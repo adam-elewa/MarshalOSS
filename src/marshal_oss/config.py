@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     embed_model: str = "voyage-law-2"
     voyage_api_key: str | None = None
 
+    # AI OCR escalation when Docling confidence / text quality is poor
+    ocr_escalate: bool = True
+    ocr_escalate_provider: str = "auto"  # auto | openai | anthropic
+    ocr_escalate_openai_model: str = "gpt-4o-mini"
+    ocr_escalate_anthropic_model: str = "claude-haiku-4-5-20251001"
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    ocr_escalate_max_pages: int = 25
+    ocr_escalate_min_score: float = 0.72  # escalate when quality.score below this AND reasons
+    # When Docling marks specific bad pages, only those are sent (else whole doc up to max_pages)
+
     bates_pattern: str = (
         r"(?i)(?:(?:NSBHF[_ ]?Washington|Washington|HCPO|Bates)[_\s-]*"
         r"(\d{3,7}(?:\s*[-–]\s*\d{3,7})?)"

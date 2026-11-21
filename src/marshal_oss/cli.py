@@ -18,23 +18,29 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
 
 
-def _load_voyage_key() -> None:
-    """Pull VOYAGE_API_KEY from marshal env.sh if present and unset."""
-    if os.environ.get("VOYAGE_API_KEY"):
+def _load_api_keys() -> None:
+    """Pull API keys from ~/.marshal/env.sh when unset."""
+    keys = ("VOYAGE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+    missing = [k for k in keys if not os.environ.get(k)]
+    if not missing:
         return
     env_sh = Path.home() / ".marshal" / "env.sh"
     if not env_sh.exists():
         return
-    # Best-effort: source via bash and print
     import subprocess
 
     try:
+        export = " ".join(f'printf "%s\\n" "{k}=${k}"' for k in missing)
         out = subprocess.check_output(
-            ["bash", "-lc", f'source "{env_sh}" && printf %s "$VOYAGE_API_KEY"'],
+            ["bash", "-lc", f'source "{env_sh}" >/dev/null 2>&1; {export}'],
             text=True,
         )
-        if out.strip():
-            os.environ["VOYAGE_API_KEY"] = out.strip()
+        for line in out.splitlines():
+            if "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            if k in missing and v.strip():
+                os.environ[k] = v.strip()
     except Exception:
         pass
 
@@ -47,13 +53,17 @@ def ingest_cmd(
     limit: Optional[int] = typer.Option(None, help="Max files to ingest (smoke test)"),
 ) -> None:
     """Ingest a discovery folder with Docling → chunks → embeddings → SQLite."""
-    _load_voyage_key()
+    _load_api_keys()
     settings = get_settings()
     db = Database(settings.database_path)
     embedder = Embedder(settings)
     display = name or slug.replace("-", " ").title()
     console.print(f"DB: {settings.database_path}")
     console.print(f"Embed: {embedder.backend} / {embedder.model_id}")
+    console.print(
+        f"AI OCR escalate: {settings.ocr_escalate} "
+        f"(provider={settings.ocr_escalate_provider})"
+    )
     stats = ingest_case(
         db,
         settings,
@@ -76,7 +86,7 @@ def serve_cmd(
 
     from fastapi import FastAPI
 
-    _load_voyage_key()
+    _load_api_keys()
     settings = get_settings()
     if host:
         settings.host = host
@@ -146,7 +156,7 @@ def search_cmd(
     top_k: int = typer.Option(8),
 ) -> None:
     """CLI search against the active case."""
-    _load_voyage_key()
+    _load_api_keys()
     from .search import search_case
 
     settings = get_settings()

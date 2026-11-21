@@ -89,6 +89,13 @@ class Database:
             );
             """
         )
+        # Additive column for quality / AI-OCR audit JSON
+        cols = {
+            r[1]
+            for r in self.conn.execute("PRAGMA table_info(files)").fetchall()
+        }
+        if "meta" not in cols:
+            self.conn.execute("ALTER TABLE files ADD COLUMN meta TEXT")
         self.conn.commit()
 
     def close(self) -> None:
@@ -169,12 +176,18 @@ class Database:
         sha256: str | None,
         status: str = "pending",
         error: str | None = None,
+        meta: dict[str, Any] | str | None = None,
     ) -> int:
         now = utc_now() if status == "ready" else None
+        meta_s = (
+            json.dumps(meta, ensure_ascii=False)
+            if isinstance(meta, dict)
+            else meta
+        )
         self.conn.execute(
             """
-            INSERT INTO files(case_id, rel_path, name, bates, mime, size, mtime, sha256, status, error, ingested_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO files(case_id, rel_path, name, bates, mime, size, mtime, sha256, status, error, ingested_at, meta)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(case_id, rel_path) DO UPDATE SET
               name=excluded.name,
               bates=excluded.bates,
@@ -184,9 +197,10 @@ class Database:
               sha256=excluded.sha256,
               status=excluded.status,
               error=excluded.error,
+              meta=COALESCE(excluded.meta, files.meta),
               ingested_at=COALESCE(excluded.ingested_at, files.ingested_at)
             """,
-            (case_id, rel_path, name, bates, mime, size, mtime, sha256, status, error, now),
+            (case_id, rel_path, name, bates, mime, size, mtime, sha256, status, error, now, meta_s),
         )
         self.conn.commit()
         row = self.conn.execute(

@@ -22,7 +22,7 @@ It is **not** a Relativity-style review/produce UI (use FreeEed or similar for c
 | Dedup skip by content hash | Yes |
 | Human review codes / production | No — see [docs/DUAL_STACK.md](docs/DUAL_STACK.md) |
 | PST / Cellebrite UFDR workers | Not in v1 — [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
-| AI escalation when OCR fails | **No** (see below) |
+| AI OCR escalation on low confidence / garbage text | **Yes** (OpenAI or Anthropic vision) |
 
 ### Ingest pipeline
 
@@ -54,58 +54,73 @@ It is **not** a Relativity-style review/produce UI (use FreeEed or similar for c
 
 ## AI / API dependencies
 
-### Required for good semantic search (recommended)
+### APIs
 
 | Dependency | Role | Required? |
 |---|---|---|
-| **`VOYAGE_API_KEY`** | Voyage embeddings (`voyage-law-2` by default) | **Recommended.** Without it, MarshalOSS falls back to a local **hash** embedder (deterministic, weak semantic quality). |
-
-Set via environment or `~/.marshal/env.sh` (auto-sourced by the CLI if `VOYAGE_API_KEY` is unset):
+| **`VOYAGE_API_KEY`** | Voyage embeddings (`voyage-law-2`) | **Recommended** for semantic search. Without it → local **hash** embedder (weak). |
+| **`OPENAI_API_KEY`** or **`ANTHROPIC_API_KEY`** | Vision LLM OCR when quality gates fire | **Recommended** if you want AI OCR escalation. Without either key, escalation is skipped (Docling text kept). |
 
 ```bash
 export VOYAGE_API_KEY="…"
+export OPENAI_API_KEY="…"          # preferred default for AI OCR (gpt-4o-mini)
 # or
-export MARSHALOSS_VOYAGE_API_KEY="…"
-export MARSHALOSS_EMBED_BACKEND=voyage   # default
-export MARSHALOSS_EMBED_MODEL=voyage-law-2
+export ANTHROPIC_API_KEY="…"       # claude-haiku by default
+
+# optional overrides
+export MARSHALOSS_EMBED_BACKEND=voyage
+export MARSHALOSS_OCR_ESCALATE=true
+export MARSHALOSS_OCR_ESCALATE_PROVIDER=auto   # auto | openai | anthropic
+export MARSHALOSS_OCR_ESCALATE_OPENAI_MODEL=gpt-4o-mini
+export MARSHALOSS_OCR_ESCALATE_MAX_PAGES=25
 ```
 
-Offline / no-key mode:
+Keys are also pulled from `~/.marshal/env.sh` when unset.
 
-```bash
-export MARSHALOSS_EMBED_BACKEND=hash
-```
-
-### Local (no cloud API for OCR)
+### Local (always)
 
 | Dependency | Role |
 |---|---|
-| **Docling** (`docling[asr]`) | Local parse/OCR/ASR. May download model weights on first run (layout, OCR engines, etc.). |
-| **Python 3.12+**, **uv** | Runtime / package management |
+| **Docling** (`docling[asr]`) | First-pass parse/OCR/ASR (local models; may download weights) |
+| **pypdfium2** + **Pillow** | Render PDF/image pages for AI OCR |
+| **Python 3.12+**, **uv** | Runtime |
 
-Docling’s OCR is **local** (e.g. EasyOCR / Tesseract-class engines via Docling). MarshalOSS does **not** call OpenAI, Anthropic, Google Vision, or Azure Document Intelligence for extraction.
-
-### Not required by MarshalOSS itself
+### Not used for extraction by default
 
 | API | Used? |
 |---|---|
-| OpenAI / Anthropic / Gemini | **No** for ingest or search. Use them only as the **MCP client** (e.g. Claude Desktop) that calls `ask`/`search`. |
-| Whisper / cloud ASR | **No** — ASR goes through Docling’s local ASR extras when audio/video are ingested. |
+| OpenAI / Anthropic **chat** for RAG answers | **No** inside MarshalOSS — Claude Desktop (MCP client) reasons over `ask`/`search` hits |
+| Whisper cloud / Google Vision / Azure DI | **No** |
 
 ---
 
-## OCR failure behavior (important)
+## AI OCR escalation (quality gates)
 
-MarshalOSS does **not** run an “AI escalation” ladder (no VLM second pass, no GPT-4o vision retry, no human-in-the-loop OCR queue).
+First pass is always **Docling**. Then MarshalOSS scores the result and may escalate **only suspicious pages/files** to a vision model.
 
-On extract:
+### What triggers escalation
 
-1. Docling convert + hybrid chunk  
-2. If chunking fails → export markdown/text and plain-chunk  
-3. If still empty → try markdown export again  
-4. If Docling throws entirely → only `.txt` / `.md` / `.csv` / `.log` fall back to raw UTF-8 read; **all other types are marked `error`** and skipped for search  
+| Signal | Example |
+|---|---|
+| Docling grades | `mean_grade` / `low_grade` in `{poor, fair}`; low `ocr_score` |
+| Sparse text | Near-empty extract; very low chars/page or chars/MB on a large scan |
+| Garbage OCR | Replacement chars (`�`), box-drawing junk, mojibake (`Ã©`, `â€™`) |
+| Token salad | High ratio of symbol-only / consonant-hash tokens |
+| Low letter density | Extract that barely looks like language |
+| Docling hard-fail | PDF/image → try whole-doc AI OCR when Docling throws |
 
-So: **good Docling OCR succeeds → searchable; hard failures stay errors.** Improve bad OCR by fixing Docling settings/models upstream or re-processing natives — not via an in-app LLM OCR escalate.
+Fair Docling grade alone with otherwise healthy text does **not** escalate.
+
+### Escalation behavior
+
+1. Score Docling text + confidence (`quality.py`)  
+2. If flagged and an API key exists → render bad pages (or whole doc if globally sparse) to PNG  
+3. Vision OCR (`gpt-4o-mini` or Claude Haiku by default)  
+4. Replace overlapping page chunks (or full doc) and embed the new text  
+5. Store audit JSON on `files.meta` (`quality_score`, `reasons`, `escalated`, `ai_ocr_pages`, …)
+
+Disable: `MARSHALOSS_OCR_ESCALATE=false`.  
+Cost control: `MARSHALOSS_OCR_ESCALATE_MAX_PAGES` (default 25).
 
 ---
 
@@ -216,6 +231,13 @@ Prefix: `MARSHALOSS_`
 | `EMBED_BACKEND` | `voyage` | `voyage` or `hash` |
 | `EMBED_MODEL` | `voyage-law-2` | Voyage model id |
 | `VOYAGE_API_KEY` | — | Also accepts bare `VOYAGE_API_KEY` |
+| `OCR_ESCALATE` | `true` | Enable AI vision OCR on quality fails |
+| `OCR_ESCALATE_PROVIDER` | `auto` | `auto` / `openai` / `anthropic` |
+| `OCR_ESCALATE_OPENAI_MODEL` | `gpt-4o-mini` | Vision model for OpenAI path |
+| `OCR_ESCALATE_ANTHROPIC_MODEL` | `claude-haiku-4-5-…` | Vision model for Anthropic path |
+| `OCR_ESCALATE_MAX_PAGES` | `25` | Cap pages sent to AI OCR per file |
+| `OCR_ESCALATE_MIN_SCORE` | `0.72` | Escalate when score below this (with reasons) |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | — | Vision OCR credentials |
 | `INGEST_EXTENSIONS` | (see above) | Comma-separated suffixes |
 | `MAX_FILE_BYTES` | `524288000` | Skip larger files |
 | `BATES_PATTERN` | built-in regex | Override Bates extraction |

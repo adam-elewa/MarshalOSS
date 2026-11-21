@@ -15,6 +15,9 @@ services:
       - type: volume
         source: datashare-models
         target: /home/datashare/dist
+      - type: bind
+        source: ./plugins
+        target: /home/datashare/plugins
     command: >-
       app start
       --dataSourceUrl "jdbc:postgresql://postgresql/datashare?user=${POSTGRES_USER:-datashare}&password=${POSTGRES_PASSWORD:-datashare}"

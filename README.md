@@ -23,6 +23,8 @@ Human review (browse, keyword, stars/tags) is the **Datashare** plane in [`revie
 | Human review (browse / keyword / tags) | **Datashare sidecar** — [review/](review/README.md), [docs/DUAL_STACK.md](docs/DUAL_STACK.md) |
 | PST / Cellebrite UFDR workers | Not in v1 — [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
 | AI OCR escalation on low confidence / garbage text | **Yes** (OpenAI or Anthropic vision) |
+| ASR escalation on poor Docling audio/video transcripts | **Yes** (ffmpeg + OpenAI `gpt-4o-transcribe`) |
+| Visual captions for images + sampled video frames | **Yes** (late pass; same vision keys as OCR escalate) |
 
 ### Ingest pipeline
 
@@ -73,6 +75,10 @@ export MARSHALOSS_OCR_ESCALATE=true
 export MARSHALOSS_OCR_ESCALATE_PROVIDER=auto   # auto | openai | anthropic
 export MARSHALOSS_OCR_ESCALATE_OPENAI_MODEL=gpt-4o-mini
 export MARSHALOSS_OCR_ESCALATE_MAX_PAGES=25
+
+# ASR escalate (audio/video) — needs ffmpeg on PATH + OPENAI_API_KEY
+export MARSHALOSS_ASR_ESCALATE=true
+export MARSHALOSS_ASR_ESCALATE_MODEL=gpt-4o-transcribe
 ```
 
 Keys are also pulled from `~/.marshal/env.sh` when unset.
@@ -90,7 +96,8 @@ Keys are also pulled from `~/.marshal/env.sh` when unset.
 | API | Used? |
 |---|---|
 | OpenAI / Anthropic **chat** for RAG answers | **No** inside MarshalOSS — Claude Desktop (MCP client) reasons over `ask`/`search` hits |
-| Whisper cloud / Google Vision / Azure DI | **No** |
+| Google Vision / Azure DI | **No** |
+| OpenAI Whisper / `gpt-4o-transcribe` | **Only on ASR escalate** (poor Docling A/V transcript) |
 
 ---
 
@@ -124,6 +131,127 @@ Cost control: `MARSHALOSS_OCR_ESCALATE_MAX_PAGES` (default 25).
 
 ---
 
+## ASR escalation (audio / video)
+
+First pass is **Docling local ASR**. Then MarshalOSS scores the transcript and may escalate **suspicious media** to OpenAI (same idea as OCR escalate).
+
+### What triggers ASR escalate
+
+| Signal | Example |
+|---|---|
+| Near-empty transcript | Tiny/empty extract from a large/long clip |
+| Hallucination phrases | “thanks for watching”, subscribe spam, music-only junk |
+| Repetitive / looped text | ASR stuck repeating a n-gram |
+| Sparse vs duration / filesize | Few characters per minute of audio or per MB |
+
+### Escalate behavior
+
+1. Score Docling transcript (`score_transcript` in `quality.py`)  
+2. If flagged and `OPENAI_API_KEY` is set → **ffmpeg** 16 kHz mono → **`gpt-4o-transcribe`** (chunked for long files)  
+3. Replace the Docling transcript chunks and embed  
+4. Store audit fields on `files.meta` (`escalated`, `escalate_kind=asr`, `quality_*`, …)
+
+Requires **ffmpeg** / **ffprobe** on `PATH`.  
+Disable: `MARSHALOSS_ASR_ESCALATE=false`.
+
+This is a streamlined version of legacy Marshal’s HQ BWC pipeline (no diarize/verify loop in v1).
+
+---
+
+## Visual analyze (images + video frames)
+
+Late ingest pass (after OCR/ASR). Makes photos and BWC/surveillance **visually searchable** without replacing transcript/OCR text.
+
+| Input | Behavior |
+|---|---|
+| Still (`.jpg` `.png` `.tif` …) | Vision caption if OCR text is thin (`< visual_skip_if_ocr_chars`) |
+| Video | ffmpeg samples a frame every N seconds → vision caption per frame (`Visual @m:ss`) |
+
+Captions are embedded + FTS’d like any other chunk. Uses the same OpenAI/Anthropic vision keys as OCR escalate.
+
+```bash
+export MARSHALOSS_VISUAL_ANALYZE=true
+export MARSHALOSS_VISUAL_FRAME_INTERVAL_SEC=5
+export MARSHALOSS_VISUAL_MAX_FRAMES=48   # ~4 min coverage at 5s
+```
+
+Disable: `MARSHALOSS_VISUAL_ANALYZE=false`.
+
+---
+
+## Prepare workflow (unzip → hashed production manifest)
+
+First step of ingestion — what was produced, before Docling:
+
+```bash
+uv run marshaloss prepare "/path/to/case/root" \
+  --slug washington-jersey-city \
+  --name "Washington v. Jersey City"
+```
+
+1. Expand production `*.zip` → sibling `<name>__unzipped/` (stdlib `zipfile`, zip-slip safe)  
+2. Walk **every** file, full **SHA-256**, Bates guess, kind (`evidence` / `unzipped` / `container` / `loadfile` / `junk`)  
+3. Write UX-ready artifacts:
+   - `<root>/.marshaloss/manifest.jsonl` — one record per file  
+   - `<root>/.marshaloss/manifest_summary.json` — counts / bytes / by_ext / by_kind  
+4. Upsert SQLite `production_manifest` + serve via `/api/manifest` and `/api/manifest/summary`
+
+`ingest` runs **prepare** automatically first. Disable zip expand: `MARSHALOSS_EXPAND_ZIPS=false`.
+
+### Ingest confidence (covered + quality)
+
+After ingest, each manifest row gets:
+
+| Field | Meaning |
+|---|---|
+| `ingest_status` | `ready` / `error` / `skipped` / `pending` / `skipped_not_covered` |
+| `quality_score` | 0–1 extraction confidence |
+| `quality_reasons` | why score is low |
+| `chunk_count` | searchable chunks written |
+| `escalated` | OCR/ASR escalate fired |
+| `entities` / `tags` | optional file-level AI extract |
+
+UX endpoints: `/api/manifest`, `/api/manifest/summary` (includes `ingest_complete`, `avg_quality`, `low_quality_count`).  
+Disk: `<root>/.marshaloss/ingest_confidence.json`.
+
+---
+
+## Entities & tags (full-file, cheap models)
+
+**Not** per-chunk search indexing. Last pass over **all extracted text** for each file (`gpt-4o-mini` / Haiku):
+
+1. Fits in one window → single call with **canonicalization**  
+   (`Jones` / `D. Jones` / `David Jones` → `canonical: "David Jones"`, `aliases: [...]`)
+2. Longer → map over ~14k-char segments → one **reduce** that merges + canonicalizes
+
+Stored on `files.meta` / manifest as `{type, canonical, aliases, note}` + `tags`.
+
+Cost (mini/Haiku): short files ≈ one call; a long PDF ≈ map_segments + 1. David Jones–scale still typically **well under $1** unless many huge transcripts. Set `MARSHALOSS_ENTITY_EXTRACT_MAX_CHARS` only if you need a safety ceiling (`0` = all text).
+
+```bash
+export MARSHALOSS_ENTITY_EXTRACT=true
+# export MARSHALOSS_ENTITY_EXTRACT=false
+# export MARSHALOSS_ENTITY_EXTRACT_SEGMENT_CHARS=14000
+# export MARSHALOSS_ENTITY_EXTRACT_MAX_CHARS=0
+```
+
+---
+
+## Media bridge (ffmpeg, not custom demuxers)
+
+Docling ASR natively covers wav/mp3/m4a/… and mp4/mov/mkv/…. Large productions also ship **surveillance/DVR** types. MarshalOSS does **not** invent parsers — it uses **ffmpeg/ffprobe** (already required for ASR escalate):
+
+1. ffprobe must open the file  
+2. ffmpeg → 16 kHz mono WAV  
+3. Docling ASR (or ASR escalate) on that WAV  
+
+| Bridge (ffmpeg) | Examples |
+|---|---|
+| Yes | `.dav` `.wmv` `.wma` `.flv` `.asf` `.ts` `.m4v` `.mpeg` `.3gp` `.caf` `.vob` `.h264` |
+| No (vendor / skip) | `.av3` `.g64x` `.v22` `.v21` `.vac` — need vendor players |
+
+---
+
 ## Supported file types (default)
 
 ```
@@ -132,11 +260,12 @@ Cost control: `MARSHALOSS_OCR_ESCALATE_MAX_PAGES` (default 25).
 .png .jpg .jpeg .tif .tiff .bmp .webp
 .mp3 .wav .m4a .aac .ogg .flac
 .mp4 .mov .avi .mkv .webm
+.wma .wmv .flv .asf .ts .m4v .mpeg .mpg .3gp .caf .dav .vob .h264 .m2ts .mts .mxf
 ```
 
 Override with `MARSHALOSS_INGEST_EXTENSIONS`. Default max file size: **500 MB** (`MARSHALOSS_MAX_FILE_BYTES`).
 
-**Not in v1:** PST/OST explosion, Cellebrite/UFDR — design notes in [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
+**Not in v1:** PST/OST explosion, Cellebrite/UFDR, proprietary jail-call containers ffmpeg can’t probe — design notes in [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
 
 ---
 
@@ -178,9 +307,13 @@ cd ~/Projects/MarshalOSS
 
 uv sync
 
+# Parallel file ingest (Docling/ffmpeg/API). Default 4; tune to hardware:
+#   export MARSHALOSS_INGEST_WORKERS=8   # Gideon-ish
+#   export MARSHALOSS_INGEST_WORKERS=2   # laptop / rate-limit friendly
 uv run marshaloss ingest "/path/to/case/root" \
   --slug washington-jersey-city \
   --name "Washington v. Jersey City" \
+  --workers 8 \
   --limit 5
 
 export MARSHALOSS_PUBLIC_BASE="http://$(tailscale ip -4):7340"

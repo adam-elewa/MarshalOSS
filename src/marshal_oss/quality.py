@@ -5,7 +5,20 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+from .media_ffmpeg import AUDIO_VIDEO_EXTS, is_media_path
+
+__all__ = [
+    "QualityReport",
+    "score_extraction",
+    "score_transcript",
+    "extract_docling_confidence",
+    "join_chunk_text",
+    "AUDIO_VIDEO_EXTS",
+    "is_media_path",
+]
 
 # Private-use / replacement / box-drawing / OCR-junk heavy ranges
 _WEIRD_RE = re.compile(
@@ -241,4 +254,128 @@ def score_extraction(
         reasons=list(dict.fromkeys(reasons)),
         metrics=metrics,
         bad_pages=sorted(set(bad_pages)),
+    )
+
+
+_HALLUCINATION_PHRASES = (
+    "thanks for watching",
+    "thank you for watching",
+    "please subscribe",
+    "like and subscribe",
+    "amara.org",
+    "subtitle",
+    "transcript by",
+    "[music]",
+    "(music)",
+    "♪",
+)
+_WHISPER_JUNK_RE = re.compile(r"^[.\s,…\-–—]+$")
+
+def score_transcript(
+    text: str,
+    *,
+    file_size: int = 0,
+    duration_sec: float | None = None,
+    min_chars: int = 24,
+    min_chars_per_minute: float = 40.0,
+    min_chars_per_mb: float = 200.0,
+) -> QualityReport:
+    """Score Docling ASR / transcript quality for audio-video escalate gates."""
+    reasons: list[str] = []
+    metrics: dict[str, Any] = {}
+    penalties = 0.0
+    text = text or ""
+    n = len(text)
+    metrics["chars"] = n
+    metrics["file_size"] = file_size
+    metrics["duration_sec"] = duration_sec
+
+    if n < min_chars:
+        reasons.append("near_empty_transcript")
+        penalties += 0.6
+
+    low = text.strip().lower()
+    hall = [p for p in _HALLUCINATION_PHRASES if p in low]
+    if hall:
+        reasons.append(f"hallucination_phrase={hall[0]}")
+        penalties += 0.45
+    if low and _WHISPER_JUNK_RE.fullmatch(low.strip()):
+        reasons.append("junk_only_transcript")
+        penalties += 0.5
+
+    # Repetitive / looped ASR nonsense
+    words = re.findall(r"[a-z0-9']+", low)
+    if len(words) >= 12:
+        unique = len(set(words))
+        u_ratio = unique / len(words)
+        metrics["unique_word_ratio"] = round(u_ratio, 3)
+        # Stuck ASR collapses to a tiny vocabulary; long interviews can also have
+        # low unique ratios, so require few distinct words — not ratio alone.
+        if len(words) >= 40 and unique < 25 and u_ratio < 0.15:
+            reasons.append(f"repetitive_transcript={u_ratio:.2f}")
+            penalties += 0.4
+        # Stuck ASR often loops the same short phrase for most of the transcript.
+        for ngram in (2, 3, 4):
+            if len(words) < ngram * 8:
+                continue
+            windows = [
+                " ".join(words[i : i + ngram])
+                for i in range(0, len(words) - ngram + 1, ngram)
+            ]
+            if not windows:
+                continue
+            top = max(windows.count(g) for g in set(windows))
+            if top >= 4 and top / len(windows) >= 0.45:
+                reasons.append("looped_ngram")
+                penalties += 0.35
+                break
+
+    if n > 80:
+        letters = len(_LETTER_RE.findall(text))
+        letter_ratio = letters / n
+        metrics["letter_ratio"] = round(letter_ratio, 3)
+        if letter_ratio < 0.30:
+            reasons.append(f"low_letter_ratio={letter_ratio:.2f}")
+            penalties += 0.3
+
+    if duration_sec and duration_sec > 20 and n >= 0:
+        cpm = n / max(duration_sec / 60.0, 0.05)
+        metrics["chars_per_minute"] = round(cpm, 1)
+        # Clear speech is usually hundreds of chars/min; near-empty ASR is sparse
+        if cpm < min_chars_per_minute:
+            reasons.append(f"sparse_vs_duration={cpm:.0f}c/min")
+            penalties += 0.4
+
+    if file_size > 200_000:
+        mb = file_size / (1024 * 1024)
+        cpmb = n / max(mb, 0.01)
+        metrics["chars_per_mb"] = round(cpmb, 1)
+        if cpmb < min_chars_per_mb and n < 1500:
+            reasons.append(f"sparse_vs_filesize={cpmb:.0f}c/MB")
+            penalties += 0.3
+
+    score = max(0.0, min(1.0, 1.0 - penalties))
+    escalate = bool(reasons) and (
+        score < 0.72
+        or any(
+            r.startswith(
+                (
+                    "near_empty",
+                    "hallucination",
+                    "junk_only",
+                    "repetitive",
+                    "looped",
+                    "sparse_",
+                )
+            )
+            for r in reasons
+        )
+        or len(reasons) >= 2
+    )
+    return QualityReport(
+        escalate=escalate,
+        score=score,
+        reasons=list(dict.fromkeys(reasons)) or ([] if n else ["empty"]),
+        metrics=metrics,
+        bad_pages=[],
     )

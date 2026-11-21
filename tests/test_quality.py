@@ -1,4 +1,4 @@
-from marshal_oss.quality import score_extraction
+from marshal_oss.quality import score_extraction, score_transcript
 
 
 def test_good_legal_text_ok():
@@ -40,3 +40,41 @@ def test_sparse_vs_large_scan():
     text = "Page one barely readable."
     r = score_extraction(text, file_size=8_000_000, page_count=30)
     assert r.escalate
+
+
+def test_transcript_hallucination_escalates():
+    r = score_transcript(
+        "thanks for watching",
+        file_size=50_000_000,
+        duration_sec=600,
+    )
+    assert r.escalate
+    assert any("hallucination" in x or "near_empty" in x for x in r.reasons)
+
+
+def test_transcript_good_dialogue_ok():
+    # Varied depo-like dialogue (not a template loop)
+    speakers = ["Rivera", "Chen", "Brooks", "Patel", "Nguyen", "Garcia"]
+    topics = [
+        "hallway camera footage from Tuesday night",
+        "who else was in the stairwell",
+        "whether anyone knocked before entering",
+        "the time the fire alarm started",
+        "what Washington said about the bag",
+        "how long the argument lasted",
+        "whether lights were on in 4B",
+        "the description of the second man",
+    ]
+    lines = []
+    for i in range(40):
+        who = speakers[i % len(speakers)]
+        topic = topics[i % len(topics)]
+        lines.append(
+            f"Q: Officer {who}, tell us about {topic}. "
+            f"A: Around {6 + (i % 6)}:{10 + (i % 40):02d} I saw two people near unit {i + 12}. "
+            f"I asked them to wait and called for backup from sector {i % 9}."
+        )
+    text = " ".join(lines)
+    r = score_transcript(text, file_size=5_000_000, duration_sec=120)
+    assert not r.escalate, r
+    assert r.score >= 0.72

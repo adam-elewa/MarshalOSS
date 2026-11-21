@@ -12,6 +12,7 @@ from .config import get_settings
 from .db import Database
 from .embed import Embedder
 from .ingest import ingest_case
+from .manifest import prepare_production
 from .server import build_mcp_server, create_app
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -45,24 +46,98 @@ def _load_api_keys() -> None:
         pass
 
 
+@app.command("prepare")
+def prepare_cmd(
+    files_root: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True),
+    slug: str = typer.Option(..., help="Case slug, e.g. washington-jersey-city"),
+    name: Optional[str] = typer.Option(None, help="Display name"),
+    no_expand: bool = typer.Option(False, help="Skip zip expand (hash only)"),
+) -> None:
+    """Unzip production archives, then write a hashed file-by-file manifest for UX."""
+    settings = get_settings()
+    db = Database(settings.database_path)
+    display = name or slug.replace("-", " ").title()
+    console.print(f"DB: {settings.database_path}")
+    console.print(
+        f"ZIP expand: {settings.expand_zips and not no_expand} "
+        f"(depth={settings.expand_zip_max_depth})"
+    )
+    result = prepare_production(
+        files_root,
+        settings,
+        db=db,
+        slug=slug,
+        display_name=display,
+        expand=not no_expand,
+        log=lambda m: console.print(m),
+    )
+    console.print(
+        {
+            "slug": result.slug,
+            "zip": result.zip_stats,
+            "summary": {
+                k: result.summary[k]
+                for k in (
+                    "file_count",
+                    "total_bytes",
+                    "ingestible_count",
+                    "unique_sha256",
+                    "by_kind",
+                )
+                if k in result.summary
+            },
+            "jsonl": result.jsonl_path,
+            "summary_json": result.summary_path,
+        }
+    )
+
+
 @app.command("ingest")
 def ingest_cmd(
     files_root: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True),
     slug: str = typer.Option(..., help="Case slug, e.g. washington-jersey-city"),
     name: Optional[str] = typer.Option(None, help="Display name"),
     limit: Optional[int] = typer.Option(None, help="Max files to ingest (smoke test)"),
+    workers: Optional[int] = typer.Option(
+        None,
+        "--workers",
+        "-j",
+        help="Parallel file workers (default: MARSHALOSS_INGEST_WORKERS or 4; 1=serial)",
+    ),
 ) -> None:
-    """Ingest a discovery folder with Docling → chunks → embeddings → SQLite."""
+    """Prepare (unzip+manifest) then Docling → chunks → embeddings → SQLite."""
     _load_api_keys()
     settings = get_settings()
     db = Database(settings.database_path)
     embedder = Embedder(settings)
     display = name or slug.replace("-", " ").title()
+    n_workers = workers if workers is not None else settings.ingest_workers
     console.print(f"DB: {settings.database_path}")
     console.print(f"Embed: {embedder.backend} / {embedder.model_id}")
+    console.print(f"Ingest workers: {n_workers}")
     console.print(
         f"AI OCR escalate: {settings.ocr_escalate} "
         f"(provider={settings.ocr_escalate_provider})"
+    )
+    console.print(
+        f"ASR escalate: {settings.asr_escalate} "
+        f"(model={settings.asr_escalate_model})"
+    )
+    console.print(
+        f"ZIP expand: {settings.expand_zips} "
+        f"(depth={settings.expand_zip_max_depth})"
+    )
+    console.print(
+        f"Visual analyze: {settings.visual_analyze} "
+        f"(images={settings.visual_analyze_images}, "
+        f"video every {settings.visual_frame_interval_sec:g}s, "
+        f"max_frames={settings.visual_max_frames})"
+    )
+    console.print(
+        f"Entity/tag extract: {settings.entity_extract} "
+        f"(provider={settings.entity_extract_provider}, "
+        f"segment={settings.entity_extract_segment_chars}, "
+        f"max_chars={settings.entity_extract_max_chars or 'all'})"
     )
     stats = ingest_case(
         db,
@@ -72,6 +147,7 @@ def ingest_cmd(
         display_name=display,
         files_root=files_root,
         limit=limit,
+        workers=n_workers,
     )
     console.print(stats)
 

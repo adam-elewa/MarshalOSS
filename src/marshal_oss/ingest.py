@@ -1,37 +1,38 @@
 from __future__ import annotations
 
-import hashlib
 import mimetypes
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
 from rich.console import Console
 
+from .asr_escalate import ai_transcribe_file, resolve_asr_client
 from .bates import extract_bates
 from .config import Settings
 from .db import Database
 from .embed import Embedder
 from .escalate import ai_ocr_file, resolve_ai_ocr_client
+from .hashing import sha256_file
+from .manifest import prepare_production
+from .media_ffmpeg import as_docling_media, is_docling_native_media, media_duration_sec
 from .quality import (
     extract_docling_confidence,
+    is_media_path,
     join_chunk_text,
     score_extraction,
+    score_transcript,
 )
+from .entities import extract_entities_for_chunks, resolve_entity_client
+from .visual import visual_analyze_file
 
 console = Console()
 
 
-def file_sha256(path: Path, max_bytes: int = 64 * 1024 * 1024) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        remaining = max_bytes
-        while remaining > 0:
-            chunk = f.read(min(1024 * 1024, remaining))
-            if not chunk:
-                break
-            h.update(chunk)
-            remaining -= len(chunk)
-    return h.hexdigest()
+def file_sha256(path: Path, max_bytes: int | None = None) -> str:
+    """Full-file SHA-256 by default (aligns with production manifest)."""
+    return sha256_file(path, max_bytes=max_bytes)
 
 
 def iter_case_files(root: Path, allowed: set[str]) -> list[Path]:
@@ -142,6 +143,83 @@ def docling_extract(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return [c for c in chunks if c.get("text")], confidence
 
 
+def _maybe_asr_escalate(
+    path: Path,
+    chunks: list[dict[str, Any]],
+    *,
+    settings: Settings,
+    file_size: int,
+    bates: str | None,
+    log: Callable[[str], None],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Score Docling ASR; if poor, replace with OpenAI gpt-4o-transcribe."""
+    text = join_chunk_text(chunks)
+    duration = media_duration_sec(path)
+    report = score_transcript(text, file_size=file_size, duration_sec=duration)
+    meta: dict[str, Any] = {
+        "quality_score": report.score,
+        "quality_reasons": report.reasons,
+        "quality_metrics": report.metrics,
+        "media_duration_sec": duration,
+        "source": "docling_asr",
+        "modality": "audio_video",
+    }
+    should = (
+        settings.asr_escalate
+        and report.escalate
+        and report.score < settings.asr_escalate_min_score
+    )
+    hard = any(
+        r.startswith(
+            (
+                "near_empty",
+                "hallucination",
+                "junk_only",
+                "repetitive",
+                "looped",
+                "sparse_",
+            )
+        )
+        for r in report.reasons
+    )
+    if not (settings.asr_escalate and (should or (report.escalate and hard))):
+        return chunks, meta
+
+    if resolve_asr_client(settings) is None:
+        log(
+            f"[yellow]asr escalate skipped[/yellow] {path.name}: no OPENAI_API_KEY "
+            f"({report.summary()})"
+        )
+        meta["escalate_skipped"] = "no_api_key"
+        meta["escalate_wanted"] = True
+        return chunks, meta
+
+    log(f"[yellow]asr quality[/yellow] {path.name}: {report.summary()}")
+    try:
+        ai_chunks = ai_transcribe_file(
+            path,
+            settings,
+            bates=bates,
+            duration_sec=duration,
+            log=log,
+        )
+    except Exception as e:
+        log(f"[red]asr escalate failed[/red] {path.name}: {e}")
+        meta["escalate_error"] = str(e)[:500]
+        meta["escalate_wanted"] = True
+        return chunks, meta
+
+    if not ai_chunks:
+        meta["escalate_error"] = "asr_empty"
+        return chunks, meta
+
+    meta["source"] = "gpt-4o-transcribe"
+    meta["escalated"] = True
+    meta["escalate_kind"] = "asr"
+    log(f"[green]asr escalate ok[/green] {path.name}: {len(join_chunk_text(ai_chunks))} chars")
+    return ai_chunks, meta
+
+
 def _maybe_ai_escalate(
     path: Path,
     chunks: list[dict[str, Any]],
@@ -152,7 +230,17 @@ def _maybe_ai_escalate(
     bates: str | None,
     log: Callable[[str], None],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Score extraction; if poor, replace/supplement with vision-LLM OCR."""
+    """Score extraction; escalate A/V via ASR or docs via vision OCR."""
+    if is_media_path(path):
+        return _maybe_asr_escalate(
+            path,
+            chunks,
+            settings=settings,
+            file_size=file_size,
+            bates=bates,
+            log=log,
+        )
+
     text = join_chunk_text(chunks)
     page_count = confidence.get("page_count")
     report = score_extraction(
@@ -261,45 +349,37 @@ def _maybe_ai_escalate(
     return chunks, meta
 
 
-def ingest_case(
+def _ingest_one_file(
+    path: Path,
+    *,
+    root: Path,
+    case_id: int,
     db: Database,
     settings: Settings,
     embedder: Embedder,
-    *,
-    slug: str,
-    display_name: str,
-    files_root: Path,
-    limit: int | None = None,
-    progress: Callable[[str], None] | None = None,
-) -> dict[str, Any]:
-    root = files_root.resolve()
-    if not root.is_dir():
-        raise FileNotFoundError(f"files_root not found: {root}")
-
-    case = db.upsert_case(slug, display_name, str(root))
-    db.set_active_case(case.id)
-
-    paths = iter_case_files(root, settings.allowed_extensions)
-    if limit is not None:
-        paths = paths[:limit]
-
-    stats = {
+    db_lock: threading.Lock,
+    embed_lock: threading.Lock,
+    log: Callable[[str], None],
+) -> dict[str, int]:
+    """Process one file (CPU/API-heavy work parallel; SQLite writes under db_lock)."""
+    delta = {
         "files": 0,
         "chunks": 0,
         "errors": 0,
         "skipped": 0,
         "escalated": 0,
         "escalate_skipped_no_key": 0,
+        "media_bridged": 0,
+        "visualized": 0,
+        "entities": 0,
     }
-    log = progress or (lambda m: console.print(m))
-
-    for path in paths:
-        rel = str(path.relative_to(root)).replace("\\", "/")
-        try:
-            st = path.stat()
-            if st.st_size > settings.max_file_bytes:
+    rel = str(path.relative_to(root)).replace("\\", "/")
+    try:
+        st = path.stat()
+        if st.st_size > settings.max_file_bytes:
+            with db_lock:
                 db.upsert_file(
-                    case.id,
+                    case_id,
                     rel,
                     path.name,
                     extract_bates(rel, settings.bates_pattern),
@@ -310,91 +390,183 @@ def ingest_case(
                     status="skipped",
                     error=f"too large ({st.st_size})",
                 )
-                stats["skipped"] += 1
-                continue
+                db.update_manifest_ingest(
+                    case_id,
+                    rel,
+                    ingest_status="skipped",
+                    error=f"too large ({st.st_size})",
+                )
+            delta["skipped"] = 1
+            return delta
 
-            sha = file_sha256(path)
-            existing = db.get_file(case.id, rel)
-            if (
-                existing
-                and existing["sha256"] == sha
-                and existing["status"] == "ready"
-            ):
-                stats["skipped"] += 1
-                continue
+        sha = file_sha256(path)
+        with db_lock:
+            existing = db.get_file(case_id, rel)
+        if (
+            existing
+            and existing["sha256"] == sha
+            and existing["status"] == "ready"
+        ):
+            meta_existing = existing["meta"] if "meta" in existing.keys() else None
+            if isinstance(meta_existing, str):
+                try:
+                    import json as _json
 
-            bates = extract_bates(rel, settings.bates_pattern)
-            mime = mimetypes.guess_type(path.name)[0]
-            log(f"[cyan]ingest[/cyan] {rel}")
+                    meta_existing = _json.loads(meta_existing)
+                except Exception:
+                    meta_existing = {}
+            meta_existing = meta_existing if isinstance(meta_existing, dict) else {}
+            with db_lock:
+                db.update_manifest_ingest(
+                    case_id,
+                    rel,
+                    ingest_status="ready",
+                    quality_score=meta_existing.get("quality_score")
+                    if isinstance(meta_existing.get("quality_score"), (int, float))
+                    else None,
+                    quality_reasons=meta_existing.get("quality_reasons")
+                    if isinstance(meta_existing.get("quality_reasons"), list)
+                    else None,
+                    file_id=int(existing["id"]),
+                    escalated=bool(meta_existing.get("escalated")),
+                    source=meta_existing.get("source")
+                    if isinstance(meta_existing.get("source"), str)
+                    else None,
+                    entities=meta_existing.get("entities"),
+                    tags=meta_existing.get("tags"),
+                )
+            delta["skipped"] = 1
+            return delta
 
-            meta: dict[str, Any] = {}
-            try:
+        bates = extract_bates(rel, settings.bates_pattern)
+        mime = mimetypes.guess_type(path.name)[0]
+        log(f"[cyan]ingest[/cyan] {rel}")
+
+        meta: dict[str, Any] = {}
+        try:
+            if is_media_path(path) and not is_docling_native_media(path):
+                with as_docling_media(path) as (media_path, bridge_meta):
+                    log(
+                        f"[cyan]media bridge[/cyan] {rel} "
+                        f"({bridge_meta.get('original_suffix')}→wav)"
+                    )
+                    chunks, confidence = docling_extract(media_path)
+                    meta.update(bridge_meta)
+                    delta["media_bridged"] = 1
+            else:
                 chunks, confidence = docling_extract(path)
-            except Exception as e:
-                if path.suffix.lower() in {".txt", ".md", ".csv", ".log"}:
-                    chunks = _chunk_plain_text(
-                        path.read_text(encoding="utf-8", errors="replace"),
-                        bates,
+        except Exception as e:
+            if path.suffix.lower() in {".txt", ".md", ".csv", ".log"}:
+                chunks = _chunk_plain_text(
+                    path.read_text(encoding="utf-8", errors="replace"),
+                    bates,
+                )
+                confidence = {}
+                meta["source"] = "raw_text_fallback"
+                meta["docling_error"] = str(e)[:500]
+            else:
+                if is_media_path(path) and settings.asr_escalate and resolve_asr_client(settings):
+                    log(f"[yellow]docling failed → asr escalate[/yellow] {rel}: {e}")
+                    chunks = ai_transcribe_file(
+                        path,
+                        settings,
+                        bates=bates,
+                        log=log,
                     )
                     confidence = {}
-                    meta["source"] = "raw_text_fallback"
-                    meta["docling_error"] = str(e)[:500]
+                    meta = {
+                        **meta,
+                        "source": "gpt-4o-transcribe",
+                        "escalated": True,
+                        "escalate_kind": "asr",
+                        "docling_error": str(e)[:500],
+                    }
+                    delta["escalated"] = 1
+                elif settings.ocr_escalate and path.suffix.lower() in {
+                    ".pdf",
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".tif",
+                    ".tiff",
+                    ".bmp",
+                    ".webp",
+                }:
+                    log(f"[yellow]docling failed → ai-ocr[/yellow] {rel}: {e}")
+                    chunks = ai_ocr_file(
+                        path,
+                        settings,
+                        bad_pages=[],
+                        whole_doc=True,
+                        bates=bates,
+                        log=log,
+                    )
+                    confidence = {}
+                    meta = {
+                        "source": "ai_ocr",
+                        "escalated": True,
+                        "docling_error": str(e)[:500],
+                    }
+                    delta["escalated"] = 1
                 else:
-                    # Last chance: AI OCR if enabled and renderable
-                    if settings.ocr_escalate and path.suffix.lower() in {
-                        ".pdf",
-                        ".png",
-                        ".jpg",
-                        ".jpeg",
-                        ".tif",
-                        ".tiff",
-                        ".bmp",
-                        ".webp",
-                    }:
-                        log(f"[yellow]docling failed → ai-ocr[/yellow] {rel}: {e}")
-                        chunks = ai_ocr_file(
-                            path,
-                            settings,
-                            bad_pages=[],
-                            whole_doc=True,
-                            bates=bates,
-                            log=log,
-                        )
-                        confidence = {}
-                        meta = {
-                            "source": "ai_ocr",
-                            "escalated": True,
-                            "docling_error": str(e)[:500],
-                        }
-                        stats["escalated"] += 1
-                    else:
-                        raise e
-            else:
-                chunks, qmeta = _maybe_ai_escalate(
-                    path,
-                    chunks,
-                    confidence,
-                    settings=settings,
-                    file_size=st.st_size,
-                    bates=bates,
-                    log=log,
-                )
-                meta.update(qmeta)
-                if qmeta.get("escalated"):
-                    stats["escalated"] += 1
-                if qmeta.get("escalate_skipped") == "no_api_key":
-                    stats["escalate_skipped_no_key"] += 1
+                    raise e
+        else:
+            chunks, qmeta = _maybe_ai_escalate(
+                path,
+                chunks,
+                confidence,
+                settings=settings,
+                file_size=st.st_size,
+                bates=bates,
+                log=log,
+            )
+            meta.update(qmeta)
+            if qmeta.get("escalated"):
+                delta["escalated"] = 1
+            if qmeta.get("escalate_skipped") == "no_api_key":
+                delta["escalate_skipped_no_key"] = 1
 
-            for ch in chunks:
-                if not ch.get("bates"):
-                    ch["bates"] = bates
+        if settings.visual_analyze:
+            v_chunks, v_meta = visual_analyze_file(
+                path,
+                settings,
+                existing_chunks=chunks,
+                bates=bates,
+                log=log,
+            )
+            meta.update({k: v for k, v in v_meta.items() if k.startswith("visual")})
+            if v_chunks:
+                chunks = list(chunks) + v_chunks
+                delta["visualized"] = 1
 
-            texts = [c["text"] for c in chunks]
+        for ch in chunks:
+            if not ch.get("bates"):
+                ch["bates"] = bates
+
+        # Simple file-level entities/tags (grow with use case later)
+        if settings.entity_extract and resolve_entity_client(settings):
+            ent = extract_entities_for_chunks(chunks, settings, log=log)
+            if ent.get("entities") or ent.get("tags"):
+                meta["entities"] = ent.get("entities") or []
+                meta["tags"] = ent.get("tags") or []
+                meta["entity_segments"] = ent.get("segments")
+                meta["entity_chars"] = ent.get("chars")
+                if ent.get("truncated"):
+                    meta["entity_truncated"] = True
+                delta["entities"] = 1
+            elif ent.get("error"):
+                meta["entity_error"] = ent["error"]
+            elif ent.get("skipped"):
+                meta["entity_skipped"] = ent["skipped"]
+
+        texts = [c["text"] for c in chunks]
+        with embed_lock:
             vectors = embedder.embed_documents(texts) if texts else []
-            emb_pairs = [(v, embedder.model_id) for v in vectors]
+        emb_pairs = [(v, embedder.model_id) for v in vectors]
 
+        with db_lock:
             file_id = db.upsert_file(
-                case.id,
+                case_id,
                 rel,
                 path.name,
                 bates,
@@ -405,13 +577,32 @@ def ingest_case(
                 status="ready",
                 meta=meta,
             )
-            n = db.replace_chunks(file_id, case.id, rel, chunks, emb_pairs)
-            stats["files"] += 1
-            stats["chunks"] += n
-        except Exception as e:
-            stats["errors"] += 1
+            n = db.replace_chunks(file_id, case_id, rel, chunks, emb_pairs)
+            qscore = meta.get("quality_score")
+            qscore_f = float(qscore) if isinstance(qscore, (int, float)) else None
+            db.update_manifest_ingest(
+                case_id,
+                rel,
+                ingest_status="ready",
+                quality_score=qscore_f,
+                quality_reasons=meta.get("quality_reasons")
+                if isinstance(meta.get("quality_reasons"), list)
+                else None,
+                chunk_count=n,
+                file_id=file_id,
+                escalated=bool(meta.get("escalated")),
+                source=meta.get("source") if isinstance(meta.get("source"), str) else None,
+                entities=meta.get("entities"),
+                tags=meta.get("tags"),
+            )
+        delta["files"] = 1
+        delta["chunks"] = n
+        return delta
+    except Exception as e:
+        delta["errors"] = 1
+        with db_lock:
             db.upsert_file(
-                case.id,
+                case_id,
                 rel,
                 path.name,
                 extract_bates(rel, settings.bates_pattern),
@@ -422,6 +613,161 @@ def ingest_case(
                 status="error",
                 error=str(e)[:2000],
             )
-            log(f"[red]error[/red] {rel}: {e}")
+            db.update_manifest_ingest(
+                case_id,
+                rel,
+                ingest_status="error",
+                error=str(e)[:2000],
+            )
+        log(f"[red]error[/red] {rel}: {e}")
+        return delta
+
+
+def ingest_case(
+    db: Database,
+    settings: Settings,
+    embedder: Embedder,
+    *,
+    slug: str,
+    display_name: str,
+    files_root: Path,
+    limit: int | None = None,
+    workers: int | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    root = files_root.resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"files_root not found: {root}")
+
+    log_lock = threading.Lock()
+    raw_log = progress or (lambda m: console.print(m))
+
+    def log(msg: str) -> None:
+        with log_lock:
+            raw_log(msg)
+
+    # Step 0–1: unzip + hashed production manifest (feeds UX / what-was-produced)
+    prep = prepare_production(
+        root,
+        settings,
+        db=db,
+        slug=slug,
+        display_name=display_name,
+        expand=settings.expand_zips,
+        log=log,
+    )
+    case = db.get_case_by_slug(slug)
+    if not case:
+        case = db.upsert_case(slug, display_name, str(root))
+        db.set_active_case(case.id)
+
+    paths = iter_case_files(root, settings.allowed_extensions)
+    if limit is not None:
+        paths = paths[:limit]
+
+    n_workers = int(workers if workers is not None else settings.ingest_workers)
+    n_workers = max(1, n_workers)
+    if paths:
+        n_workers = min(n_workers, len(paths))
+
+    stats = {
+        "files": 0,
+        "chunks": 0,
+        "errors": 0,
+        "skipped": 0,
+        "escalated": 0,
+        "escalate_skipped_no_key": 0,
+        "zip_archives": prep.zip_stats.get("archives", 0),
+        "zip_extracted": prep.zip_stats.get("extracted", 0),
+        "manifest_files": prep.summary.get("file_count", 0),
+        "media_bridged": 0,
+        "visualized": 0,
+        "entities": 0,
+        "workers": n_workers,
+    }
+
+    db_lock = threading.Lock()
+    embed_lock = threading.Lock()
+    log(f"[cyan]parallel[/cyan] ingest_workers={n_workers} files={len(paths)}")
+
+    def _run(path: Path) -> dict[str, int]:
+        return _ingest_one_file(
+            path,
+            root=root,
+            case_id=case.id,
+            db=db,
+            settings=settings,
+            embedder=embedder,
+            db_lock=db_lock,
+            embed_lock=embed_lock,
+            log=log,
+        )
+
+    if n_workers == 1:
+        deltas = [_run(p) for p in paths]
+    else:
+        deltas = []
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
+            futs = {pool.submit(_run, p): p for p in paths}
+            for fut in as_completed(futs):
+                deltas.append(fut.result())
+
+    for d in deltas:
+        for k, v in d.items():
+            if k in stats:
+                stats[k] += v
+
+    # Refresh disk summary + confidence board for UX
+    try:
+        import json as _json
+
+        rows = db.list_production_manifest(case.id, limit=100_000)
+        summary_path = root / ".marshaloss" / "manifest_summary.json"
+        summary = db.production_manifest_summary(case.id)
+        summary.update(
+            {
+                "schema": "marshaloss.production_manifest.v1",
+                "root": str(root),
+                "slug": slug,
+                "post_ingest": True,
+            }
+        )
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text(_json.dumps(summary, indent=2), encoding="utf-8")
+        board = {
+            "ingest_complete": summary.get("ingest_complete"),
+            "by_status": summary.get("by_status"),
+            "avg_quality": summary.get("avg_quality"),
+            "low_quality_count": summary.get("low_quality_count"),
+            "high_quality_count": summary.get("high_quality_count"),
+            "ready_count": summary.get("ready_count"),
+            "error_count": summary.get("error_count"),
+            "not_covered_count": summary.get("not_covered_count"),
+            "escalated_count": summary.get("escalated_count"),
+            "low_quality_files": [
+                {
+                    "rel_path": r["rel_path"],
+                    "quality_score": r.get("quality_score"),
+                    "quality_reasons": r.get("quality_reasons"),
+                    "source": r.get("source"),
+                    "escalated": r.get("escalated"),
+                }
+                for r in rows
+                if r.get("ingest_status") == "ready"
+                and isinstance(r.get("quality_score"), (int, float))
+                and float(r["quality_score"]) < 0.72
+            ][:200],
+            "errors": [
+                {"rel_path": r["rel_path"], "error": r.get("error")}
+                for r in rows
+                if r.get("ingest_status") == "error"
+            ][:200],
+        }
+        conf_path = root / ".marshaloss" / "ingest_confidence.json"
+        conf_path.write_text(_json.dumps(board, indent=2), encoding="utf-8")
+        stats["manifest_summary"] = summary_path.as_posix()
+        stats["ingest_confidence"] = conf_path.as_posix()
+    except Exception as e:
+        log(f"[yellow]manifest summary refresh failed[/yellow]: {e}")
 
     return {"case": case, **stats}

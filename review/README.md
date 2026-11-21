@@ -21,6 +21,10 @@ UI: **http://localhost:8100/** (no login in `LOCAL` mode). Select project `my-ca
 
 Needs Docker. Elasticsearch **8.19.x** (Datashare 21.25 breaks on ES 7 for highlight).
 
+## Theme
+
+`plugins/marshal-theme` injects the Marshal minimal-white palette (warm off-white, forest accent) over Datashare. Mounted automatically via compose.
+
 ## Customize
 
 | Goal | How |

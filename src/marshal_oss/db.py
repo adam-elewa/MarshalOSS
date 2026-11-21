@@ -87,6 +87,40 @@ class Database:
               content='',
               tokenize='porter'
             );
+            CREATE TABLE IF NOT EXISTS production_manifest (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+              rel_path TEXT NOT NULL,
+              name TEXT NOT NULL,
+              ext TEXT,
+              detected_ext TEXT,
+              size INTEGER NOT NULL DEFAULT 0,
+              mtime REAL,
+              sha256 TEXT NOT NULL,
+              mime TEXT,
+              bates TEXT,
+              kind TEXT NOT NULL,
+              ingestible INTEGER NOT NULL DEFAULT 0,
+              parent_zip TEXT,
+              produced_from TEXT NOT NULL DEFAULT 'native',
+              ingest_status TEXT NOT NULL DEFAULT 'pending',
+              quality_score REAL,
+              quality_reasons TEXT,
+              chunk_count INTEGER NOT NULL DEFAULT 0,
+              file_id INTEGER,
+              escalated INTEGER NOT NULL DEFAULT 0,
+              source TEXT,
+              error TEXT,
+              entities_json TEXT,
+              tags_json TEXT,
+              UNIQUE(case_id, rel_path)
+            );
+            CREATE INDEX IF NOT EXISTS idx_manifest_case_kind
+              ON production_manifest(case_id, kind);
+            CREATE INDEX IF NOT EXISTS idx_manifest_case_sha
+              ON production_manifest(case_id, sha256);
+            CREATE INDEX IF NOT EXISTS idx_manifest_case_status
+              ON production_manifest(case_id, ingest_status);
             """
         )
         # Additive column for quality / AI-OCR audit JSON
@@ -96,6 +130,25 @@ class Database:
         }
         if "meta" not in cols:
             self.conn.execute("ALTER TABLE files ADD COLUMN meta TEXT")
+        # Additive production_manifest ingest/quality columns (older DBs)
+        mcols = {
+            r[1]
+            for r in self.conn.execute("PRAGMA table_info(production_manifest)").fetchall()
+        }
+        for col, decl in [
+            ("ingest_status", "TEXT NOT NULL DEFAULT 'pending'"),
+            ("quality_score", "REAL"),
+            ("quality_reasons", "TEXT"),
+            ("chunk_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("file_id", "INTEGER"),
+            ("escalated", "INTEGER NOT NULL DEFAULT 0"),
+            ("source", "TEXT"),
+            ("error", "TEXT"),
+            ("entities_json", "TEXT"),
+            ("tags_json", "TEXT"),
+        ]:
+            if mcols and col not in mcols:
+                self.conn.execute(f"ALTER TABLE production_manifest ADD COLUMN {col} {decl}")
         self.conn.commit()
 
     def close(self) -> None:
@@ -235,6 +288,224 @@ class Database:
                 (case_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def replace_production_manifest(self, case_id: int, records: Iterable[Any]) -> int:
+        """Replace all production_manifest rows for a case (full inventory refresh)."""
+        self.conn.execute("DELETE FROM production_manifest WHERE case_id=?", (case_id,))
+        rows = []
+        for r in records:
+            # dataclass or dict
+            if hasattr(r, "__dataclass_fields__"):
+                d = {k: getattr(r, k) for k in r.__dataclass_fields__}
+            else:
+                d = dict(r)
+            ingestible = 1 if d.get("ingestible") else 0
+            status = "pending" if ingestible else "skipped_not_covered"
+            rows.append(
+                (
+                    case_id,
+                    d["rel_path"],
+                    d["name"],
+                    d.get("ext"),
+                    d.get("detected_ext"),
+                    int(d.get("size") or 0),
+                    d.get("mtime"),
+                    d["sha256"],
+                    d.get("mime"),
+                    d.get("bates"),
+                    d["kind"],
+                    ingestible,
+                    d.get("parent_zip"),
+                    d.get("produced_from") or "native",
+                    status,
+                )
+            )
+        self.conn.executemany(
+            """
+            INSERT INTO production_manifest(
+              case_id, rel_path, name, ext, detected_ext, size, mtime, sha256,
+              mime, bates, kind, ingestible, parent_zip, produced_from, ingest_status
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            rows,
+        )
+        self.conn.commit()
+        return len(rows)
+
+    def update_manifest_ingest(
+        self,
+        case_id: int,
+        rel_path: str,
+        *,
+        ingest_status: str,
+        quality_score: float | None = None,
+        quality_reasons: list[str] | None = None,
+        chunk_count: int = 0,
+        file_id: int | None = None,
+        escalated: bool = False,
+        source: str | None = None,
+        error: str | None = None,
+        entities: list[Any] | dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> None:
+        """Update one manifest row after ingest / entity pass."""
+        self.conn.execute(
+            """
+            UPDATE production_manifest SET
+              ingest_status=?,
+              quality_score=COALESCE(?, quality_score),
+              quality_reasons=COALESCE(?, quality_reasons),
+              chunk_count=?,
+              file_id=COALESCE(?, file_id),
+              escalated=?,
+              source=COALESCE(?, source),
+              error=?,
+              entities_json=COALESCE(?, entities_json),
+              tags_json=COALESCE(?, tags_json)
+            WHERE case_id=? AND rel_path=?
+            """,
+            (
+                ingest_status,
+                quality_score,
+                json.dumps(quality_reasons, ensure_ascii=False) if quality_reasons is not None else None,
+                chunk_count,
+                file_id,
+                1 if escalated else 0,
+                source,
+                error,
+                json.dumps(entities, ensure_ascii=False) if entities is not None else None,
+                json.dumps(tags, ensure_ascii=False) if tags is not None else None,
+                case_id,
+                rel_path,
+            ),
+        )
+        self.conn.commit()
+
+    def list_production_manifest(
+        self,
+        case_id: int,
+        *,
+        kind: str | None = None,
+        ingestible: bool | None = None,
+        ingest_status: str | None = None,
+        prefix: str = "",
+        limit: int = 5000,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        clauses = ["case_id=?"]
+        args: list[Any] = [case_id]
+        if kind:
+            clauses.append("kind=?")
+            args.append(kind)
+        if ingestible is not None:
+            clauses.append("ingestible=?")
+            args.append(1 if ingestible else 0)
+        if ingest_status:
+            clauses.append("ingest_status=?")
+            args.append(ingest_status)
+        if prefix:
+            clauses.append("rel_path LIKE ?")
+            args.append(prefix.rstrip("/") + "/%")
+        args.extend([limit, offset])
+        sql = f"""
+            SELECT * FROM production_manifest
+            WHERE {' AND '.join(clauses)}
+            ORDER BY rel_path
+            LIMIT ? OFFSET ?
+        """
+        out = []
+        for r in self.conn.execute(sql, args).fetchall():
+            d = dict(r)
+
+            def _loads(val: Any) -> Any:
+                if isinstance(val, str) and val:
+                    try:
+                        return json.loads(val)
+                    except Exception:
+                        return val
+                return val
+
+            d["quality_reasons"] = _loads(d.get("quality_reasons"))
+            d["entities"] = _loads(d.get("entities_json"))
+            d["tags"] = _loads(d.get("tags_json"))
+            out.append(d)
+        return out
+
+    def production_manifest_summary(self, case_id: int) -> dict[str, Any]:
+        row = self.conn.execute(
+            """
+            SELECT COUNT(*) AS file_count,
+                   COALESCE(SUM(size),0) AS total_bytes,
+                   SUM(CASE WHEN ingestible=1 THEN 1 ELSE 0 END) AS ingestible_count,
+                   COALESCE(SUM(CASE WHEN ingestible=1 THEN size ELSE 0 END),0) AS ingestible_bytes,
+                   COUNT(DISTINCT sha256) AS unique_sha256,
+                   SUM(CASE WHEN ingest_status='ready' THEN 1 ELSE 0 END) AS ready_count,
+                   SUM(CASE WHEN ingest_status='error' THEN 1 ELSE 0 END) AS error_count,
+                   SUM(CASE WHEN ingest_status='pending' THEN 1 ELSE 0 END) AS pending_count,
+                   SUM(CASE WHEN ingest_status='skipped' THEN 1 ELSE 0 END) AS skipped_count,
+                   SUM(CASE WHEN ingest_status='skipped_not_covered' THEN 1 ELSE 0 END) AS not_covered_count,
+                   SUM(CASE WHEN escalated=1 THEN 1 ELSE 0 END) AS escalated_count,
+                   AVG(CASE WHEN quality_score IS NOT NULL THEN quality_score END) AS avg_quality,
+                   SUM(CASE WHEN quality_score IS NOT NULL AND quality_score < 0.72 THEN 1 ELSE 0 END) AS low_quality_count,
+                   SUM(CASE WHEN quality_score IS NOT NULL AND quality_score >= 0.85 THEN 1 ELSE 0 END) AS high_quality_count,
+                   SUM(chunk_count) AS total_chunks
+            FROM production_manifest WHERE case_id=?
+            """,
+            (case_id,),
+        ).fetchone()
+        by_kind = {
+            r["kind"]: r["n"]
+            for r in self.conn.execute(
+                """
+                SELECT kind, COUNT(*) AS n FROM production_manifest
+                WHERE case_id=? GROUP BY kind ORDER BY n DESC
+                """,
+                (case_id,),
+            )
+        }
+        by_ext = {
+            r["ext"]: r["n"]
+            for r in self.conn.execute(
+                """
+                SELECT ext, COUNT(*) AS n FROM production_manifest
+                WHERE case_id=? GROUP BY ext ORDER BY n DESC LIMIT 40
+                """,
+                (case_id,),
+            )
+        }
+        by_status = {
+            r["ingest_status"]: r["n"]
+            for r in self.conn.execute(
+                """
+                SELECT ingest_status, COUNT(*) AS n FROM production_manifest
+                WHERE case_id=? GROUP BY ingest_status ORDER BY n DESC
+                """,
+                (case_id,),
+            )
+        }
+        return {
+            "file_count": int(row["file_count"]),
+            "total_bytes": int(row["total_bytes"]),
+            "ingestible_count": int(row["ingestible_count"] or 0),
+            "ingestible_bytes": int(row["ingestible_bytes"] or 0),
+            "unique_sha256": int(row["unique_sha256"] or 0),
+            "ready_count": int(row["ready_count"] or 0),
+            "error_count": int(row["error_count"] or 0),
+            "pending_count": int(row["pending_count"] or 0),
+            "skipped_count": int(row["skipped_count"] or 0),
+            "not_covered_count": int(row["not_covered_count"] or 0),
+            "escalated_count": int(row["escalated_count"] or 0),
+            "avg_quality": round(float(row["avg_quality"]), 3) if row["avg_quality"] is not None else None,
+            "low_quality_count": int(row["low_quality_count"] or 0),
+            "high_quality_count": int(row["high_quality_count"] or 0),
+            "total_chunks": int(row["total_chunks"] or 0),
+            "by_kind": by_kind,
+            "by_ext": by_ext,
+            "by_status": by_status,
+            "ingest_complete": int(row["pending_count"] or 0) == 0
+            and int(row["ingestible_count"] or 0)
+            == int(row["ready_count"] or 0) + int(row["error_count"] or 0) + int(row["skipped_count"] or 0),
+        }
 
     def replace_chunks(
         self,

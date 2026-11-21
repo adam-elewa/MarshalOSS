@@ -87,6 +87,65 @@ def create_app(
         except PermissionError as e:
             raise HTTPException(403, str(e)) from e
 
+    @app.get("/api/manifest")
+    def api_manifest(
+        case_id: int | None = None,
+        kind: str | None = None,
+        ingestible: bool | None = None,
+        ingest_status: str | None = None,
+        path: str = "",
+        limit: int = Query(500, ge=1, le=10000),
+        offset: int = Query(0, ge=0),
+    ) -> dict[str, Any]:
+        """Production inventory + ingest confidence for UX 'what was produced / ingested well'."""
+        c = resolve_case(case_id=case_id)
+        rows = db.list_production_manifest(
+            c.id,
+            kind=kind,
+            ingestible=ingestible,
+            ingest_status=ingest_status,
+            prefix=path,
+            limit=limit,
+            offset=offset,
+        )
+        summary = db.production_manifest_summary(c.id)
+        artifact = db.get_setting(f"manifest_path:{c.id}")
+        return {
+            "case": c.__dict__,
+            "summary": summary,
+            "summary_path": artifact,
+            "limit": limit,
+            "offset": offset,
+            "records": rows,
+        }
+
+    @app.get("/api/manifest/summary")
+    def api_manifest_summary(case_id: int | None = None) -> dict[str, Any]:
+        c = resolve_case(case_id=case_id)
+        summary = db.production_manifest_summary(c.id)
+        artifact = db.get_setting(f"manifest_path:{c.id}")
+        disk = None
+        confidence = None
+        import json
+
+        if artifact and Path(artifact).is_file():
+            try:
+                disk = json.loads(Path(artifact).read_text(encoding="utf-8"))
+            except Exception:
+                disk = None
+        conf_path = Path(c.files_root) / ".marshaloss" / "ingest_confidence.json"
+        if conf_path.is_file():
+            try:
+                confidence = json.loads(conf_path.read_text(encoding="utf-8"))
+            except Exception:
+                confidence = None
+        return {
+            "case": c.__dict__,
+            "summary": summary,
+            "artifact": disk,
+            "confidence": confidence,
+        }
+
     @app.get("/api/search")
     def api_search(
         q: str = Query(...),

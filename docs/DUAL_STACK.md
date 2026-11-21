@@ -1,26 +1,27 @@
-# Dual stack: MarshalOSS + FreeEed
+# Dual stack: MarshalOSS + Datashare
 
-Same Tailscale host (`gideon`, `100.126.162.84`).
+Same host can run both planes.
 
-| Role | Product | URL |
-|------|---------|-----|
-| MCP / hybrid RAG | **MarshalOSS** | `http://100.126.162.84:7340/mcp` |
-| Browser (Bates + search) | MarshalOSS | `http://100.126.162.84:7340/` |
-| Human review (labels, search, produce) | **FreeEed** | `http://100.126.162.84:8090/freeeedui/` |
+| Role | Product | Default URL |
+|------|---------|-------------|
+| MCP / hybrid RAG / Bates ingest | **MarshalOSS** | `http://<host>:7340/mcp` |
+| File open URLs | MarshalOSS | `http://<host>:7340/` |
+| Human review (browse, keyword, stars, tags) | **Datashare** | `http://<host>:8100/` |
 
-## FreeEed login
+## Review plane
 
-- User: `admin`
-- Password: `admin`
-
-## Start FreeEed services
+Compose + index scripts live in [`review/`](../review/README.md).
 
 ```bash
-~/Projects/FreeEed/start-tailscale.sh
+cd review
+cp .env.example .env
+docker compose up -d
+./scripts/create-and-index.sh <project> <subdir-under-data>
 ```
 
-Pack lives at `~/Projects/FreeEed/freeeed_complete_pack`. OpenContracts is parked (`docker compose stop`) after the FreeEed pivot.
+FreeEed / OpenContracts were earlier experiments; Datashare is the supported review plane.
 
-## Smoke case
+## License split
 
-Project `washington` processes OPIA transcripts from `/mnt/marshal/cases/Washington-Jersey City/OPIA-transcripts` (subset under `freeeed_complete_pack/data/washington-opia`).
+- **MarshalOSS** (this repo): Apache-2.0  
+- **Datashare** (upstream image / any fork of its code): AGPL-3.0 — if you modify Datashare and offer it as a network service, you must provide corresponding source.

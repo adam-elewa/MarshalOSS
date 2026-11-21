@@ -1,0 +1,6 @@
+data/
+.env
+*.pdf
+*.eml
+*.msg
+*.pst

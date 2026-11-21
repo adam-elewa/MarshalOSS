@@ -5,7 +5,7 @@ Defense-discovery **ingest + hybrid search + MCP** stack.
 **Docling** turns case files into text (PDF/OCR, Office, email, images, audio/video ASR).  
 **MarshalOSS** stores Bates/path metadata, chunks + embeddings, serves Tailscale file URLs, and exposes tools to Claude Desktop / other MCP clients.
 
-It is **not** a Relativity-style review/produce UI (use FreeEed or similar for coding). It is **not** a full LLM judge that re-OCRs failed pages with GPT/Claude vision.
+Human review (browse, keyword, stars/tags) is the **Datashare** plane in [`review/`](review/README.md). It is **not** a full LLM judge that re-OCRs failed pages with GPT/Claude vision.
 
 ---
 
@@ -20,7 +20,7 @@ It is **not** a Relativity-style review/produce UI (use FreeEed or similar for c
 | MCP tools for agents (`search`, `ask`, …) | Yes |
 | Case file browser + open/download URLs | Yes |
 | Dedup skip by content hash | Yes |
-| Human review codes / production | No — see [docs/DUAL_STACK.md](docs/DUAL_STACK.md) |
+| Human review (browse / keyword / tags) | **Datashare sidecar** — [review/](review/README.md), [docs/DUAL_STACK.md](docs/DUAL_STACK.md) |
 | PST / Cellebrite UFDR workers | Not in v1 — [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
 | AI OCR escalation on low confidence / garbage text | **Yes** (OpenAI or Anthropic vision) |
 

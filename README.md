@@ -1,16 +1,67 @@
 # MarshalOSS
 
-**Local defense-discovery ingest + search**, with **Claude Cowork (or Claude Desktop) as the AI front end**.
-
-Typical productions are PDFs, Office, emails, bodycam/surveillance A/V, and stills. MarshalOSS turns those into Bates-aware searchable text on **your machine** (or a private Tailscale box like Gideon). Claude connects over **MCP** and does the reasoning — ask questions, chase entities, open files — without standing up a cloud e-discovery stack or paying Relativity AI rates.
-
-Human coding/browse stays optional in **Datashare** ([`review/`](review/README.md)). MarshalOSS is the **semantic / RAG / MCP** plane.
+**AI-powered search and reasoning over criminal defense discovery** — locally, at a cost that fits CJA appointments, public defenders, and smaller private cases — without giving up frontier models where they matter.
 
 Apache-2.0. Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
 
+## Objective and scope
+
+No commercial platform today offers serious AI reasoning over a large, messy discovery corpus at a price that makes sense for most criminal matters. Enterprise e-discovery AI is built for civil megacases; criminal productions are often just as complex — and the budget is not.
+
+Criminal defense discovery is rarely a clean PDF binder. It is PDFs and Office files with poor or missing OCR, email dumps, body-worn and surveillance video, radio and call audio, and forensic exports. Even a “minor” case can mean **hundreds of gigabytes** of media and exotic file types that off-the-shelf tools ignore or bill by the gigabyte to touch.
+
+**MarshalOSS exists to close that gap:** AI search and reasoning over large, varied criminal productions at the **lowest practical cost**, while still using **frontier models** for quality where local extraction is not enough.
+
+The approach is not to reinvent e-discovery. It is to **glue and customize strong open-source projects** (Docling, Datashare, ffmpeg, SQLite/FTS, MCP) for how defense counsel actually work — then put **Claude Cowork** (or Claude Desktop) on top as the AI front end for questions, chase-downs, and analysis over the indexed case.
+
+In practice that means: ingest and index on your machine or a private Tailscale box; escalate OCR/ASR only when quality gates fail; keep human review optional in Datashare; let Claude reason over retrieved context via MCP. The goal is to keep e-discovery and AI analysis **aligned with the economic limits of criminal practice** while still matching the volume and complexity of modern discovery.
+
 ---
 
-## Claude Cowork as the front end
+## Note for contributors
+
+**Practicing criminal defense attorneys are especially welcome.** The best features will come from people who live inside discovery every week — not from abstract platform design. If a workflow would have saved you hours on a real case, that is a good contribution.
+
+When you build, please follow these design decisions:
+
+### 1. Claude Cowork or Perplexity Computer as the core AI engine
+
+Prefer **Claude Cowork** (or **Perplexity Computer**) as the place where query and analysis happen — not a custom chat UI that burns its own API tokens on every question.
+
+| Why | Detail |
+|---|---|
+| **Cost** | Subscription / Computer-style usage is usually far cheaper than wiring every search, memo, and follow-up as raw API calls against a large corpus |
+| **Quality** | Frontier reasoning stays in a product that is already optimized for agents, tools, and long sessions |
+| **Ecosystem** | Users get a mature connector surface “for free”: Outlook / email, Microsoft Word, calendars, CourtListener-style legal research, browsers, and other MCP or Computer integrations — without MarshalOSS reinventing each one |
+
+MarshalOSS should stay the **local ingest + search + MCP/context plane**. The AI engine on top asks questions, opens files, drafts, and reaches out to other tools. Do not grow MarshalOSS into a second Relativity AI chatbot unless there is a clear defense-specific reason the host agent cannot do it.
+
+### 2. Prefer open source glue over building from scratch
+
+Especially for **exotic file types** (DVR/surveillance containers, forensic dumps, mail stores, niche players): **do not** invent and maintain hundreds of custom parsers.
+
+| Prefer | Avoid |
+|---|---|
+| **Docling** (and similar) for documents, OCR, native A/V ASR | Homegrown PDF/Office/email parsers |
+| **ffmpeg / ffprobe** as the media bridge | Custom demuxers per vendor extension |
+| Existing open review / index tools (e.g. Datashare) for human coding UX | Rewriting a full Relativity clone |
+| Thin adapters that call mature libraries | “Just one more” file-type connector that only we own |
+
+If ffmpeg cannot probe it or Docling cannot read it, the default path is **upstream conversion / vendor export**, or a **small, well-scoped adapter** around an existing open project — not a permanent MarshalOSS-owned library for every suffix that shows up in a production.
+
+### 3. Cost and quality stay coupled
+
+Local first; escalate to paid vision/ASR/embeddings only when quality gates say the extract is bad. New features should make the same tradeoff: cheapest path that still holds up in court-facing work product.
+
+### 4. Defense workflow first
+
+Bates, production manifests, ingest confidence, searchable media, and “can counsel actually find this tonight” beat generic RAG demos. Document the real case shape (Washington / Jones–class productions) when you add something.
+
+PRs, issues, and design notes from the defense bar are encouraged — even rough ones. Say what the case needed and what open tool you would rather wrap than rewrite.
+
+---
+
+## Claude Cowork (or Perplexity Computer) as the front end
 
 ```
   Production on disk (Washington, David Jones, …)
@@ -27,24 +78,24 @@ Apache-2.0. Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-
               │
        ┌──────┴──────┐
        ▼             ▼
- Claude Cowork    Datashare (optional)
- / Desktop MCP    human review :8100
- (AI over case)   browse / stars / tags
+ Claude Cowork /      Datashare (optional)
+ Perplexity Computer  human review :8100
+ (AI engine + connectors)
 ```
 
 | Layer | What it is | What you pay |
 |---|---|---|
 | **MarshalOSS** | Local ingest, hybrid search, file URLs, MCP tools | Mostly CPU/GPU time; small API $ for embeddings + escalate + entities |
-| **Claude Cowork / Desktop** | The chat UI + reasoning over MCP hits | Your Claude subscription / API — not a second discovery platform |
+| **Claude Cowork / Perplexity Computer** | Query, analysis, drafting + connectors (Outlook, Word, CourtListener, …) | Subscription-style usage — not per-query discovery-platform AI pricing |
 | **Datashare** (optional) | Relativity-ish human review beside the case | Free/open; AGPL upstream |
 
 **Why this is cheap and simple**
 
 1. **Local first** — Docling does OCR/ASR on-box; only *bad* pages/clips escalate to mini/Haiku/`gpt-4o-transcribe`.
-2. **No LLM answers inside MarshalOSS** — `ask` / `search` return chunks + links; Claude (Cowork) writes the memo.
+2. **No LLM answers inside MarshalOSS** — `ask` / `search` return chunks + links; Cowork / Computer writes the memo.
 3. **File-level tags/entities** — one cheap pass per file (canonical names), not per-chunk Sonnet.
 4. **Parallel ingest** — tune workers to your hardware (`-j 8` on Gideon, `-j 2` on a laptop).
-5. **Cowork is the add-on** — counsel already lives in Claude; point MCP at Tailscale `:7340` and the case is AI-ready.
+5. **Agent is the add-on** — counsel works in Cowork or Computer; point MCP at Tailscale `:7340` and the case is AI-ready, with their existing connectors.
 
 **Cowork / Desktop MCP config**
 

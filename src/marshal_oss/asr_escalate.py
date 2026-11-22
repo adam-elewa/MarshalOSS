@@ -61,7 +61,7 @@ def ai_transcribe_file(
     """
     ffmpeg → 16 kHz mono → OpenAI gpt-4o-transcribe (chunked if long/large).
     Returns Marshal-style chunks (plain text segments).
-    Works for Docling-native and ffmpeg-bridge formats (.dav, .wmv, …).
+    Works for Docling-native and ffmpeg-bridge A/V formats.
     """
     _log = log or (lambda _m: None)
     key = resolve_asr_client(settings)

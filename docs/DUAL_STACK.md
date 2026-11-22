@@ -4,11 +4,13 @@ Same host can run both planes.
 
 | Role | Product | Default URL |
 |------|---------|-------------|
-| MCP / hybrid RAG / Bates ingest | **MarshalOSS** | `http://<host>:7340/mcp` |
+| MCP / hybrid search / Bates ingest | **MarshalOSS** | `http://<host>:7340/mcp` |
 | File open URLs | MarshalOSS | `http://<host>:7340/` |
-| Human review (browse, keyword, stars, tags) | **Datashare** | `http://<host>:8100/` |
+| Manual, human-led review | **Datashare** | `http://<host>:8100/` |
 
 ## Review plane
+
+All human-led reviewing should go through **Datashare**. Defense-specific needs (coding UX, tags, privilege, layouts) should be met by **extending or revising Datashare**, not by building a second review product inside MarshalOSS.
 
 Compose + index scripts live in [`review/`](../review/README.md).
 

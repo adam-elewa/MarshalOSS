@@ -328,7 +328,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     @mcp.tool()
     def get_file_link(path: str, case_id: int | None = None) -> dict[str, Any]:
-        """Return Tailscale open/download URLs for a case-relative file path."""
+        """Return open/download URLs (via PUBLIC_BASE) for a case-relative file path."""
         c = active_or(case_id)
         root = Path(c.files_root)
         target = (root / path).resolve()

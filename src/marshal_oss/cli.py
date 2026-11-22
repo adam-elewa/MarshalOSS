@@ -49,7 +49,7 @@ def _load_api_keys() -> None:
 @app.command("prepare")
 def prepare_cmd(
     files_root: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True),
-    slug: str = typer.Option(..., help="Case slug, e.g. washington-jersey-city"),
+    slug: str = typer.Option(..., help="Case slug, e.g. my-case"),
     name: Optional[str] = typer.Option(None, help="Display name"),
     no_expand: bool = typer.Option(False, help="Skip zip expand (hash only)"),
 ) -> None:
@@ -95,7 +95,7 @@ def prepare_cmd(
 @app.command("ingest")
 def ingest_cmd(
     files_root: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True),
-    slug: str = typer.Option(..., help="Case slug, e.g. washington-jersey-city"),
+    slug: str = typer.Option(..., help="Case slug, e.g. my-case"),
     name: Optional[str] = typer.Option(None, help="Display name"),
     limit: Optional[int] = typer.Option(None, help="Max files to ingest (smoke test)"),
     workers: Optional[int] = typer.Option(
@@ -178,7 +178,7 @@ def serve_cmd(
 
         from mcp.server.transport_security import TransportSecuritySettings
 
-        # Allow Tailscale / LAN Host headers (DNS-rebinding guard blocks raw IPs by default)
+        # Allow Host from PUBLIC_BASE (VPN/tunnel/LAN); DNS-rebinding guard blocks unknown hosts
         parsed = urlparse(settings.public_base)
         pub_host = parsed.hostname or "127.0.0.1"
         pub_port = parsed.port or settings.port

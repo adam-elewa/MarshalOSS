@@ -10,16 +10,14 @@ from marshal_oss.manifest import prepare_production
 
 
 def test_prepare_unzips_and_manifest(tmp_path: Path):
-    # native pdf
     (tmp_path / "docs").mkdir()
-    pdf = tmp_path / "docs" / "NSBHF_Washington 00001234.pdf"
+    pdf = tmp_path / "docs" / "PROD_00001234.pdf"
     pdf.write_bytes(b"%PDF-1.4 fake")
 
-    # zip with wav + extensionless mp3 frame header
     zpath = tmp_path / "radio.zip"
     with zipfile.ZipFile(zpath, "w") as zf:
-        zf.writestr("clip.wav", b"RIFF$$$$WAVEfmt ")  # minimal-ish
-        zf.writestr("NSBHF_Washington 00001590", b"\xff\xfb\x90d" + b"\x00" * 32 + b"Xing")
+        zf.writestr("clip.wav", b"RIFF$$$$WAVEfmt ")
+        zf.writestr("PROD_00001590", b"\xff\xfb\x90d" + b"\x00" * 32 + b"Xing")
 
     settings = Settings(expand_zips=True, expand_zip_max_depth=1)
     db = Database(tmp_path / "test.db")
@@ -27,8 +25,8 @@ def test_prepare_unzips_and_manifest(tmp_path: Path):
         tmp_path,
         settings,
         db=db,
-        slug="wash-test",
-        display_name="Wash Test",
+        slug="demo-case",
+        display_name="Demo Case",
         expand=True,
     )
 
@@ -41,14 +39,13 @@ def test_prepare_unzips_and_manifest(tmp_path: Path):
     assert summary["schema"] == "marshaloss.production_manifest.v1"
     assert summary["ingestible_count"] >= 1
 
-    case = db.get_case_by_slug("wash-test")
+    case = db.get_case_by_slug("demo-case")
     assert case is not None
     rows = db.list_production_manifest(case.id)
     assert len(rows) == result.summary["file_count"]
     assert any(r["sha256"] for r in rows)
 
-    # extensionless mp3 sniffed
-    bare = next(r for r in rows if r["name"] == "NSBHF_Washington 00001590")
+    bare = next(r for r in rows if r["name"] == "PROD_00001590")
     assert bare["detected_ext"] == ".mp3"
     assert bare["produced_from"] == "zip_expand"
     assert bare["parent_zip"] and bare["parent_zip"].endswith("radio.zip")

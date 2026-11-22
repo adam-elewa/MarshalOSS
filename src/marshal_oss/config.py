@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     db_path: Path | None = None
     host: str = "0.0.0.0"
     port: int = 7340
-    public_base: str = "http://100.126.162.84:7340"
+    # Base URL clients use for open/download links (localhost, Tailscale, tunnel, …)
+    public_base: str = "http://127.0.0.1:7340"
 
     embed_backend: str = "voyage"  # voyage | hash
     embed_model: str = "voyage-law-2"
@@ -62,16 +63,16 @@ class Settings(BaseSettings):
     # Chars per map call when file exceeds one window
     entity_extract_segment_chars: int = 14000
 
+    # Generic Bates / production id from path (override per matter if needed)
     bates_pattern: str = (
-        r"(?i)(?:(?:NSBHF[_ ]?Washington|Washington|HCPO|Bates)[_\s-]*"
-        r"(\d{3,7}(?:\s*[-–]\s*\d{3,7})?)"
+        r"(?i)(?:Bates[_\s-]*(\d{3,7}(?:\s*[-–]\s*\d{3,7})?)"
         r"|\b([A-Z]{2,8}[_-]?\d{4,7}(?:\s*[-–]\s*\d{3,7})?)\b)"
     )
 
     max_file_bytes: int = 500 * 1024 * 1024
 
     # Parallel file ingest (Docling/ffmpeg/API are I/O-bound). 1 = serial.
-    # Tune to hardware / API rate limits: e.g. 4–8 on Gideon, 2 on a laptop.
+    # Tune to hardware / API rate limits (e.g. 2 on a laptop, 8 on a workstation).
     ingest_workers: int = 4
 
     # Expand production .zip before ingest (stdlib zipfile → <name>__unzipped/)

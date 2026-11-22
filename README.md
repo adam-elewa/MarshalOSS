@@ -2,7 +2,9 @@
 
 Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal defense discovery: PDFs (including bad or missing OCR), emails, bodycam and surveillance video, radio and call audio, forensic dumps, and similar production material.
 
-MarshalOSS runs on your computer or a private Tailscale host. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions and do the analysis in Cowork or Computer. That keeps query cost closer to a normal subscription instead of paying enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
+MarshalOSS runs on your computer. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions and do the analysis in Cowork or Computer. That keeps query cost closer to a normal subscription instead of paying enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
+
+Hosting is separate from the product: local only, or reach it over **Tailscale**, a **Cloudflare Tunnel**, or another private path. Do not expose the port on the public internet without auth. Optional helpers live in [`tools/networking/`](tools/networking/README.md) — deploy however you want.
 
 Apache-2.0. Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
 
@@ -12,39 +14,39 @@ Commercial tools that claim AI over a whole discovery set are usually priced for
 
 MarshalOSS is for search and analysis over those productions at low cost, without skipping paid models when local extraction is wrong or empty.
 
-We are not trying to rebuild Relativity. The point is to wire together existing open-source pieces (Docling, Datashare, ffmpeg, SQLite/FTS, MCP) and adapt them for defense work. Index locally. Re-run OCR or transcription only when quality checks fail. Use Datashare if you want a separate human review UI. Use Claude or Perplexity for questions, drafting, and their connectors (Outlook, Word, CourtListener, and so on).
+The project is not designed to rebuild Relativity. It wires together existing open-source pieces (Docling, Datashare, ffmpeg, SQLite/FTS, MCP) and adapts them for defense work: index locally; re-run OCR or transcription only when quality checks fail; Claude or Perplexity for questions, drafting, and connectors (Outlook, Word, CourtListener, and so on). Manual, human-led review belongs in **Datashare** — extend or revise that project for defense needs rather than building a new review product here.
 
 ---
 
 ## Note for contributors
 
-Practicing criminal defense attorneys are welcome. Useful additions usually come from something that would have helped on a real case.
+Contributions from practicing criminal defense attorneys are welcome. Useful additions usually come from something that would have helped on a real case.
 
-Please stick to these choices:
+Design decisions to follow:
 
 ### 1. Claude Cowork or Perplexity Computer for query and analysis
 
-Put questions and analysis in **Claude Cowork** or **Perplexity Computer**. Do not build a separate chat product that spends API tokens on every search and memo.
+Questions and analysis belong in **Claude Cowork** or **Perplexity Computer**, not in a separate chat product that spends API tokens on every search and memo.
 
 | Why | Detail |
 |---|---|
 | Cost | Subscription / Computer usage is usually cheaper than API calls for every query over a large set |
 | Connectors | Outlook, Word, calendars, CourtListener-style research, browsers, and other MCP/Computer tools stay available without reimplementing them here |
 
-MarshalOSS should remain local ingest, search, and MCP context. Cowork or Computer asks questions, opens files, and drafts. Do not turn this repo into another Relativity-style AI chatbot unless there is a concrete defense reason the host tool cannot do the job.
+MarshalOSS is meant to stay local ingest, search, and MCP context. Cowork or Computer asks questions, opens files, and drafts. The project is not designed to become another Relativity-style AI chatbot unless there is a concrete defense reason the host tool cannot do the job.
 
 ### 2. Prefer existing open-source tools over writing parsers
 
-Especially for odd file types (DVR/surveillance containers, forensic dumps, mail stores, niche players): do not invent and maintain dozens of custom format libraries.
+Especially for odd file types (DVR/surveillance containers, forensic dumps, mail stores, niche players): the project is not designed to invent and maintain dozens of custom format libraries.
 
 | Prefer | Avoid |
 |---|---|
 | Docling (and similar) for documents, OCR, native A/V transcription | Homegrown PDF/Office/email parsers |
 | ffmpeg / ffprobe for media conversion | Custom demuxers per vendor extension |
-| Existing review tools (e.g. Datashare) for human coding | Cloning Relativity in this repo |
-| Small adapters around mature libraries | One-off file-type connectors only we maintain |
+| Extend/revise **Datashare** for human-led review UX | A new review UI or Relativity clone in this repo |
+| Small adapters around mature libraries | One-off file-type connectors only this project maintains |
 
-If ffmpeg cannot open a file or Docling cannot read it, convert with the vendor tool first, or add a thin adapter around an existing open project. Do not grow a permanent MarshalOSS parser for every extension that appears in a production.
+If ffmpeg cannot open a file or Docling cannot read it, convert with the vendor tool first, or add a thin adapter around an existing open project — not a permanent MarshalOSS parser for every extension that appears in a production.
 
 ### 3. Local first, paid APIs when extract quality is bad
 
@@ -52,9 +54,9 @@ Run extraction locally when possible. Call paid vision, transcription, or embedd
 
 ### 4. Defense workflow first
 
-Prefer Bates, production manifests, ingest status/quality, and searchable media over demo-style chat features. When you add something, note the kind of production it is for (e.g. Washington- or Jones-scale sets).
+Prefer features that help counsel find and trust material in a real production (Bates, manifests, ingest status/quality, searchable media) over chat demos that only work on a clean sample set.
 
-Issues and PRs from defense counsel are fine even if rough. Say what the case needed and which open tool you would wrap instead of rewriting.
+Issues and PRs from defense counsel are fine even if rough: what the case needed, and which open tool to wrap instead of rewriting.
 
 ---
 
@@ -91,7 +93,7 @@ Practical points:
 2. MarshalOSS does not answer questions itself. `ask` / `search` return text chunks and links; Cowork or Computer writes the response.
 3. Entities and tags are one cheap pass per file, not a paid call on every chunk.
 4. Ingest can run in parallel (`--workers`); tune for your machine and API limits.
-5. Point MCP at Tailscale `:7340` so Cowork or Computer can search the case and use its other connectors.
+5. Point MCP at your MarshalOSS URL (`http://127.0.0.1:7340` locally, or your Tailscale / tunnel URL) so Cowork or Computer can search the case and use its other connectors.
 
 **MCP config (Claude Desktop / Cowork-style hosts)**
 
@@ -101,7 +103,7 @@ Practical points:
   "args": [
     "-y",
     "mcp-remote",
-    "http://<TAILSCALE_IP>:7340/mcp",
+    "http://<HOST>:7340/mcp",
     "--allow-http",
     "--transport",
     "http-only"
@@ -109,7 +111,7 @@ Practical points:
 }
 ```
 
-Set `MARSHALOSS_PUBLIC_BASE` to the same Tailscale base so open/download links work.
+Set `MARSHALOSS_PUBLIC_BASE` to the same base URL clients use so open/download links work. See [`tools/networking/`](tools/networking/README.md).
 
 ### MCP tools
 
@@ -119,7 +121,7 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same Tailscale base so open/download links w
 | `browse_case_files` | Directory listing + Bates + URLs |
 | `search` | Keyword / semantic / hybrid hits + snippets + `open_url` |
 | `ask` | Top hybrid chunks as context (the host model answers) |
-| `get_file_link` / `open_file_browser` | Tailscale file links |
+| `get_file_link` / `open_file_browser` | File links via `PUBLIC_BASE` |
 
 ---
 
@@ -135,15 +137,30 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same Tailscale base so open/download links w
 | Parallel file workers (`--workers` / `INGEST_WORKERS`) | Yes |
 | OCR reprocess (vision) when Docling text is bad | Yes |
 | ASR reprocess (`gpt-4o-transcribe`) when A/V transcript is bad | Yes |
-| ffmpeg media bridge (odd A/V → wav → ASR) | Yes |
+| ffmpeg media bridge (extra A/V → wav → ASR) | Yes |
 | Captions for stills and sampled video frames | Yes |
 | File-level entities + tags (with name aliases) | Yes |
 | MCP for Cowork / Desktop | Yes |
 | Case browser + open/download URLs | Yes |
 | Human review (browse / keyword / stars / tags) | Datashare sidecar |
-| PST / Cellebrite UFDR / vendor DVR ffmpeg cannot open | Not in v1 — [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
+| PST / OST explosion, Cellebrite/UFDR workers | Not in v1 — [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
 
-Adequate for Washington- and David Jones–type productions (PDF/Office/images/common A/V). Formats ffmpeg cannot probe still need vendor export first.
+---
+
+## Covered file types
+
+Default allowlist (override with `MARSHALOSS_INGEST_EXTENSIONS`):
+
+| Kind | Extensions |
+|---|---|
+| Documents | `.pdf` `.docx` `.doc` `.pptx` `.ppt` `.xlsx` `.xls` `.csv` `.txt` `.md` `.html` `.htm` |
+| Email | `.eml` `.msg` |
+| Images | `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.webp` |
+| Audio (Docling ASR) | `.mp3` `.wav` `.m4a` `.aac` `.ogg` `.flac` |
+| Video (Docling ASR) | `.mp4` `.mov` `.avi` `.mkv` `.webm` |
+| Other A/V via ffmpeg → wav → ASR | `.wma` `.wmv` `.flv` `.asf` `.ts` `.m4v` `.mpeg` `.mpg` `.3gp` `.caf` `.dav` `.vob` `.h264` `.m2ts` `.mts` `.mxf` |
+
+Anything else is left off the allowlist on purpose. If Docling or ffmpeg cannot open a file, convert it with whatever tool produced it, then re-ingest. Max size default **500 MB** (`MARSHALOSS_MAX_FILE_BYTES`).
 
 ---
 
@@ -191,30 +208,14 @@ Disk: `<root>/.marshaloss/ingest_confidence.json`.
 
 One pass over the full extracted text per file (`gpt-4o-mini` / Haiku):
 
-- Fits in one window → single call; merge variants (`Jones` / `David Jones` → canonical + aliases)
+- Fits in one window → single call; merge name variants into a canonical form + aliases
 - Longer → map ~14k-char segments → one merge call
 
 Stored on `files.meta` / the manifest. Not per-chunk tagging for now.
 
 ### Media bridge
 
-| ffmpeg can open | Examples |
-|---|---|
-| Convert to wav → ASR | `.dav` `.wmv` `.wma` `.flv` `.asf` `.ts` `.m4v` `.mpeg` `.3gp` `.caf` `.vob` `.h264` … |
-| Skip | `.av3` `.g64x` `.v22` `.vac` — convert with vendor tools first |
-
-### Supported extensions (default)
-
-```
-.pdf .docx .doc .pptx .ppt .xlsx .xls .csv .txt .md
-.html .htm .eml .msg
-.png .jpg .jpeg .tif .tiff .bmp .webp
-.mp3 .wav .m4a .aac .ogg .flac
-.mp4 .mov .avi .mkv .webm
-.wma .wmv .flv .asf .ts .m4v .mpeg .mpg .3gp .caf .dav .vob .h264 .m2ts .mts .mxf
-```
-
-Override: `MARSHALOSS_INGEST_EXTENSIONS`. Max size default **500 MB** (`MARSHALOSS_MAX_FILE_BYTES`).
+For A/V extensions Docling does not take natively, MarshalOSS uses ffmpeg/ffprobe: convert to 16 kHz mono WAV, then the same ASR path. No custom demuxers — if ffmpeg cannot open the file, convert upstream and re-ingest.
 
 ---
 
@@ -226,9 +227,9 @@ Override: `MARSHALOSS_INGEST_EXTENSIONS`. Max size default **500 MB** (`MARSHALO
 | Voyage embeddings | Every chunk | cents to a few dollars on a mid-size case |
 | OCR / ASR reprocess | Only when quality fails | Can dominate A/V-heavy cases if many files fail |
 | Visual captions | Stills + sampled frames | cheap vision models |
-| Entities/tags | One or more cheap calls per file | often under $1 on a Jones-scale set |
+| Entities/tags | One or more cheap calls per file | often under $1 on a mid-size set |
 
-David Jones–class (~80 ingestible files / ~17 GB mostly A/V): often about **$2–9** API total if reprocess stays selective. Runtime is usually the bigger issue — use `--workers`.
+Example mid-size A/V-heavy production (~80 ingestible files / ~17 GB mostly media): often about **$2–9** API total if reprocess stays selective. Runtime is usually the bigger issue — use `--workers`.
 
 ---
 
@@ -244,20 +245,23 @@ uv sync
 # export MARSHALOSS_INGEST_WORKERS=8
 
 uv run marshaloss ingest "/path/to/case/root" \
-  --slug washington-jersey-city \
-  --name "Washington v. Jersey City" \
+  --slug my-case \
+  --name "My Case" \
   --workers 8
 
-export MARSHALOSS_PUBLIC_BASE="http://$(tailscale ip -4):7340"
+# Local (default PUBLIC_BASE is http://127.0.0.1:7340)
 uv run marshaloss serve
+
+# Or use optional networking helpers (Tailscale / Cloudflare Tunnel / explicit URL):
+#   ./tools/networking/serve.sh
 ```
 
 Manifest only (before Docling):
 
 ```bash
 uv run marshaloss prepare "/path/to/case/root" \
-  --slug washington-jersey-city \
-  --name "Washington v. Jersey City"
+  --slug my-case \
+  --name "My Case"
 ```
 
 | Surface | URL |
@@ -301,14 +305,16 @@ Stills with little OCR text get a caption. Video: sample a frame every N seconds
 
 ---
 
-## Dual stack (optional human review)
+## Dual stack (human review = Datashare)
 
 | Role | Tool | Default |
 |---|---|---|
 | Search / MCP / Cowork or Computer | MarshalOSS | `:7340` |
-| Human browse / keyword / stars / tags | Datashare | `:8100` |
+| Manual, human-led review | **Datashare** | `:8100` |
 
-See [docs/DUAL_STACK.md](docs/DUAL_STACK.md) and [review/README.md](review/README.md).  
+MarshalOSS is not the place to build coding panels, privilege workflows, or a full review desk. That work should be done as an **extension or revision of Datashare** to fit criminal defense practice — do not reinvent a review platform in this repo.
+
+Compose and ops scripts: [`review/`](review/README.md). Dual-stack notes: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).  
 Datashare upstream is AGPL-3.0; MarshalOSS in this repo is Apache-2.0.
 
 ---
@@ -320,7 +326,7 @@ Datashare upstream is AGPL-3.0; MarshalOSS in this repo is Apache-2.0.
 | `DATA_DIR` | `~/.marshaloss` | SQLite + local data |
 | `DB_PATH` | `$DATA_DIR/marshal_oss.db` | Override DB |
 | `HOST` / `PORT` | `0.0.0.0` / `7340` | Bind |
-| `PUBLIC_BASE` | (set Tailscale URL) | Links for MCP / UI |
+| `PUBLIC_BASE` | `http://127.0.0.1:7340` | Base URL for MCP / open links (local, Tailscale, tunnel, …) |
 | `INGEST_WORKERS` | `4` | Parallel files (`--workers` / `-j`) |
 | `EMBED_BACKEND` | `voyage` | `voyage` or `hash` |
 | `EMBED_MODEL` | `voyage-law-2` | Voyage model |
@@ -366,4 +372,4 @@ Data dir: `~/.marshaloss/` (separate from legacy `~/.marshal-lite` — re-ingest
 
 ## What this is not
 
-This is not Relativity. There are no coding panels, privilege logs, redaction workflows, or reviewer assignment here. MarshalOSS covers ingest status, searchable text, and MCP search/context for Cowork or Computer. Use Datashare (or another review tool) for human coding.
+The project is not designed to replace Relativity. It covers ingest status, searchable text, and MCP search/context for Cowork or Computer. It does not include a full human review desk (coding panels, privilege logs, redaction, reviewer assignment). That belongs in **Datashare** — extend or revise Datashare for defense-specific needs instead of building a parallel review product here.

@@ -1,8 +1,8 @@
 # Review plane (Datashare)
 
-Human **browse / keyword search / star / tag** sidecar for [MarshalOSS](../README.md).
+Manual, human-led review for [MarshalOSS](../README.md): browse, keyword search, stars, tags.
 
-Claude (via Marshal MCP) stays the ask-AI front end. This stack is for manual review.
+Claude / Perplexity (via MarshalOSS MCP) stays the AI front end. **Do not reinvent a review UI in MarshalOSS.** Defense-specific review needs should be met by **extending or revising Datashare** (theme, tags, coding UX, auth, and so on).
 
 Upstream: [ICIJ Datashare](https://github.com/ICIJ/datashare) (**AGPL-3.0**). This folder is compose + ops scripts only (Apache-2.0 with the rest of MarshalOSS).
 
@@ -25,11 +25,11 @@ Needs Docker. Elasticsearch **8.19.x** (Datashare 21.25 breaks on ES 7 for highl
 
 `plugins/marshal-theme` injects the Marshal minimal-white palette (warm off-white, forest accent) over Datashare. Mounted automatically via compose.
 
-## Customize
+## Customize (extend Datashare, don’t rebuild it)
 
 | Goal | How |
 |------|-----|
-| Themes / UI / tags UX | Fork [ICIJ/datashare](https://github.com/ICIJ/datashare) (AGPL — share your changes if you distribute/run modified server) |
+| Themes / UI / tags / coding UX for defense | Fork or patch [ICIJ/datashare](https://github.com/ICIJ/datashare) (AGPL — share changes if you distribute/run a modified server) |
 | Port / passwords / data path | `.env` |
 | OCR on | Index with `--ocr true` (edit `create-and-index.sh`) |
 | NER people/orgs | Add NLP stage after INDEX (see Datashare docs) |

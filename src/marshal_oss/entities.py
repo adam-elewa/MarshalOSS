@@ -4,7 +4,7 @@ File-level AI entities + tags (last ingest pass).
 Covers **full extracted text** per file:
 - Short files → one call
 - Long files → map over segments, then one reduce that **canonicalizes**
-  (e.g. Jones / D. Jones / David Jones → canonical "David Jones" + aliases)
+  (e.g. Smith / J. Smith / Jane Smith → canonical "Jane Smith" + aliases)
 
 Not per-chunk indexing — authoritative for UX filters; search still uses FTS/embeddings.
 """
@@ -47,10 +47,10 @@ From the FULL extracted text below, return ONLY compact JSON (no markdown):
 }
 Canonicalization (important):
 - Merge the same real-world referent into ONE entity.
-- Example: "Jones", "D. Jones", "David Jones", "Mr. Jones" → canonical "David Jones",
-  aliases ["Jones", "D. Jones", "Mr. Jones"].
+- Example: "Smith", "J. Smith", "Jane Smith", "Ms. Smith" → canonical "Jane Smith",
+  aliases ["Smith", "J. Smith", "Ms. Smith"].
 - Prefer the most complete proper name as canonical when clear from context.
-- Same for orgs (e.g. "HCSO" / "Hillsborough County Sheriff's Office").
+- Same for orgs (short form / full name when both appear).
 - Only facts grounded in the text; skip empty arrays if nothing clear.
 """
 
@@ -66,8 +66,8 @@ Given the candidate lists below (possibly overlapping/noisy), return ONLY compac
   "tags": ["merged short tags, max 12"]
 }
 Canonicalization (important):
-- Same person/org/place → ONE row. Example: Jones + David Jones → canonical "David Jones",
-  aliases include "Jones".
+- Same person/org/place → ONE row. Example: Smith + Jane Smith → canonical "Jane Smith",
+  aliases include "Smith".
 - Prefer the most complete proper name when the text supports it.
 - Drop duplicates and weak one-off noise; keep grounded entities only.
 - Union tags; dedupe; max 12.

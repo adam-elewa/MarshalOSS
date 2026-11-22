@@ -60,7 +60,7 @@ def test_transcript_good_dialogue_ok():
         "who else was in the stairwell",
         "whether anyone knocked before entering",
         "the time the fire alarm started",
-        "what Washington said about the bag",
+        "what the neighbor said about the bag",
         "how long the argument lasted",
         "whether lights were on in 4B",
         "the description of the second man",

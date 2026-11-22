@@ -1,12 +1,10 @@
 """
-ffmpeg/ffprobe helpers — the demuxer wheel for discovery media.
+ffmpeg/ffprobe helpers for A/V Docling does not take natively.
 
-Docling natively ASR's a short list (wav/mp3/m4a/… + mp4/mov/…). Large
-productions (Gede-class) also ship .dav/.wmv/.wma/.flv/.asf/.ts/…. Those we
-normalize to 16 kHz mono WAV with ffmpeg, then reuse Docling ASR / escalate.
-
-Proprietary containers ffmpeg cannot probe (.av3, .g64x, .v22, .vac, …) are
-intentionally not allowlisted — need vendor players, not a custom demuxer.
+Docling ASR covers a short native list (wav/mp3/m4a/… + mp4/mov/…). Other
+common A/V types are normalized to 16 kHz mono WAV with ffmpeg, then the same
+ASR / escalate path is used. No custom demuxers — if ffmpeg cannot probe a
+file, convert it upstream and re-ingest.
 """
 
 from __future__ import annotations
@@ -35,7 +33,7 @@ DOCLING_NATIVE_MEDIA = frozenset(
     }
 )
 
-# Extra discovery/surveillance types ffmpeg commonly decodes (probe-verified on Gede)
+# Extra A/V types commonly opened by ffmpeg, then bridged to wav
 FFMPEG_BRIDGE_MEDIA = frozenset(
     {
         ".wma",
@@ -48,7 +46,7 @@ FFMPEG_BRIDGE_MEDIA = frozenset(
         ".mpg",
         ".3gp",
         ".caf",
-        ".dav",  # Dahua/NVR
+        ".dav",
         ".vob",
         ".h264",
         ".m2ts",

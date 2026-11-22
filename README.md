@@ -1,76 +1,73 @@
 # MarshalOSS
 
-**AI-powered search and reasoning over criminal defense discovery** — locally, at a cost that fits CJA appointments, public defenders, and smaller private cases — without giving up frontier models where they matter.
+Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal defense discovery: PDFs (including bad or missing OCR), emails, bodycam and surveillance video, radio and call audio, forensic dumps, and similar production material.
+
+MarshalOSS runs on your computer or a private Tailscale host. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions and do the analysis in Cowork or Computer. That keeps query cost closer to a normal subscription instead of paying enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
 
 Apache-2.0. Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
 
 ## Objective and scope
 
-No commercial platform today offers serious AI reasoning over a large, messy discovery corpus at a price that makes sense for most criminal matters. Enterprise e-discovery AI is built for civil megacases; criminal productions are often just as complex — and the budget is not.
+Commercial tools that claim AI over a whole discovery set are usually priced for large civil matters. Criminal cases often have the same mess — volume and odd file types — without the same budget. A routine case can still include hundreds of gigabytes of audio, video, and forensic exports. Many file types are ignored by generic software, or billed heavily to process.
 
-Criminal defense discovery is rarely a clean PDF binder. It is PDFs and Office files with poor or missing OCR, email dumps, body-worn and surveillance video, radio and call audio, and forensic exports. Even a “minor” case can mean **hundreds of gigabytes** of media and exotic file types that off-the-shelf tools ignore or bill by the gigabyte to touch.
+MarshalOSS is for search and analysis over those productions at low cost, without skipping paid models when local extraction is wrong or empty.
 
-**MarshalOSS exists to close that gap:** AI search and reasoning over large, varied criminal productions at the **lowest practical cost**, while still using **frontier models** for quality where local extraction is not enough.
-
-The approach is not to reinvent e-discovery. It is to **glue and customize strong open-source projects** (Docling, Datashare, ffmpeg, SQLite/FTS, MCP) for how defense counsel actually work — then put **Claude Cowork** (or Claude Desktop) on top as the AI front end for questions, chase-downs, and analysis over the indexed case.
-
-In practice that means: ingest and index on your machine or a private Tailscale box; escalate OCR/ASR only when quality gates fail; keep human review optional in Datashare; let Claude reason over retrieved context via MCP. The goal is to keep e-discovery and AI analysis **aligned with the economic limits of criminal practice** while still matching the volume and complexity of modern discovery.
+We are not trying to rebuild Relativity. The point is to wire together existing open-source pieces (Docling, Datashare, ffmpeg, SQLite/FTS, MCP) and adapt them for defense work. Index locally. Re-run OCR or transcription only when quality checks fail. Use Datashare if you want a separate human review UI. Use Claude or Perplexity for questions, drafting, and their connectors (Outlook, Word, CourtListener, and so on).
 
 ---
 
 ## Note for contributors
 
-**Practicing criminal defense attorneys are especially welcome.** The best features will come from people who live inside discovery every week — not from abstract platform design. If a workflow would have saved you hours on a real case, that is a good contribution.
+Practicing criminal defense attorneys are welcome. Useful additions usually come from something that would have helped on a real case.
 
-When you build, please follow these design decisions:
+Please stick to these choices:
 
-### 1. Claude Cowork or Perplexity Computer as the core AI engine
+### 1. Claude Cowork or Perplexity Computer for query and analysis
 
-Prefer **Claude Cowork** (or **Perplexity Computer**) as the place where query and analysis happen — not a custom chat UI that burns its own API tokens on every question.
+Put questions and analysis in **Claude Cowork** or **Perplexity Computer**. Do not build a separate chat product that spends API tokens on every search and memo.
 
 | Why | Detail |
 |---|---|
-| **Cost** | Subscription / Computer-style usage is usually far cheaper than wiring every search, memo, and follow-up as raw API calls against a large corpus |
-| **Quality** | Frontier reasoning stays in a product that is already optimized for agents, tools, and long sessions |
-| **Ecosystem** | Users get a mature connector surface “for free”: Outlook / email, Microsoft Word, calendars, CourtListener-style legal research, browsers, and other MCP or Computer integrations — without MarshalOSS reinventing each one |
+| Cost | Subscription / Computer usage is usually cheaper than API calls for every query over a large set |
+| Connectors | Outlook, Word, calendars, CourtListener-style research, browsers, and other MCP/Computer tools stay available without reimplementing them here |
 
-MarshalOSS should stay the **local ingest + search + MCP/context plane**. The AI engine on top asks questions, opens files, drafts, and reaches out to other tools. Do not grow MarshalOSS into a second Relativity AI chatbot unless there is a clear defense-specific reason the host agent cannot do it.
+MarshalOSS should remain local ingest, search, and MCP context. Cowork or Computer asks questions, opens files, and drafts. Do not turn this repo into another Relativity-style AI chatbot unless there is a concrete defense reason the host tool cannot do the job.
 
-### 2. Prefer open source glue over building from scratch
+### 2. Prefer existing open-source tools over writing parsers
 
-Especially for **exotic file types** (DVR/surveillance containers, forensic dumps, mail stores, niche players): **do not** invent and maintain hundreds of custom parsers.
+Especially for odd file types (DVR/surveillance containers, forensic dumps, mail stores, niche players): do not invent and maintain dozens of custom format libraries.
 
 | Prefer | Avoid |
 |---|---|
-| **Docling** (and similar) for documents, OCR, native A/V ASR | Homegrown PDF/Office/email parsers |
-| **ffmpeg / ffprobe** as the media bridge | Custom demuxers per vendor extension |
-| Existing open review / index tools (e.g. Datashare) for human coding UX | Rewriting a full Relativity clone |
-| Thin adapters that call mature libraries | “Just one more” file-type connector that only we own |
+| Docling (and similar) for documents, OCR, native A/V transcription | Homegrown PDF/Office/email parsers |
+| ffmpeg / ffprobe for media conversion | Custom demuxers per vendor extension |
+| Existing review tools (e.g. Datashare) for human coding | Cloning Relativity in this repo |
+| Small adapters around mature libraries | One-off file-type connectors only we maintain |
 
-If ffmpeg cannot probe it or Docling cannot read it, the default path is **upstream conversion / vendor export**, or a **small, well-scoped adapter** around an existing open project — not a permanent MarshalOSS-owned library for every suffix that shows up in a production.
+If ffmpeg cannot open a file or Docling cannot read it, convert with the vendor tool first, or add a thin adapter around an existing open project. Do not grow a permanent MarshalOSS parser for every extension that appears in a production.
 
-### 3. Cost and quality stay coupled
+### 3. Local first, paid APIs when extract quality is bad
 
-Local first; escalate to paid vision/ASR/embeddings only when quality gates say the extract is bad. New features should make the same tradeoff: cheapest path that still holds up in court-facing work product.
+Run extraction locally when possible. Call paid vision, transcription, or embedding APIs when quality checks say the text is bad or missing. New features should follow the same rule: cheapest path that still produces usable work product.
 
 ### 4. Defense workflow first
 
-Bates, production manifests, ingest confidence, searchable media, and “can counsel actually find this tonight” beat generic RAG demos. Document the real case shape (Washington / Jones–class productions) when you add something.
+Prefer Bates, production manifests, ingest status/quality, and searchable media over demo-style chat features. When you add something, note the kind of production it is for (e.g. Washington- or Jones-scale sets).
 
-PRs, issues, and design notes from the defense bar are encouraged — even rough ones. Say what the case needed and what open tool you would rather wrap than rewrite.
+Issues and PRs from defense counsel are fine even if rough. Say what the case needed and which open tool you would wrap instead of rewriting.
 
 ---
 
-## Claude Cowork (or Perplexity Computer) as the front end
+## How Cowork / Computer fits
 
 ```
-  Production on disk (Washington, David Jones, …)
+  Production on disk
               │
               ▼
      MarshalOSS ingest (local)
        unzip → hashed manifest
-       Docling OCR/ASR (+ escalate when bad)
-       visual captions · file entities/tags
+       Docling OCR/ASR (+ reprocess when quality is bad)
+       image/video captions · file entities/tags
        FTS5 + Voyage embeddings
               │
               ▼
@@ -80,24 +77,23 @@ PRs, issues, and design notes from the defense bar are encouraged — even rough
        ▼             ▼
  Claude Cowork /      Datashare (optional)
  Perplexity Computer  human review :8100
- (AI engine + connectors)
 ```
 
-| Layer | What it is | What you pay |
+| Layer | Role | Cost |
 |---|---|---|
-| **MarshalOSS** | Local ingest, hybrid search, file URLs, MCP tools | Mostly CPU/GPU time; small API $ for embeddings + escalate + entities |
-| **Claude Cowork / Perplexity Computer** | Query, analysis, drafting + connectors (Outlook, Word, CourtListener, …) | Subscription-style usage — not per-query discovery-platform AI pricing |
-| **Datashare** (optional) | Relativity-ish human review beside the case | Free/open; AGPL upstream |
+| MarshalOSS | Ingest, search, file URLs, MCP | Mostly local compute; small API spend for embeddings and failed OCR/ASR |
+| Claude Cowork / Perplexity Computer | Questions, analysis, drafting, connectors | Mostly subscription usage |
+| Datashare (optional) | Browse / keyword / stars / tags | Open source (AGPL upstream) |
 
-**Why this is cheap and simple**
+Practical points:
 
-1. **Local first** — Docling does OCR/ASR on-box; only *bad* pages/clips escalate to mini/Haiku/`gpt-4o-transcribe`.
-2. **No LLM answers inside MarshalOSS** — `ask` / `search` return chunks + links; Cowork / Computer writes the memo.
-3. **File-level tags/entities** — one cheap pass per file (canonical names), not per-chunk Sonnet.
-4. **Parallel ingest** — tune workers to your hardware (`-j 8` on Gideon, `-j 2` on a laptop).
-5. **Agent is the add-on** — counsel works in Cowork or Computer; point MCP at Tailscale `:7340` and the case is AI-ready, with their existing connectors.
+1. Docling does first-pass OCR/ASR locally. Only bad pages or clips go to paid vision / `gpt-4o-transcribe`.
+2. MarshalOSS does not answer questions itself. `ask` / `search` return text chunks and links; Cowork or Computer writes the response.
+3. Entities and tags are one cheap pass per file, not a paid call on every chunk.
+4. Ingest can run in parallel (`--workers`); tune for your machine and API limits.
+5. Point MCP at Tailscale `:7340` so Cowork or Computer can search the case and use its other connectors.
 
-**Cowork / Desktop MCP config**
+**MCP config (Claude Desktop / Cowork-style hosts)**
 
 ```json
 "marshaloss": {
@@ -113,69 +109,69 @@ PRs, issues, and design notes from the defense bar are encouraged — even rough
 }
 ```
 
-Set `MARSHALOSS_PUBLIC_BASE` to that same Tailscale base so open/download links work from Cowork.
+Set `MARSHALOSS_PUBLIC_BASE` to the same Tailscale base so open/download links work.
 
-### MCP tools Claude uses
+### MCP tools
 
 | Tool | Purpose |
 |---|---|
 | `list_cases` / `get_active_case` / `set_active_case` | Case selection |
 | `browse_case_files` | Directory listing + Bates + URLs |
-| `search` | Hybrid / keyword / semantic hits + snippets + `open_url` |
-| `ask` | Top hybrid chunks as RAG context (**Claude** answers) |
+| `search` | Keyword / semantic / hybrid hits + snippets + `open_url` |
+| `ask` | Top hybrid chunks as context (the host model answers) |
 | `get_file_link` / `open_file_browser` | Tailscale file links |
 
 ---
 
-## What you get (capability map)
+## Features
 
-| Capability | Status |
+| Feature | Status |
 |---|---|
 | Multi-format ingest (Docling) | Yes |
-| Zip expand + **hashed production manifest** | Yes |
-| **Ingest confidence** (status, quality, low-quality board) | Yes |
+| Zip expand + hashed production manifest | Yes |
+| Ingest status / quality on the manifest | Yes |
 | Bates from path/filename | Yes |
 | SQLite FTS5 + Voyage (or offline hash) hybrid search | Yes |
 | Parallel file workers (`--workers` / `INGEST_WORKERS`) | Yes |
-| OCR escalate (vision) on garbage/sparse Docling | Yes |
-| ASR escalate (`gpt-4o-transcribe`) on bad A/V | Yes |
-| ffmpeg **media bridge** (DVR-ish types → wav → ASR) | Yes |
-| Visual captions (stills + sampled video frames) | Yes |
-| File-level AI **entities + tags** (canonical aliases) | Yes |
-| MCP for Claude Cowork / Desktop | Yes |
+| OCR reprocess (vision) when Docling text is bad | Yes |
+| ASR reprocess (`gpt-4o-transcribe`) when A/V transcript is bad | Yes |
+| ffmpeg media bridge (odd A/V → wav → ASR) | Yes |
+| Captions for stills and sampled video frames | Yes |
+| File-level entities + tags (with name aliases) | Yes |
+| MCP for Cowork / Desktop | Yes |
 | Case browser + open/download URLs | Yes |
-| Human review (browse / keyword / stars / tags) | **Datashare** sidecar |
-| PST / Cellebrite UFDR / exotic vendor DVR | Not v1 — [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
+| Human review (browse / keyword / stars / tags) | Datashare sidecar |
+| PST / Cellebrite UFDR / vendor DVR ffmpeg cannot open | Not in v1 — [docs/EXTENSIONS.md](docs/EXTENSIONS.md) |
 
-Good stopping point for **Washington**- and **David Jones**-class productions (PDF/Office/images/standard A/V). Proprietary jail/DVR containers ffmpeg can’t probe still need vendor export upstream.
+Adequate for Washington- and David Jones–type productions (PDF/Office/images/common A/V). Formats ffmpeg cannot probe still need vendor export first.
 
 ---
 
-## End-to-end ingest pipeline
+## Ingest pipeline
 
 ```
 1. prepare   Expand *.zip → <name>__unzipped/
              Walk every file → full SHA-256 + Bates + kind
              Write .marshaloss/manifest.jsonl + summary
-             Upsert production_manifest (UX “what was produced”)
+             Upsert production_manifest
 
 2. extract   Docling DocumentConverter → HybridChunker
-             Media: native Docling A/V, else ffmpeg → wav → ASR
+             Media: Docling A/V if supported, else ffmpeg → wav → ASR
 
-3. quality   Score OCR/transcript; escalate only when gates fire
-             OCR → vision mini/Haiku · ASR → gpt-4o-transcribe
+3. quality   Score OCR/transcript; reprocess only when checks fail
+             OCR → vision (mini/Haiku) · ASR → gpt-4o-transcribe
 
-4. visual    Late pass: image captions + video frame samples
+4. visual    Image captions + video frame samples
 
-5. entities  File-level mini/Haiku → canonical entities + tags
-             (short = 1 call; long = map segments → reduce merge)
+5. entities  File-level mini/Haiku → entities + tags
+             (short file = 1 call; long = segments then merge)
 
 6. index     Embed → SQLite files / chunks / embeddings / FTS5
-             Stamp manifest: ingest_status, quality_*, entities, tags
-             Write ingest_confidence.json for the board
+             Update manifest: ingest_status, quality_*, entities, tags
+             Write ingest_confidence.json
 ```
 
-`marshaloss ingest` runs **prepare** automatically first.
+`marshaloss ingest` runs prepare first.
 
 ### Ingest confidence
 
@@ -185,28 +181,27 @@ Good stopping point for **Washington**- and **David Jones**-class productions (P
 | `quality_score` | 0–1 extraction confidence |
 | `quality_reasons` | why score is low |
 | `chunk_count` | searchable chunks |
-| `escalated` | OCR or ASR escalate fired |
-| `entities` / `tags` | file-level AI extract |
+| `escalated` | OCR or ASR reprocess ran |
+| `entities` / `tags` | file-level extract |
 
-API: `/api/manifest`, `/api/manifest/summary` (`ingest_complete`, `avg_quality`, `low_quality_count`, …).  
+API: `/api/manifest`, `/api/manifest/summary`.  
 Disk: `<root>/.marshaloss/ingest_confidence.json`.
 
-### Entities & tags (keep it simple)
+### Entities and tags
 
-Last pass over **full extracted text** per file (`gpt-4o-mini` / Haiku):
+One pass over the full extracted text per file (`gpt-4o-mini` / Haiku):
 
-- One window → single call with canonicalization  
-  (`Jones` / `D. Jones` / `David Jones` → `canonical: "David Jones"`, `aliases: […]`)
-- Longer → map ~14k-char segments → one reduce that merges aliases  
+- Fits in one window → single call; merge variants (`Jones` / `David Jones` → canonical + aliases)
+- Longer → map ~14k-char segments → one merge call
 
-Stored on `files.meta` / manifest. Not per-chunk tagging (that stays future / use-case driven).
+Stored on `files.meta` / the manifest. Not per-chunk tagging for now.
 
-### Media bridge (no custom demuxers)
+### Media bridge
 
-| ffmpeg can probe | Examples |
+| ffmpeg can open | Examples |
 |---|---|
-| Bridged → wav → ASR | `.dav` `.wmv` `.wma` `.flv` `.asf` `.ts` `.m4v` `.mpeg` `.3gp` `.caf` `.vob` `.h264` … |
-| Skip (vendor) | `.av3` `.g64x` `.v22` `.vac` — convert upstream |
+| Convert to wav → ASR | `.dav` `.wmv` `.wma` `.flv` `.asf` `.ts` `.m4v` `.mpeg` `.3gp` `.caf` `.vob` `.h264` … |
+| Skip | `.av3` `.g64x` `.v22` `.vac` — convert with vendor tools first |
 
 ### Supported extensions (default)
 
@@ -223,17 +218,17 @@ Override: `MARSHALOSS_INGEST_EXTENSIONS`. Max size default **500 MB** (`MARSHALO
 
 ---
 
-## Cost model (typical)
+## Cost (rough)
 
-| Pass | When it spends $ | Ballpark |
+| Pass | When it costs money | Ballpark |
 |---|---|---|
 | Docling | Local | ~$0 API |
-| Voyage embeddings | Every chunk | cents–low dollars per mid case |
-| OCR / ASR escalate | Only quality fails | dominate A/V-heavy cases if many escalate |
-| Visual captions | Stills + sampled frames | mini/Haiku vision |
-| Entities/tags | 1+ cheap calls per file | often **≪ $1** on DJ-scale |
+| Voyage embeddings | Every chunk | cents to a few dollars on a mid-size case |
+| OCR / ASR reprocess | Only when quality fails | Can dominate A/V-heavy cases if many files fail |
+| Visual captions | Stills + sampled frames | cheap vision models |
+| Entities/tags | One or more cheap calls per file | often under $1 on a Jones-scale set |
 
-David Jones–class (~80 ingestible / ~17 GB mostly A/V): often **~$2–9** API all-in if escalate stays selective; wall clock is the bigger constraint — use **`--workers`**.
+David Jones–class (~80 ingestible files / ~17 GB mostly A/V): often about **$2–9** API total if reprocess stays selective. Runtime is usually the bigger issue — use `--workers`.
 
 ---
 
@@ -246,8 +241,7 @@ cd ~/Projects/MarshalOSS
 
 uv sync
 
-# Parallelism: hardware + API limits
-#   export MARSHALOSS_INGEST_WORKERS=8
+# export MARSHALOSS_INGEST_WORKERS=8
 
 uv run marshaloss ingest "/path/to/case/root" \
   --slug washington-jersey-city \
@@ -258,7 +252,7 @@ export MARSHALOSS_PUBLIC_BASE="http://$(tailscale ip -4):7340"
 uv run marshaloss serve
 ```
 
-Prepare only (manifest before Docling):
+Manifest only (before Docling):
 
 ```bash
 uv run marshaloss prepare "/path/to/case/root" \
@@ -271,7 +265,7 @@ uv run marshaloss prepare "/path/to/case/root" \
 | Home / browser | `http://<host>:7340/` · `/browser` |
 | Health | `http://<host>:7340/health` |
 | Manifest | `http://<host>:7340/api/manifest` · `/api/manifest/summary` |
-| MCP (Cowork) | `http://<host>:7340/mcp` |
+| MCP | `http://<host>:7340/mcp` |
 
 ```bash
 uv run marshaloss search "bodycam booking" --mode hybrid --top-k 8
@@ -279,31 +273,31 @@ uv run marshaloss search "bodycam booking" --mode hybrid --top-k 8
 
 ---
 
-## AI / local dependencies
+## Dependencies
 
 | Dependency | Role | Required? |
 |---|---|---|
-| **Docling** (`docling[asr]`) | First-pass parse / OCR / ASR | Yes |
-| **ffmpeg / ffprobe** | Media bridge + ASR escalate + frame sample | Yes for A/V |
-| **`VOYAGE_API_KEY`** | `voyage-law-2` embeddings | Recommended (else weak local hash) |
-| **`OPENAI_API_KEY`** / **`ANTHROPIC_API_KEY`** | OCR escalate, visual, entities; OpenAI also ASR | Recommended |
-| Python **3.12+**, **uv** | Runtime | Yes |
+| Docling (`docling[asr]`) | First-pass parse / OCR / ASR | Yes |
+| ffmpeg / ffprobe | Media bridge, ASR reprocess, frame sample | Yes for A/V |
+| `VOYAGE_API_KEY` | `voyage-law-2` embeddings | Recommended (else weak local hash) |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | OCR reprocess, captions, entities; OpenAI also ASR | Recommended |
+| Python 3.12+, uv | Runtime | Yes |
 
 Keys also load from `~/.marshal/env.sh` when unset.
 
-**Not** used for RAG answers inside MarshalOSS — Claude Cowork reasons over retrieved context.
+MarshalOSS does not call a chat model to answer case questions; Cowork or Computer does that from retrieved text.
 
-### Quality gates (OCR)
+### OCR quality checks
 
-Escalate when Docling looks bad: poor grades, near-empty/sparse extract, `�` / mojibake / symbol salad, hard Docling fail on PDF/image. Fair grade + healthy text does **not** escalate. Cap: `MARSHALOSS_OCR_ESCALATE_MAX_PAGES` (default 25).
+Reprocess when Docling looks bad: poor grades, near-empty or sparse text, `�` / mojibake / junk symbols, or Docling hard-fail on PDF/image. A fair grade with normal text does not reprocess. Cap: `MARSHALOSS_OCR_ESCALATE_MAX_PAGES` (default 25).
 
-### Quality gates (ASR)
+### ASR quality checks
 
-Escalate when transcript looks empty, hallucinated (“thanks for watching”), looped, or sparse vs duration/size → ffmpeg → `gpt-4o-transcribe`.
+Reprocess when the transcript is empty, looping, sparse for the length/size, or full of junk phrases → ffmpeg → `gpt-4o-transcribe`.
 
 ### Visual analyze
 
-Stills with thin OCR → caption. Video → frame every N seconds (default 5s, max 48) → caption chunks (`Visual @m:ss`), embedded like text.
+Stills with little OCR text get a caption. Video: sample a frame every N seconds (default 5s, max 48) and caption those (`Visual @m:ss`).
 
 ---
 
@@ -311,11 +305,11 @@ Stills with thin OCR → caption. Video → frame every N seconds (default 5s, m
 
 | Role | Tool | Default |
 |---|---|---|
-| Semantic / MCP / Cowork RAG | **MarshalOSS** | `:7340` |
-| Human browse / keyword / stars / tags | **Datashare** | `:8100` |
+| Search / MCP / Cowork or Computer | MarshalOSS | `:7340` |
+| Human browse / keyword / stars / tags | Datashare | `:8100` |
 
 See [docs/DUAL_STACK.md](docs/DUAL_STACK.md) and [review/README.md](review/README.md).  
-Datashare upstream is AGPL-3.0; this repo’s MarshalOSS code is Apache-2.0.
+Datashare upstream is AGPL-3.0; MarshalOSS in this repo is Apache-2.0.
 
 ---
 
@@ -330,17 +324,17 @@ Datashare upstream is AGPL-3.0; this repo’s MarshalOSS code is Apache-2.0.
 | `INGEST_WORKERS` | `4` | Parallel files (`--workers` / `-j`) |
 | `EMBED_BACKEND` | `voyage` | `voyage` or `hash` |
 | `EMBED_MODEL` | `voyage-law-2` | Voyage model |
-| `OCR_ESCALATE` | `true` | Vision OCR on quality fails |
+| `OCR_ESCALATE` | `true` | Vision OCR when quality fails |
 | `OCR_ESCALATE_PROVIDER` | `auto` | `auto` / `openai` / `anthropic` |
 | `OCR_ESCALATE_MAX_PAGES` | `25` | Cap AI OCR pages/file |
 | `OCR_ESCALATE_MIN_SCORE` | `0.72` | Score gate |
-| `ASR_ESCALATE` | `true` | Cloud ASR on bad transcripts |
+| `ASR_ESCALATE` | `true` | Cloud ASR when transcript is bad |
 | `ASR_ESCALATE_MODEL` | `gpt-4o-transcribe` | ASR model |
 | `VISUAL_ANALYZE` | `true` | Image/frame captions |
 | `VISUAL_FRAME_INTERVAL_SEC` | `5` | Video sample interval |
 | `VISUAL_MAX_FRAMES` | `48` | Cap frames/video |
 | `ENTITY_EXTRACT` | `true` | File-level entities/tags |
-| `ENTITY_EXTRACT_SEGMENT_CHARS` | `14000` | Map window for long files |
+| `ENTITY_EXTRACT_SEGMENT_CHARS` | `14000` | Segment size for long files |
 | `ENTITY_EXTRACT_MAX_CHARS` | `0` | `0` = all extracted text |
 | `EXPAND_ZIPS` | `true` | Unzip before ingest |
 | `EXPAND_ZIP_MAX_DEPTH` | `2` | Nested zip depth |
@@ -356,20 +350,20 @@ Also accept bare `VOYAGE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
 
 ```
 Case folder
-    → prepare (manifest) → extract → escalate → visual → entities
+    → prepare (manifest) → extract → reprocess → visual → entities
     → Embedder (Voyage | hash)
     → SQLite
          ├── FTS5 keyword
          ├── vector cosine
          └── hybrid RRF
     → REST /api/search · /api/manifest · /browser · /files/…
-    → MCP  /mcp  → Claude Cowork
+    → MCP  /mcp  → Cowork / Computer
 ```
 
-Data dir: `~/.marshaloss/` (does not share legacy `~/.marshal-lite` — re-ingest or point `MARSHALOSS_DB_PATH`).
+Data dir: `~/.marshaloss/` (separate from legacy `~/.marshal-lite` — re-ingest or set `MARSHALOSS_DB_PATH`).
 
 ---
 
-## Not Relativity (and that’s fine)
+## What this is not
 
-MarshalOSS + Cowork aims at **ingest confidence, searchable text, and AI Q&A over the production** — not coding panels, privilege logs, redaction workflows, or reviewer assignment. Use Datashare (or your review tool) for human coding; grow those surfaces from this ingest base when the use case demands it.
+This is not Relativity. There are no coding panels, privilege logs, redaction workflows, or reviewer assignment here. MarshalOSS covers ingest status, searchable text, and MCP search/context for Cowork or Computer. Use Datashare (or another review tool) for human coding.

@@ -23,7 +23,11 @@ docker compose up -d
 
 FreeEed / OpenContracts were earlier experiments; Datashare is the supported review plane.
 
-## License split
+## License
 
-- **MarshalOSS** (this repo): Apache-2.0  
-- **Datashare** (upstream image / any fork of its code): AGPL-3.0 — if you modify Datashare and offer it as a network service, you must provide corresponding source.
+Both are AGPL-3.0:
+
+- **MarshalOSS** (this repo): AGPL-3.0-or-later
+- **Datashare** (upstream image / any fork of its code): AGPL-3.0
+
+If you modify either and offer it as a network service, you must provide the corresponding source.

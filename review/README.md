@@ -4,7 +4,7 @@ Basic human review for [MarshalOSS](../README.md): **browse, tag, and annotate**
 
 Claude / Perplexity (via MarshalOSS MCP) stays the AI front end. This project is designed to ship those basic review tools **through Datashare**, not a new UI inside MarshalOSS. Defense-specific needs should be met by **extending or revising Datashare** (theme, tags, annotation, coding UX, auth, and so on).
 
-Upstream: [ICIJ Datashare](https://github.com/ICIJ/datashare) (**AGPL-3.0**). This folder is compose + ops scripts only (Apache-2.0 with the rest of MarshalOSS).
+Upstream: [ICIJ Datashare](https://github.com/ICIJ/datashare) (**AGPL-3.0**). This folder is compose + ops scripts only (AGPL-3.0 with the rest of MarshalOSS).
 
 ## Quick start
 

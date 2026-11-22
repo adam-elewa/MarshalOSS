@@ -4,7 +4,7 @@ Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal 
 
 MarshalOSS runs on your computer. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions in Cowork or Computer, so query cost stays close to a normal subscription instead of enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
 
-Apache-2.0. Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
+License: AGPL-3.0 (see [License](#license)). Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
 
 ## Objective and scope
 
@@ -216,7 +216,28 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 
 Browsing, tagging, and annotating are handled by [Datashare](https://github.com/ICIJ/datashare), running beside MarshalOSS on `:8100`. Defense-specific review features (coding, tags, annotation, privilege, layouts) should be built by **extending or revising Datashare**, not by creating a separate review UI in this repo.
 
-Setup: [`review/`](review/README.md). Details: [docs/DUAL_STACK.md](docs/DUAL_STACK.md). Datashare is AGPL-3.0; MarshalOSS is Apache-2.0.
+Setup: [`review/`](review/README.md). Details: [docs/DUAL_STACK.md](docs/DUAL_STACK.md). Both Datashare and MarshalOSS are AGPL-3.0.
+
+---
+
+## Defense tools (specialized viewers)
+
+Some defense work needs a purpose-built view that a general review app will never ship — for example, watching several officers' bodycam footage on one synced timeline. These tools follow one pattern:
+
+- **Built and served by MarshalOSS.** The tool reads MarshalOSS's own data (transcripts, frame descriptions, timestamps, file metadata), so it needs no separate processing and also works on its own in a browser.
+- **Shown inside Datashare.** A thin Datashare plugin adds the tool as its own view: a sidebar page for case-wide views, and a panel on the matching documents. Reviewers stay in one app.
+- **Fed by ingest.** Where a tool needs special inputs (like knowing which videos are bodycam), ingest detects and stores them automatically.
+
+| Tool | What it does | Status |
+|---|---|---|
+| **Bodycam viewer** | Video with a synced, clickable transcript and frame descriptions; videos grouped by officer; a multi-camera timeline aligned by recording time, with per-camera clock offsets; transcript search | Planned (porting from legacy Marshal) |
+
+Planned groundwork for the bodycam viewer:
+1. Store start/end times on transcript and frame chunks so clicking a line seeks the video.
+2. Detect bodycam footage at ingest from file paths, video metadata (device, serial, recording start), and the existing vision pass (camera type, burned-in overlay text).
+3. Serve the viewer from MarshalOSS and add the Datashare plugin.
+
+New tools should follow the same pattern. General browse/tag/annotate features still belong in Datashare itself.
 
 ---
 
@@ -265,8 +286,25 @@ Contributions from practicing criminal defense attorneys are welcome. The most u
 | Extending Datashare for review UX | A new review UI or Relativity clone |
 | Thin adapters around mature libraries | Format connectors only this project maintains |
 
-If Docling or ffmpeg can't read a file, convert it upstream or add a thin adapter around an existing open project.
+If Docling or ffmpeg can't read a file, convert it upstream or add a thin adapter around an existing open project. The one exception to "extend Datashare" is specialized defense viewers; see [Defense tools](#defense-tools-specialized-viewers).
 
 **3. Local first; pay only when quality is bad.** Extract locally where possible and call paid vision, transcription, or embedding APIs only when the result is bad or missing.
 
 **4. Defense workflow first.** Prefer features that help counsel find and trust material in a real production: Bates, manifests, ingest status/quality, searchable media.
+
+---
+
+## License
+
+MarshalOSS is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-or-later).
+
+In plain terms:
+
+- **Free to use, study, and modify**, including in a law practice or public defender office.
+- **Derivative works must stay open source** under the same license. You cannot fork this project into a closed-source product.
+- **This includes hosted use.** If you run a modified version as a service for others (for example, hosting it for clients over the network), you must offer them the source code of your modified version.
+- **Paid setup, hosting, and support are allowed**, as long as the software itself stays AGPL.
+
+Contributions are accepted under the same license: by submitting a pull request, you agree your contribution is licensed under AGPL-3.0-or-later.
+
+This is a plain-language summary, not legal advice. The [LICENSE](LICENSE) file controls.

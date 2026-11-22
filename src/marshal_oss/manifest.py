@@ -275,7 +275,6 @@ def prepare_production(
         _log("[cyan]prepare[/cyan] expanding zips…")
         zip_stats = expand_zips(
             root,
-            max_archive_bytes=settings.expand_zip_max_bytes,
             max_depth=settings.expand_zip_max_depth,
             log=_log,
         )

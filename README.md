@@ -163,37 +163,112 @@ Default allowlist (override with `MARSHALOSS_INGEST_EXTENSIONS`):
 | Video (Docling ASR) | `.mp4` `.mov` `.avi` `.mkv` `.webm` |
 | Other A/V via ffmpeg → wav → ASR | `.wma` `.wmv` `.flv` `.asf` `.ts` `.m4v` `.mpeg` `.mpg` `.3gp` `.caf` `.dav` `.vob` `.h264` `.m2ts` `.mts` `.mxf` |
 
-Anything else is left off the allowlist on purpose. If Docling or ffmpeg cannot open a file, convert it with whatever tool produced it, then re-ingest. Max size default **500 MB** (`MARSHALOSS_MAX_FILE_BYTES`).
+Anything else is left off the allowlist on purpose. If Docling or ffmpeg cannot open a file, convert it with whatever tool produced it, then re-ingest.
 
 ---
 
-## Ingest pipeline
+## Ingest pipeline (what actually happens)
+
+Think of ingest as: **turn a folder of discovery into searchable text + vectors**, then stamp a checklist so you know what worked. `marshaloss ingest` runs all of this. Files can run in parallel (`--workers`).
 
 ```
-1. prepare   Expand *.zip → <name>__unzipped/
-             Walk every file → full SHA-256 + Bates + kind
-             Write .marshaloss/manifest.jsonl + summary
-             Upsert production_manifest
-
-2. extract   Docling DocumentConverter → HybridChunker
-             Media: Docling A/V if supported, else ffmpeg → wav → ASR
-
-3. quality   Score OCR/transcript; reprocess only when checks fail
-             OCR → vision (mini/Haiku) · ASR → gpt-4o-transcribe
-
-4. visual    Image captions + video frame samples
-
-5. entities  File-level mini/Haiku → entities + tags
-             (short file = 1 call; long = segments then merge)
-
-6. index     Embed → SQLite files / chunks / embeddings / FTS5
-             Update manifest: ingest_status, quality_*, entities, tags
-             Write ingest_confidence.json
+  Case folder on disk
+           │
+           ▼
+  ┌─ 1. PREPARE (local, $0) ─────────────────────────────────────┐
+  │  Unzip *.zip → sibling __unzipped/ folders                   │
+  │  Hash every file (SHA-256), guess Bates from path            │
+  │  Write production manifest (“what was produced”)             │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 │
+           for each allowlisted file (parallel workers)
+                                 ▼
+  ┌─ 2. EXTRACT TEXT (local Docling + ffmpeg, $0 API) ───────────┐
+  │  PDFs / Office / email / images → Docling OCR/parse          │
+  │  Common A/V → Docling ASR                                    │
+  │  Other A/V → ffmpeg → wav → same ASR path                    │
+  │  Output: text chunks (with page/time when available)         │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 ▼
+  ┌─ 3. QUALITY GATE (local score; API only if bad) ─────────────┐
+  │  Docs: garbage/empty OCR? → OpenAI/Anthropic vision OCR      │
+  │  A/V: empty/junk transcript? → OpenAI gpt-4o-transcribe      │
+  │  Good enough Docling text? → keep it, no API call            │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 ▼
+  ┌─ 4. VISUAL CAPTIONS (API, cheap vision) ─────────────────────┐
+  │  Photos with little OCR text → caption                       │
+  │  Video → sample frames → caption each (“what’s on screen”)   │
+  │  Captions become searchable chunks like any other text       │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 ▼
+  ┌─ 5. ENTITIES / TAGS (API, cheap chat model, per file) ───────┐
+  │  One pass over that file’s full text → people/orgs + tags    │
+  │  Merge aliases (e.g. short name → full name)                 │
+  │  Stored on the file for filters / UX — not every chunk       │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 ▼
+  ┌─ 6. INDEX (Voyage API + local SQLite) ───────────────────────┐
+  │  Every text chunk → Voyage embedding (voyage-law-2)          │
+  │  Store: files, chunks, vectors, FTS5 keyword index           │
+  │  Update manifest: ready/error, quality, entities, tags       │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 ▼
+                    Ready for search / MCP / Datashare
 ```
 
-`marshaloss ingest` runs prepare first.
+### Stage-by-stage (lay version)
+
+**1. Prepare — inventory, no AI**  
+Production folders often arrive as zips. MarshalOSS expands them, hashes every file, and builds a **manifest**: a flat list of what the state produced. That is your “did we get everything?” board before OCR even runs. No API keys needed.
+
+**2. Extract — local Docling (and ffmpeg when needed)**  
+[Docling](https://github.com/docling-project/docling) is an open-source document AI stack that runs **on your machine**. It turns PDFs, Office, email, images, and common audio/video into text.  
+For A/V types Docling does not take natively, MarshalOSS calls **ffmpeg** (installed on the host, not shipped in this repo): convert to a plain WAV, then run the same transcription path.  
+**Cost:** CPU/GPU time, not cloud tokens. This is the bulk of wall-clock time on a big case.
+
+**3. Quality gate — pay only when the extract looks bad**  
+Local heuristics score the text (empty, gibberish, “thanks for watching” junk ASR, etc.).  
+- Bad **document/image** OCR → call a **vision** model (OpenAI or Anthropic, cheap tier by default) on the bad pages.  
+- Bad **audio/video** transcript → call **OpenAI `gpt-4o-transcribe`**.  
+If Docling did fine, **no API call**. That is how cost stays down without accepting garbage text.
+
+**4. Visual captions — cheap vision so pictures are searchable**  
+A still with almost no OCR, or a video that is mostly images, will not show up in keyword search. This step asks a vision model for a short caption (and samples video frames). Those captions are stored as text chunks so “red hoodie in the hallway” can hit later.
+
+**5. Entities and tags — one cheap pass per file**  
+A small chat model (`gpt-4o-mini` / Haiku) reads the file’s extracted text and returns people/orgs/places plus short tags, with name aliases merged. Used for simple filtering later. Not a paid call on every chunk.
+
+**6. Voyage embeddings + SQLite — how search gets “smart”**  
+Plain keyword search (SQLite **FTS5**) finds exact words. That misses “the booking” vs “processed at central.”  
+
+**Voyage** (`voyage-law-2`, needs `VOYAGE_API_KEY`) turns each text chunk into a vector — a list of numbers that means “what this passage is about.” Those vectors are stored next to the chunks.  
+
+When you (or Cowork) search:  
+- **Keyword** → FTS5  
+- **Semantic** → embed the query with Voyage, compare to stored vectors  
+- **Hybrid (default)** → fuse both (RRF)  
+
+So Voyage is **not** answering questions. It only builds/query the meaning index. **Claude Cowork / Perplexity Computer** still write the answer from the chunks MarshalOSS returns over MCP.  
+
+If there is no Voyage key, MarshalOSS falls back to a weak local hash embedder — fine for smoke tests, not for real semantic search.
+
+### API calls cheat sheet
+
+| Stage | Who gets called | When | Why |
+|---|---|---|---|
+| Prepare | Nobody | Always | Inventory only |
+| Extract | Nobody (Docling/ffmpeg local) | Always | Turn files into text |
+| Quality | OpenAI or Anthropic vision | Doc OCR looks bad | Fix unreadable pages |
+| Quality | OpenAI `gpt-4o-transcribe` | A/V transcript looks bad | Fix bad speech-to-text |
+| Visual | OpenAI or Anthropic vision | Thin OCR / video frames | Make pictures searchable |
+| Entities | OpenAI mini or Anthropic Haiku | Each file with enough text | Tags + people/org names |
+| Index | **Voyage** | Every text chunk | Semantic search vectors |
+| Ask / search (later) | Voyage (query embed) + **no** chat API in MarshalOSS | Each search | Host agent (Cowork) does the reasoning |
 
 ### Ingest confidence
+
+After ingest, each manifest row gets status and quality so you can see what failed:
 
 | Field | Meaning |
 |---|---|
@@ -207,32 +282,16 @@ Anything else is left off the allowlist on purpose. If Docling or ffmpeg cannot 
 API: `/api/manifest`, `/api/manifest/summary`.  
 Disk: `<root>/.marshaloss/ingest_confidence.json`.
 
-### Entities and tags
+### Cost (rough)
 
-One pass over the full extracted text per file (`gpt-4o-mini` / Haiku):
-
-- Fits in one window → single call; merge name variants into a canonical form + aliases
-- Longer → map ~14k-char segments → one merge call
-
-Stored on `files.meta` / the manifest. Not per-chunk tagging for now.
-
-### Media bridge
-
-For A/V extensions Docling does not take natively, MarshalOSS uses ffmpeg/ffprobe: convert to 16 kHz mono WAV, then the same ASR path. No custom demuxers — if ffmpeg cannot open the file, convert upstream and re-ingest.
-
----
-
-## Cost (rough)
-
-| Pass | When it costs money | Ballpark |
+| Pass | Money | Notes |
 |---|---|---|
-| Docling | Local | ~$0 API |
-| Voyage embeddings | Every chunk | cents to a few dollars on a mid-size case |
-| OCR / ASR reprocess | Only when quality fails | Can dominate A/V-heavy cases if many files fail |
-| Visual captions | Stills + sampled frames | cheap vision models |
-| Entities/tags | One or more cheap calls per file | often under $1 on a mid-size set |
+| Docling / ffmpeg | ~$0 API | Dominates **time** |
+| Voyage | Every chunk (+ each search query) | Usually cents–low dollars per mid case |
+| OCR / ASR reprocess | Only failures | Can dominate A/V-heavy cases if many clips fail |
+| Visual + entities | Cheap models | Usually small vs ASR |
 
-Example mid-size A/V-heavy production (~80 ingestible files / ~17 GB mostly media): often about **$2–9** API total if reprocess stays selective. Runtime is usually the bigger issue — use `--workers`.
+Runtime is often the bottleneck — use `--workers`. No per-file or per-zip size skip: large media is ingested like everything else.
 
 ---
 
@@ -350,25 +409,20 @@ Datashare upstream is AGPL-3.0; MarshalOSS in this repo is Apache-2.0.
 | `EXPAND_ZIPS` | `true` | Unzip before ingest |
 | `EXPAND_ZIP_MAX_DEPTH` | `2` | Nested zip depth |
 | `INGEST_EXTENSIONS` | (see above) | Allowed suffixes |
-| `MAX_FILE_BYTES` | `524288000` | Skip larger |
 | `BATES_PATTERN` | built-in | Bates regex |
 
 Also accept bare `VOYAGE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
 
 ---
 
-## Architecture (search)
+## After ingest (how you use it)
 
 ```
-Case folder
-    → prepare (manifest) → extract → reprocess → visual → entities
-    → Embedder (Voyage | hash)
-    → SQLite
-         ├── FTS5 keyword
-         ├── vector cosine
-         └── hybrid RRF
-    → REST /api/search · /api/manifest · /browser · /files/…
-    → MCP  /mcp  → Cowork / Computer
+  SQLite (chunks + Voyage vectors + FTS5)
+           │
+           ├─ REST  /api/search  /api/manifest  /browser  /files/…
+           ├─ MCP   /mcp  → Claude Cowork / Perplexity Computer
+           └─ Datashare (optional) → browse / tag / annotate
 ```
 
 Data dir: `~/.marshaloss/` (separate from legacy `~/.marshal-lite` — re-ingest or set `MARSHALOSS_DB_PATH`).

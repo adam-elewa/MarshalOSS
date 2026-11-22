@@ -50,7 +50,6 @@ def _safe_extract_member(zf: zipfile.ZipFile, member: zipfile.ZipInfo, dest: Pat
 def expand_zips(
     root: Path,
     *,
-    max_archive_bytes: int = 8 * 1024 * 1024 * 1024,
     max_depth: int = 2,
     log: LogFn | None = None,
 ) -> dict[str, int]:
@@ -59,7 +58,7 @@ def expand_zips(
 
     Idempotent when the extract folder already has files. Recurses up to
     ``max_depth`` so nested production zips expand too.
-    Uses only the stdlib ``zipfile`` module.
+    Uses only the stdlib ``zipfile`` module. No archive size cap.
     """
     _log = log or (lambda _m: None)
     root = root.resolve()
@@ -80,18 +79,8 @@ def expand_zips(
 
         new_this_pass = 0
         for zpath in uniq:
-            try:
-                size = zpath.stat().st_size
-            except OSError:
+            if not zpath.is_file():
                 stats["errors"] += 1
-                continue
-            if size > max_archive_bytes:
-                try:
-                    rel = zpath.relative_to(root)
-                except ValueError:
-                    rel = zpath
-                _log(f"[yellow]zip skip[/yellow] too large ({size}): {rel}")
-                stats["skipped"] += 1
                 continue
 
             dest = _extract_dest(zpath)

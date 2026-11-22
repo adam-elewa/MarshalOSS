@@ -69,15 +69,12 @@ class Settings(BaseSettings):
         r"|\b([A-Z]{2,8}[_-]?\d{4,7}(?:\s*[-–]\s*\d{3,7})?)\b)"
     )
 
-    max_file_bytes: int = 500 * 1024 * 1024
-
     # Parallel file ingest (Docling/ffmpeg/API are I/O-bound). 1 = serial.
     # Tune to hardware / API rate limits (e.g. 2 on a laptop, 8 on a workstation).
     ingest_workers: int = 4
 
     # Expand production .zip before ingest (stdlib zipfile → <name>__unzipped/)
     expand_zips: bool = True
-    expand_zip_max_bytes: int = 8 * 1024 * 1024 * 1024
     expand_zip_max_depth: int = 2
 
     # Docling-native + ffmpeg-bridge A/V (see media_ffmpeg.AUDIO_VIDEO_EXTS)

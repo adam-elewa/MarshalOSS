@@ -376,29 +376,6 @@ def _ingest_one_file(
     rel = str(path.relative_to(root)).replace("\\", "/")
     try:
         st = path.stat()
-        if st.st_size > settings.max_file_bytes:
-            with db_lock:
-                db.upsert_file(
-                    case_id,
-                    rel,
-                    path.name,
-                    extract_bates(rel, settings.bates_pattern),
-                    mimetypes.guess_type(path.name)[0],
-                    st.st_size,
-                    st.st_mtime,
-                    None,
-                    status="skipped",
-                    error=f"too large ({st.st_size})",
-                )
-                db.update_manifest_ingest(
-                    case_id,
-                    rel,
-                    ingest_status="skipped",
-                    error=f"too large ({st.st_size})",
-                )
-            delta["skipped"] = 1
-            return delta
-
         sha = file_sha256(path)
         with db_lock:
             existing = db.get_file(case_id, rel)

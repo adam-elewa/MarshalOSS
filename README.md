@@ -4,7 +4,7 @@ Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal 
 
 MarshalOSS runs on your computer. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions and do the analysis in Cowork or Computer. That keeps query cost closer to a normal subscription instead of paying enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
 
-Hosting is separate from the product: local only, or reach it over **Tailscale**, a **Cloudflare Tunnel**, or another private path. Do not expose the port on the public internet without auth. Optional helpers live in [`tools/networking/`](tools/networking/README.md) — deploy however you want.
+The project is **hosting-agnostic** — run it locally or behind whatever network you prefer. Do **not** expose the port on the public internet without auth. Prefer a private path such as **Tailscale** or a **Cloudflare Tunnel**. Optional helpers for that are under [`tools/networking/`](tools/networking/README.md).
 
 Apache-2.0. Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
 
@@ -12,9 +12,12 @@ Apache-2.0. Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-
 
 Commercial tools that claim AI over a whole discovery set are usually priced for large civil matters. Criminal cases often have the same mess — volume and odd file types — without the same budget. A routine case can still include hundreds of gigabytes of audio, video, and forensic exports. Many file types are ignored by generic software, or billed heavily to process.
 
-MarshalOSS is for search and analysis over those productions at low cost, without skipping paid models when local extraction is wrong or empty.
+The project is for two things at low cost, without skipping paid models when local extraction is wrong or empty:
 
-The project is not designed to rebuild Relativity. It wires together existing open-source pieces (Docling, Datashare, ffmpeg, SQLite/FTS, MCP) and adapts them for defense work: index locally; re-run OCR or transcription only when quality checks fail; Claude or Perplexity for questions, drafting, and connectors (Outlook, Word, CourtListener, and so on). Manual, human-led review belongs in **Datashare** — extend or revise that project for defense needs rather than building a new review product here.
+1. **AI search and analysis** over the production (MarshalOSS + Cowork / Computer)
+2. **Basic human review** — browsing, tagging, and annotating discovery (via **Datashare**)
+
+The project is not designed to rebuild Relativity. It wires together existing open-source pieces (Docling, Datashare, ffmpeg, SQLite/FTS, MCP) and adapts them for defense work: index locally; re-run OCR or transcription only when quality checks fail; Claude or Perplexity for questions, drafting, and connectors (Outlook, Word, CourtListener, and so on). Manual review tools (browse, tag, annotate) should be delivered by **extending or revising Datashare** for defense needs — not by inventing a new review product from scratch in this repo.
 
 ---
 
@@ -307,12 +310,14 @@ Stills with little OCR text get a caption. Video: sample a frame every N seconds
 
 ## Dual stack (human review = Datashare)
 
+The project is also designed to provide **basic review tools** for browsing, tagging, and annotating discovery. That plane is **Datashare**, not a second UI invented inside MarshalOSS.
+
 | Role | Tool | Default |
 |---|---|---|
 | Search / MCP / Cowork or Computer | MarshalOSS | `:7340` |
-| Manual, human-led review | **Datashare** | `:8100` |
+| Browse / tag / annotate (human-led) | **Datashare** | `:8100` |
 
-MarshalOSS is not the place to build coding panels, privilege workflows, or a full review desk. That work should be done as an **extension or revision of Datashare** to fit criminal defense practice — do not reinvent a review platform in this repo.
+Grow defense-specific review features (coding UX, tags, annotation, privilege, layouts) as an **extension or revision of Datashare**. Do not reinvent a review platform in this repo.
 
 Compose and ops scripts: [`review/`](review/README.md). Dual-stack notes: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).  
 Datashare upstream is AGPL-3.0; MarshalOSS in this repo is Apache-2.0.
@@ -372,4 +377,4 @@ Data dir: `~/.marshaloss/` (separate from legacy `~/.marshal-lite` — re-ingest
 
 ## What this is not
 
-The project is not designed to replace Relativity. It covers ingest status, searchable text, and MCP search/context for Cowork or Computer. It does not include a full human review desk (coding panels, privilege logs, redaction, reviewer assignment). That belongs in **Datashare** — extend or revise Datashare for defense-specific needs instead of building a parallel review product here.
+The project is not designed to replace Relativity. It covers ingest, searchable text, MCP for Cowork / Computer, and **basic browse / tag / annotate review through Datashare**. It is not a full enterprise review desk (privilege logs, redaction workflows, reviewer assignment as in Relativity). Those needs, if required, should still be met by extending Datashare — not by building a parallel product here.

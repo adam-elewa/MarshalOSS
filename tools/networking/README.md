@@ -1,10 +1,10 @@
 # Networking helpers (optional)
 
-MarshalOSS does **not** own how you expose the server. Run it on localhost, a LAN, Tailscale, a Cloudflare Tunnel, a VPN, or any other path you trust. These scripts are optional helpers only.
+MarshalOSS is **hosting-agnostic**. These scripts only help set a public base URL and start the server — they are not part of the core product.
 
 ## Recommended for remote access
 
-Do not put `:7340` on the public internet without auth. Prefer:
+Do **not** put `:7340` on the public internet without auth. Prefer:
 
 | Option | Notes |
 |---|---|

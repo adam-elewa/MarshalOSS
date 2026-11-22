@@ -10,7 +10,7 @@ Same host can run both planes.
 
 ## Review plane
 
-All human-led reviewing should go through **Datashare**. Defense-specific needs (coding UX, tags, privilege, layouts) should be met by **extending or revising Datashare**, not by building a second review product inside MarshalOSS.
+The stack is also meant to provide **basic review tools**: browsing, tagging, and annotating discovery. That work goes through **Datashare**. Defense-specific needs (coding UX, tags, annotation, privilege, layouts) should be met by **extending or revising Datashare**, not by building a second review product inside MarshalOSS.
 
 Compose + index scripts live in [`review/`](../review/README.md).
 

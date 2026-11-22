@@ -121,9 +121,56 @@ Each manifest row records `ingest_status` (`ready` / `error` / `skipped` / …),
 
 ---
 
+## Services, API keys, and local tools
+
+### Paid API services (used during ingest and search)
+
+| Service | Key | What it is | Why MarshalOSS needs it | Required? |
+|---|---|---|---|---|
+| [Voyage AI](https://www.voyageai.com/) ([docs](https://docs.voyageai.com/)) | `VOYAGE_API_KEY` | Embedding service. Turns text into vectors that represent meaning. `voyage-law-2` is tuned for legal text. | Semantic search: finding passages by meaning, not just exact words. Called for every text chunk at ingest and for every search query. | Strongly recommended. Without it, search falls back to a weak local method. |
+| [OpenAI API](https://platform.openai.com/) ([keys](https://platform.openai.com/api-keys)) | `OPENAI_API_KEY` | API access to OpenAI models (billed separately from a ChatGPT subscription). | `gpt-4o-transcribe` re-transcribes bad audio/video. `gpt-4o-mini` re-OCRs bad pages, describes photos and video frames, and extracts entities/tags. | Recommended. It is the only option for transcription re-runs. |
+| [Anthropic API](https://www.anthropic.com/api) ([console](https://console.anthropic.com/)) | `ANTHROPIC_API_KEY` | API access to Claude models (billed separately from a Claude subscription). | Claude Haiku can do OCR re-runs, photo/frame descriptions, and entities/tags instead of OpenAI. | Optional. An alternative to OpenAI for everything except transcription. |
+
+If neither OpenAI nor Anthropic is configured, ingest still works. Poor OCR and transcripts are kept as-is, and photo descriptions and entities are skipped.
+
+Keys can be set as environment variables or loaded from `~/.marshal/env.sh`.
+
+### AI front end (subscriptions, not API keys)
+
+| Service | What it is | Why |
+|---|---|---|
+| [Claude](https://claude.ai/) (Cowork / Desktop) | Anthropic's Claude app with agent features and MCP support | Where you ask questions, analyze, and draft against the case |
+| [Perplexity](https://www.perplexity.ai/) (Computer) | Perplexity's agent product | Alternative front end with its own connectors |
+
+MarshalOSS does not need keys for these. They connect to MarshalOSS over MCP.
+
+### What leaves your machine
+
+Confidentiality matters in defense work, so be aware of what each service receives:
+
+| Service | Receives |
+|---|---|
+| Voyage | Extracted text chunks and search queries |
+| OpenAI / Anthropic | Page images that failed OCR, audio that failed transcription, photos and video frames, and extracted text for entity tagging |
+| Cowork / Computer | Whatever search results and file content the assistant retrieves while you work |
+
+Review each provider's data retention and training terms, and your jurisdiction's ethics guidance, before using them on client material. To keep everything local, set `MARSHALOSS_EMBED_BACKEND=hash`, `MARSHALOSS_OCR_ESCALATE=false`, `MARSHALOSS_ASR_ESCALATE=false`, `MARSHALOSS_VISUAL_ANALYZE=false`, and `MARSHALOSS_ENTITY_EXTRACT=false`. You lose semantic search and AI cleanup, but nothing is sent out during ingest.
+
+### Local tools (free, run on your machine)
+
+| Tool | What it is | Why |
+|---|---|---|
+| [Docling](https://github.com/docling-project/docling) | Open-source document conversion: OCR, parsing, speech-to-text | First-pass text extraction for every file |
+| [ffmpeg](https://ffmpeg.org/) | Standard open-source audio/video toolkit | Converts other A/V formats for transcription and samples video frames. Install with your OS package manager and keep it updated. |
+| [SQLite](https://www.sqlite.org/) | Embedded database (built into Python) | Stores text, vectors, and the keyword index |
+| [Datashare](https://github.com/ICIJ/datashare) | Open-source document review app from ICIJ (runs in Docker) | Human browse / tag / annotate |
+| Python 3.12+ and [uv](https://docs.astral.sh/uv/) | Runtime and package manager | Runs MarshalOSS |
+
+---
+
 ## Quick start
 
-Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), and ffmpeg (for A/V). Recommended keys: `VOYAGE_API_KEY`, plus `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` (OpenAI is needed for transcription re-runs). Keys also load from `~/.marshal/env.sh`.
+Install the local tools above and set your API keys first.
 
 ```bash
 cd ~/Projects/MarshalOSS

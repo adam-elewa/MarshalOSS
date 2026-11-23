@@ -317,13 +317,14 @@ def main() -> int:
 
         tags = list(dict.fromkeys((src.get("tags") or []) + rec["tags"]))
         categories = sorted({e["category"] for e in rec["entities"]})
-        ner_tags = list(dict.fromkeys((src.get("nerTags") or []) + categories))
+        # Document.nerTags is Set<Pipeline.Type> (which NLP ran), NOT entity categories.
+        ner_tags = ["CORENLP"] if rec["entities"] else list(src.get("nerTags") or [])
         source = rec["meta"].get("source") if isinstance(rec["meta"], dict) else None
 
         if args.dry_run:
             print(
                 f"WOULD update {rel} chars={len(text)} tags={len(tags)} "
-                f"entities={len(rec['entities'])} nerTags={categories}"
+                f"entities={len(rec['entities'])} categories={categories}"
             )
             updated += 1
             entities_written += len(rec["entities"])

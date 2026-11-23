@@ -26,7 +26,7 @@ from .quality import (
     score_transcript,
 )
 from .entities import extract_entities_for_chunks, resolve_entity_client
-from .visual import visual_analyze_file
+from .visual import is_image_path, visual_analyze_file
 
 console = Console()
 
@@ -316,6 +316,12 @@ def _maybe_ai_escalate(
         },
         "source": "docling",
     }
+
+    # An image with no text is a scene photo, not a failed scan; the visual pass describes it.
+    if is_image_path(path) and "near_empty_text" in report.reasons:
+        meta["quality_score"] = None
+        meta["quality_reasons"] = ["photo_no_text"]
+        return chunks, meta
 
     should = (
         settings.ocr_escalate

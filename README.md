@@ -1,6 +1,6 @@
 # MarshalOSS
 
-> Creatively deploy cutting-edge frontier AI models, at the lowest possible cost, to search and analyze the most complex and voluminous discovery on behalf of the poorest clients against the most well-resourced adversaries.
+> **Goal:** Creatively deploy cutting-edge frontier AI models, at the lowest possible cost, to search and analyze the most complex and voluminous discovery on behalf of the poorest clients against the most well-resourced adversaries.
 
 Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal defense discovery: PDFs (including bad or missing OCR), emails, bodycam and surveillance video, radio and call audio, photos, forensic dumps, and similar production material.
 

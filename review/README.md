@@ -38,7 +38,7 @@ Needs Docker. Elasticsearch **8.19.x** (Datashare 21.25 breaks on ES 7 for highl
 
 ## Sync MarshalOSS text into Datashare
 
-After indexing a case folder in Datashare, push MarshalOSS extracted text, tags, and entities into the Datashare index so search/browse uses the defense pipeline (not empty OCR):
+After indexing a case folder in Datashare, push MarshalOSS extracted text, tags, and **NamedEntity** records into Datashare (document Entities tab + project entity widgets), so search/browse uses the defense pipeline (not empty OCR):
 
 ```bash
 python3 review/scripts/sync-from-marshaloss.py \

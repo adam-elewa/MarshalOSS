@@ -1,18 +1,10 @@
 #!/usr/bin/env python3
-"""Push MarshalOSS extracted text + tags/entities into a Datashare project index.
+"""Push MarshalOSS extracted text, tags, and named entities into Datashare.
 
-Datashare SCAN+INDEX often leaves scanned PDFs and media with empty content when
-OCR is off. This fills ``content`` and ``tags`` from MarshalOSS so Datashare
-search/browse reflects the defense pipeline.
+Fills document ``content`` / ``tags`` and writes Datashare ``NamedEntity`` child
+documents (what the document Entities tab and project Entities widgets read).
 
-Usage (on the host that runs Datashare + has the MarshalOSS DB):
-
-  python3 review/scripts/sync-from-marshaloss.py \\
-    --slug david-jones \\
-    --project david-jones \\
-    --es http://127.0.0.1:9200
-
-Or via docker ES:
+Usage:
 
   python3 review/scripts/sync-from-marshaloss.py \\
     --slug david-jones --project david-jones \\
@@ -22,14 +14,41 @@ Or via docker ES:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+# Datashare NamedEntity.Category
+_TYPE_MAP = {
+    "person": "PERSON",
+    "people": "PERSON",
+    "officer": "PERSON",
+    "witness": "PERSON",
+    "defendant": "PERSON",
+    "victim": "PERSON",
+    "attorney": "PERSON",
+    "organization": "ORGANIZATION",
+    "org": "ORGANIZATION",
+    "company": "ORGANIZATION",
+    "agency": "ORGANIZATION",
+    "place": "LOCATION",
+    "location": "LOCATION",
+    "address": "LOCATION",
+    "date": "DATE",
+    "email": "EMAIL",
+    "money": "MONEY",
+    "number": "NUMBER",
+    "bates": "NUMBER",
+    "id": "NUMBER",
+}
+_EXTRACTOR = "CORENLP"  # valid Pipeline.Type; IDs stay stable across re-syncs
 
 
 def _db_path(explicit: str | None) -> Path:
@@ -47,17 +66,10 @@ def _es_request(es: str, method: str, path: str, body: dict | None = None, docke
     payload = None if body is None else json.dumps(body).encode("utf-8")
     if docker:
         cmd = [
-            "docker",
-            "exec",
-            "-i",
-            docker,
-            "curl",
-            "-s",
-            "-X",
-            method,
+            "docker", "exec", "-i", docker,
+            "curl", "-s", "-X", method,
             f"http://localhost:9200{url_path}",
-            "-H",
-            "Content-Type: application/json",
+            "-H", "Content-Type: application/json",
         ]
         if payload is not None:
             cmd += ["--data-binary", "@-"]
@@ -86,7 +98,7 @@ def _scroll_docs(es: str, project: str, docker: str | None) -> list[dict]:
     body = {
         "size": 200,
         "query": {"term": {"type": "Document"}},
-        "_source": ["path", "contentTextLength", "tags", "title", "contentType"],
+        "_source": ["path", "contentTextLength", "tags", "title", "contentType", "nerTags"],
     }
     res = _es_request(es, "POST", f"/{project}/_search?scroll=2m", body, docker)
     scroll_id = res.get("_scroll_id")
@@ -98,11 +110,8 @@ def _scroll_docs(es: str, project: str, docker: str | None) -> list[dict]:
         if not scroll_id:
             break
         res = _es_request(
-            es,
-            "POST",
-            "/_search/scroll",
-            {"scroll": "2m", "scroll_id": scroll_id},
-            docker,
+            es, "POST", "/_search/scroll",
+            {"scroll": "2m", "scroll_id": scroll_id}, docker,
         )
         scroll_id = res.get("_scroll_id")
     if scroll_id:
@@ -114,16 +123,36 @@ def _scroll_docs(es: str, project: str, docker: str | None) -> list[dict]:
 
 
 def _rel_from_ds_path(path: str, project: str) -> str:
-    # /home/datashare/data/<project>/rel → rel
     marker = f"/data/{project}/"
     if marker in path:
         return path.split(marker, 1)[1]
-    # fallback: strip up to project name segment
     parts = path.split("/")
     if project in parts:
         i = parts.index(project)
         return "/".join(parts[i + 1 :])
     return path.lstrip("/")
+
+
+def _mention_norm(mention: str) -> str:
+    # Datashare StringUtils.normalize: unidecode → trim → collapse ws → lower
+    try:
+        from unidecode import unidecode  # type: ignore
+
+        s = unidecode(mention)
+    except Exception:
+        s = mention
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
+def _named_entity_id(document_id: str, offsets: list[int], mention_norm: str) -> str:
+    # NamedEntity ctor: SHA-384(documentId|offsets.toString()|extractor|mentionNorm)
+    joined = "|".join([document_id, str(offsets), _EXTRACTOR, mention_norm])
+    return hashlib.sha384(joined.encode("utf-8")).hexdigest()
+
+
+def _category(etype: str) -> str:
+    key = (etype or "").strip().lower().replace(" ", "_")
+    return _TYPE_MAP.get(key, "UNKNOWN")
 
 
 def _tags_from_meta(meta: dict) -> list[str]:
@@ -149,6 +178,76 @@ def _tags_from_meta(meta: dict) -> list[str]:
     if kind in ("bodycam", "dashcam", "audio", "video") and kind not in tags:
         tags.append(kind)
     return tags[:80]
+
+
+def _entities_from_meta(meta: dict, text: str) -> list[dict]:
+    """Deduped NamedEntity payloads for one document."""
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for ent in meta.get("entities") or []:
+        if not isinstance(ent, dict):
+            continue
+        mention = (ent.get("canonical") or ent.get("value") or "").strip()
+        if not mention or len(mention) > 200:
+            continue
+        category = _category(str(ent.get("type") or ""))
+        key = (category, _mention_norm(mention))
+        if key in seen:
+            continue
+        seen.add(key)
+        pos = text.find(mention) if text else -1
+        if pos < 0:
+            # try case-insensitive
+            low = text.lower()
+            pos = low.find(mention.lower()) if text else -1
+        offsets = [pos if pos >= 0 else 0]
+        out.append({"mention": mention, "category": category, "offsets": offsets})
+    return out
+
+
+def _index_named_entities(
+    es: str,
+    project: str,
+    docker: str | None,
+    document_id: str,
+    entities: list[dict],
+    dry_run: bool,
+) -> int:
+    n = 0
+    for ent in entities:
+        mention = ent["mention"]
+        mention_norm = _mention_norm(mention)
+        offsets = ent["offsets"]
+        ne_id = _named_entity_id(document_id, offsets, mention_norm)
+        body = {
+            "type": "NamedEntity",
+            "join": {"name": "NamedEntity", "parent": document_id},
+            "category": ent["category"],
+            "mention": mention,
+            "mentionNorm": mention_norm,
+            "mentionNormTextLength": len(mention_norm),
+            "offsets": offsets,
+            "extractor": _EXTRACTOR,
+            "extractorLanguage": "ENGLISH",
+            "isHidden": False,
+            "documentId": document_id,
+            "rootDocument": document_id,
+            "parentDocument": document_id,
+            "metadata": {"marshaloss_synced": True},
+        }
+        if dry_run:
+            n += 1
+            continue
+        # routing must be the parent document id for join children
+        _es_request(
+            es,
+            "PUT",
+            f"/{project}/_doc/{ne_id}?routing={document_id}&refresh=false",
+            body,
+            docker,
+        )
+        n += 1
+    return n
 
 
 def main() -> int:
@@ -193,30 +292,43 @@ def main() -> int:
             "name": f["name"],
             "text": text,
             "tags": _tags_from_meta(meta),
+            "entities": _entities_from_meta(meta, text),
             "meta": meta,
         }
 
     docs = _scroll_docs(args.es, args.project, args.es_via_docker)
     matched = updated = skipped_empty = unmatched = 0
+    entities_written = 0
+    lower_map = {k.lower(): v for k, v in by_rel.items()}
+
     for hit in docs:
         src = hit.get("_source") or {}
         path = src.get("path") or ""
         rel = _rel_from_ds_path(path, args.project)
-        # try exact, then case-insensitive
-        rec = by_rel.get(rel)
-        if rec is None:
-            lower = {k.lower(): v for k, v in by_rel.items()}
-            rec = lower.get(rel.lower())
+        rec = by_rel.get(rel) or lower_map.get(rel.lower())
         if rec is None:
             unmatched += 1
             continue
         matched += 1
         text = rec["text"]
-        if not text:
+        if not text and not rec["entities"]:
             skipped_empty += 1
             continue
+
         tags = list(dict.fromkeys((src.get("tags") or []) + rec["tags"]))
+        categories = sorted({e["category"] for e in rec["entities"]})
+        ner_tags = list(dict.fromkeys((src.get("nerTags") or []) + categories))
         source = rec["meta"].get("source") if isinstance(rec["meta"], dict) else None
+
+        if args.dry_run:
+            print(
+                f"WOULD update {rel} chars={len(text)} tags={len(tags)} "
+                f"entities={len(rec['entities'])} nerTags={categories}"
+            )
+            updated += 1
+            entities_written += len(rec["entities"])
+            continue
+
         body = {
             "script": {
                 "lang": "painless",
@@ -224,6 +336,7 @@ def main() -> int:
                     "ctx._source.content = params.content;"
                     "ctx._source.contentTextLength = params.len;"
                     "ctx._source.tags = params.tags;"
+                    "ctx._source.nerTags = params.nerTags;"
                     "if (ctx._source.metadata == null) {ctx._source.metadata = new HashMap();}"
                     "ctx._source.metadata.marshaloss_synced = true;"
                     "ctx._source.metadata.marshaloss_slug = params.slug;"
@@ -233,25 +346,24 @@ def main() -> int:
                     "content": text,
                     "len": len(text),
                     "tags": tags,
+                    "nerTags": ner_tags,
                     "slug": args.slug,
                     "source": source,
                 },
             }
         }
-        if args.dry_run:
-            print(f"WOULD update {rel} chars={len(text)} tags={len(tags)}")
-            updated += 1
-            continue
         _es_request(
-            args.es,
-            "POST",
+            args.es, "POST",
             f"/{args.project}/_update/{hit['_id']}?refresh=false",
-            body,
-            args.es_via_docker,
+            body, args.es_via_docker,
+        )
+        entities_written += _index_named_entities(
+            args.es, args.project, args.es_via_docker,
+            hit["_id"], rec["entities"], dry_run=False,
         )
         updated += 1
         if updated % 25 == 0:
-            print(f"… {updated} updated")
+            print(f"… {updated} docs, {entities_written} entities")
 
     if not args.dry_run and updated:
         _es_request(args.es, "POST", f"/{args.project}/_refresh", None, args.es_via_docker)
@@ -265,6 +377,7 @@ def main() -> int:
                 "marshal_ready_files": len(by_rel),
                 "matched": matched,
                 "updated": updated,
+                "named_entities_written": entities_written,
                 "matched_but_no_text": skipped_empty,
                 "unmatched_datashare_only": unmatched,
                 "dry_run": args.dry_run,

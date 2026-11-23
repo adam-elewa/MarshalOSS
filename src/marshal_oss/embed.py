@@ -73,9 +73,13 @@ def cosine_topk(
     q = np.asarray(query, dtype=np.float32)
     qn = float(np.linalg.norm(q)) or 1.0
     q = q / qn
+    qdim = int(q.shape[0])
     scored: list[tuple[float, dict]] = []
     for _cid, vec, meta in corpus:
         v = np.asarray(vec, dtype=np.float32)
+        if int(v.shape[0]) != qdim:
+            # Skip stale/mismatched embeddings (e.g. hash-384 vs voyage-1024)
+            continue
         vn = float(np.linalg.norm(v)) or 1.0
         score = float(np.dot(q, v / vn))
         scored.append((score, meta))

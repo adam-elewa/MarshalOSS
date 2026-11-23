@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 from urllib.parse import quote
 
 from .config import Settings
 from .db import Case, Database
 from .embed import Embedder, cosine_topk
+
+logger = logging.getLogger(__name__)
 
 Mode = Literal["hybrid", "keyword", "semantic"]
 
@@ -86,12 +89,22 @@ def search_case(
     semantic_hits: list[tuple[float, dict[str, Any]]] = []
 
     if mode in ("hybrid", "keyword"):
-        keyword_hits = db.fts_search(case.id, query, limit=max(top_k * 3, 30))
+        try:
+            keyword_hits = db.fts_search(case.id, query, limit=max(top_k * 3, 30))
+        except Exception as e:
+            logger.warning("keyword search failed: %s", e)
+            keyword_hits = []
 
     if mode in ("hybrid", "semantic"):
-        qvec = embedder.embed_query(query)
-        corpus = db.all_embeddings(case.id)
-        semantic_hits = cosine_topk(qvec, corpus, k=max(top_k * 3, 30))
+        try:
+            qvec = embedder.embed_query(query)
+            corpus = db.all_embeddings(case.id)
+            semantic_hits = cosine_topk(qvec, corpus, k=max(top_k * 3, 30))
+        except Exception as e:
+            logger.warning("semantic search failed: %s", e)
+            semantic_hits = []
+            if mode == "semantic":
+                return []
 
     if mode == "keyword":
         fused = [

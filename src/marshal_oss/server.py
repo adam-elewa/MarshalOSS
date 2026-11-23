@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from .categories import CATEGORY_DEFS, CATEGORY_LABELS, categorize_file_row
 from .config import Settings, get_settings
 from .db import Database
 from .embed import Embedder
@@ -74,6 +75,90 @@ def create_app(
         c = db.set_active_case(case_id)
         return {"ok": True, "active": c.__dict__}
 
+    @app.get("/api/cases/{case_id}/overview")
+    def api_case_overview(case_id: int) -> dict[str, Any]:
+        """Case-level stats + full production manifest for the review UI overview pane."""
+        c = resolve_case(case_id=case_id)
+        summary = db.production_manifest_summary(c.id)
+        entities = db.case_entity_tag_stats(c.id)
+        records = db.list_production_manifest(c.id, limit=10000, offset=0)
+        # Compact rows for the overview table
+        manifest = []
+        for r in records:
+            reasons = r.get("quality_reasons")
+            if isinstance(reasons, list):
+                reasons_s = "; ".join(str(x) for x in reasons[:6])
+            elif reasons:
+                reasons_s = str(reasons)
+            else:
+                reasons_s = ""
+            status = r.get("ingest_status") or "unknown"
+            processed = status == "ready"
+            manifest.append(
+                {
+                    "rel_path": r.get("rel_path"),
+                    "name": r.get("name"),
+                    "ext": r.get("ext"),
+                    "kind": r.get("kind"),
+                    "size": r.get("size"),
+                    "bates": r.get("bates"),
+                    "ingest_status": status,
+                    "processed": processed,
+                    "quality_score": r.get("quality_score"),
+                    "quality_reasons": reasons_s,
+                    "chunk_count": r.get("chunk_count") or 0,
+                    "escalated": bool(r.get("escalated")),
+                    "ingestible": bool(r.get("ingestible")),
+                    "error": r.get("error"),
+                    "entity_count": len(r.get("entities") or [])
+                    if isinstance(r.get("entities"), list)
+                    else 0,
+                    "tag_count": len(r.get("tags") or [])
+                    if isinstance(r.get("tags"), list)
+                    else 0,
+                }
+            )
+        return {
+            "case": c.__dict__,
+            "summary": summary,
+            "entities": entities,
+            "manifest": manifest,
+        }
+
+    @app.get("/api/files/by-facet")
+    def api_files_by_facet(
+        case_id: int | None = None,
+        tag: str | None = None,
+        entity: str | None = None,
+        entity_type: str | None = None,
+        limit: int = Query(500, ge=1, le=5000),
+    ) -> dict[str, Any]:
+        """Document Explorer subset filtered by tag and/or entity."""
+        if not tag and not entity and not entity_type:
+            raise HTTPException(400, "provide tag and/or entity / entity_type")
+        c = resolve_case(case_id=case_id)
+        rows = db.find_files_by_facet(
+            c.id,
+            tag=tag,
+            entity=entity,
+            entity_type=entity_type,
+            limit=limit,
+        )
+        for row in rows:
+            urls = file_urls(settings, c, row["rel_path"])
+            row.update(urls)
+            row["path"] = row["rel_path"]
+        return {
+            "case": c.__dict__,
+            "filter": {
+                "tag": tag,
+                "entity": entity,
+                "entity_type": entity_type,
+            },
+            "count": len(rows),
+            "entries": rows,
+        }
+
     @app.get("/api/files/list")
     def api_files_list(
         case_id: int | None = None,
@@ -86,6 +171,88 @@ def create_app(
             raise HTTPException(404, str(e)) from e
         except PermissionError as e:
             raise HTTPException(403, str(e)) from e
+
+    @app.get("/api/files/categories")
+    def api_files_categories(
+        case_id: int | None = None,
+        category: str | None = None,
+    ) -> dict[str, Any]:
+        """Auto document categories for Document Explorer (tag + name heuristics)."""
+        c = resolve_case(case_id=case_id)
+        files = db.list_files_with_meta(c.id)
+        buckets: dict[str, list[dict[str, Any]]] = {cid: [] for cid, _ in CATEGORY_DEFS}
+        for f in files:
+            cid = categorize_file_row(f)
+            if cid not in buckets:
+                cid = "other"
+            urls = file_urls(settings, c, f["rel_path"])
+            buckets[cid].append(
+                {
+                    "type": "file",
+                    "id": f["id"],
+                    "path": f["rel_path"],
+                    "rel_path": f["rel_path"],
+                    "name": f["name"],
+                    "bates": f.get("bates"),
+                    "mime": f.get("mime"),
+                    "size": f.get("size"),
+                    "status": f.get("status"),
+                    "category": cid,
+                    "category_label": CATEGORY_LABELS.get(cid, cid),
+                    **urls,
+                }
+            )
+
+        if category:
+            if category not in CATEGORY_LABELS:
+                raise HTTPException(404, f"unknown category: {category}")
+            entries = buckets.get(category) or []
+            return {
+                "case": c.__dict__,
+                "mode": "category",
+                "category": category,
+                "category_label": CATEGORY_LABELS[category],
+                "count": len(entries),
+                "entries": entries,
+                "categories": [
+                    {
+                        "id": cid,
+                        "label": label,
+                        "count": len(buckets[cid]),
+                    }
+                    for cid, label in CATEGORY_DEFS
+                    if buckets[cid] or cid == category
+                ],
+            }
+
+        # Root: category "folders"
+        cat_entries = []
+        for cid, label in CATEGORY_DEFS:
+            n = len(buckets[cid])
+            if n == 0:
+                continue
+            cat_entries.append(
+                {
+                    "type": "category",
+                    "id": cid,
+                    "path": cid,
+                    "name": label,
+                    "count": n,
+                    "size": None,
+                }
+            )
+        return {
+            "case": c.__dict__,
+            "mode": "categories",
+            "category": None,
+            "count": len(files),
+            "entries": cat_entries,
+            "categories": [
+                {"id": cid, "label": label, "count": len(buckets[cid])}
+                for cid, label in CATEGORY_DEFS
+                if buckets[cid]
+            ],
+        }
 
     @app.get("/api/manifest")
     def api_manifest(
@@ -159,6 +326,56 @@ def create_app(
         hits = search_case(db, settings, embedder, c, q, mode=mode, top_k=top_k)  # type: ignore
         return {"case": c.__dict__, "query": q, "mode": mode, "hits": hits}
 
+    @app.get("/api/files/detail")
+    def api_file_detail(
+        path: str = Query(..., min_length=1),
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Document payload for the review UI: text, meta, entities, tags, URLs."""
+        c = resolve_case(case_id=case_id)
+        detail = db.get_file_detail(c.id, path)
+        if not detail:
+            raise HTTPException(404, "file not ingested (no DB row); browse disk via /api/files/list")
+        urls = file_urls(settings, c, path)
+        mime = detail.get("mime") or mimetypes.guess_type(detail.get("name") or path)[0]
+        lower = (detail.get("name") or path).lower()
+        kind = "other"
+        if mime == "application/pdf" or lower.endswith(".pdf"):
+            kind = "pdf"
+        elif mime and mime.startswith("image/"):
+            kind = "image"
+        elif mime and mime.startswith("video/"):
+            kind = "video"
+        elif mime and mime.startswith("audio/"):
+            kind = "audio"
+        elif mime and (
+            mime.startswith("text/")
+            or lower.endswith((".txt", ".md", ".csv", ".log", ".json", ".xml", ".kml", ".st3"))
+        ):
+            kind = "text"
+        return {
+            "case": c.__dict__,
+            "file": {
+                "id": detail["id"],
+                "rel_path": detail["rel_path"],
+                "name": detail["name"],
+                "bates": detail.get("bates"),
+                "mime": mime,
+                "size": detail.get("size"),
+                "status": detail.get("status"),
+                "error": detail.get("error"),
+                "kind": kind,
+                "meta": detail.get("meta") or {},
+                "manifest": detail.get("manifest"),
+                "entities": detail.get("entities") or [],
+                "tags": detail.get("tags") or [],
+                "text": detail.get("text") or "",
+                "chunk_count": len(detail.get("chunks") or []),
+                "chunks": detail.get("chunks") or [],
+                **urls,
+            },
+        }
+
     @app.get("/browser", response_class=HTMLResponse)
     def browser() -> HTMLResponse:
         html_path = WEB_DIR / "browser.html"
@@ -166,18 +383,16 @@ def create_app(
             return HTMLResponse("<h1>browser.html missing</h1>", status_code=500)
         return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
-    @app.get("/")
+    @app.get("/app", response_class=HTMLResponse)
+    @app.get("/", response_class=HTMLResponse)
     def root() -> HTMLResponse:
-        return HTMLResponse(
-            """<!doctype html><meta charset=utf-8>
-            <title>MarshalOSS</title>
-            <body style="font:14px system-ui;padding:24px">
-            <h1>MarshalOSS</h1>
-            <p><a href="/browser">Case file browser</a></p>
-            <p>Health: <a href="/health">/health</a></p>
-            <p>MCP: <code>/mcp</code></p>
-            </body>"""
-        )
+        html_path = WEB_DIR / "app.html"
+        if not html_path.exists():
+            return HTMLResponse(
+                "<h1>MarshalOSS</h1><p><a href=/browser>Legacy browser</a></p>",
+                status_code=500,
+            )
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
     def _safe_file(slug: str, rel: str) -> tuple[Any, Path]:
         c = resolve_case(slug=slug)
@@ -203,9 +418,12 @@ def create_app(
 
     @app.get("/view/{slug}/{rel_path:path}")
     def view_file(slug: str, rel_path: str) -> Response:
-        c, target = _safe_file(slug, rel_path)
+        _c, target = _safe_file(slug, rel_path)
         mime = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-        urls = file_urls(settings, c, "/".join(unquote(p) for p in rel_path.split("/") if p))
+        # Relative URLs so preview works over Tailscale / any host (not public_base localhost).
+        enc = encode_rel_path("/".join(unquote(p) for p in rel_path.split("/") if p))
+        raw_url = f"/files/{slug}/{enc}"
+        download_url = f"{raw_url}?dl=1"
         name = target.name
         safe = name.replace("<", "").replace(">", "").replace('"', "")
         lower = name.lower()
@@ -218,8 +436,8 @@ def create_app(
             header{{padding:8px 12px;background:#1b1b1b;display:flex;justify-content:space-between}}
             a{{color:#9fdfc2}}iframe,img{{width:100%;height:calc(100vh - 42px);border:0}}
             img{{object-fit:contain;height:auto;max-height:calc(100vh - 42px);display:block;margin:0 auto}}</style></head>
-            <body><header><strong>{safe}</strong><a href="{urls['download_url']}">Download</a></header>
-            {"<iframe src='" + urls['raw_url'] + "'></iframe>" if is_pdf else "<img src='" + urls['raw_url'] + "'/>"}
+            <body><header><strong>{safe}</strong><a href="{download_url}">Download</a></header>
+            {"<iframe src='" + raw_url + "'></iframe>" if is_pdf else "<img src='" + raw_url + "'/>"}
             </body></html>"""
             return HTMLResponse(body)
         if is_text and target.stat().st_size < 2_000_000:
@@ -230,7 +448,7 @@ def create_app(
                 <style>body{{margin:0;background:#111;color:#eee;font:13px/1.45 ui-monospace,Menlo,monospace}}
                 header{{padding:8px 12px;background:#1b1b1b;font:14px system-ui}}
                 a{{color:#9fdfc2}}pre{{padding:16px;white-space:pre-wrap}}</style>
-                <header>{safe} · <a href="{urls['download_url']}">Download</a></header><pre>{esc}</pre>"""
+                <header>{safe} · <a href="{download_url}">Download</a></header><pre>{esc}</pre>"""
             )
         return FileResponse(str(target), filename=name, content_disposition_type="attachment")
 

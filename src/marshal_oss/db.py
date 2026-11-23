@@ -1,11 +1,65 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
+logger = logging.getLogger(__name__)
+
+# FTS5 MATCH treats these as operators / syntax; natural-language asks often include them.
+_FTS5_SPECIAL = re.compile(r"[^\w\s']+", re.UNICODE)
+_FTS5_OPS = frozenset({"AND", "OR", "NOT", "NEAR"})
+# Drop question/filler words so MATCH (implicit AND) still hits discovery text.
+_FTS5_STOP = frozenset(
+    {
+        "a", "an", "the", "and", "or", "not", "of", "to", "in", "on", "at", "for",
+        "from", "by", "with", "as", "is", "are", "was", "were", "be", "been", "being",
+        "do", "does", "did", "what", "which", "who", "whom", "whose", "where", "when",
+        "why", "how", "can", "could", "would", "should", "may", "might", "will",
+        "this", "that", "these", "those", "it", "its", "he", "she", "they", "them",
+        "his", "her", "their", "our", "your", "my", "we", "you", "i", "me", "us",
+        "about", "into", "over", "under", "than", "then", "there", "here", "also",
+        "just", "please", "tell", "show", "find", "give", "list", "summarize",
+        "summary", "describe", "explain", "any", "all", "some", "have", "has", "had",
+    }
+)
+
+
+def sanitize_fts5_query(query: str) -> str:
+    """Turn free text into a safe FTS5 MATCH query.
+
+    Uses OR of content tokens so natural-language asks (with punctuation and
+    filler words) still retrieve; bm25 ranks stronger overlaps higher.
+    """
+    q = (query or "").replace('"', " ").replace("'", " ")
+    q = _FTS5_SPECIAL.sub(" ", q)
+    tokens = []
+    seen: set[str] = set()
+    for t in q.split():
+        if not t or t.upper() in _FTS5_OPS:
+            continue
+        if t.lower() in _FTS5_STOP:
+            continue
+        if len(t) == 1 and not t.isdigit():
+            continue
+        key = t.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        tokens.append(t)
+    # If everything was stopwords, fall back to raw alphanumerics so MATCH isn't empty.
+    if not tokens:
+        tokens = [t for t in q.split() if t and t.upper() not in _FTS5_OPS]
+    if not tokens:
+        return ""
+    if len(tokens) == 1:
+        return tokens[0]
+    return " OR ".join(tokens)
 
 
 def utc_now() -> str:
@@ -290,6 +344,71 @@ class Database:
             (case_id, rel_path),
         ).fetchone()
 
+    def get_file_detail(self, case_id: int, rel_path: str) -> dict[str, Any] | None:
+        """File row + parsed meta + extracted text chunks + manifest entities/tags."""
+        row = self.get_file(case_id, rel_path)
+        if not row:
+            return None
+        d = dict(row)
+        meta: dict[str, Any] = {}
+        raw_meta = d.get("meta")
+        if raw_meta:
+            try:
+                loaded = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+                if isinstance(loaded, dict):
+                    meta = loaded
+            except Exception:
+                meta = {}
+        d["meta"] = meta
+        chunks = self.conn.execute(
+            """
+            SELECT id, chunk_index, text, page_start, page_end, heading, start_sec, end_sec
+            FROM chunks WHERE file_id=? ORDER BY chunk_index
+            """,
+            (d["id"],),
+        ).fetchall()
+        d["chunks"] = [dict(c) for c in chunks]
+        d["text"] = "\n\n".join(
+            (c["text"] or "").strip() for c in d["chunks"] if (c.get("text") or "").strip()
+        )
+        entities = meta.get("entities") or []
+        tags = meta.get("tags") or []
+        man = self.conn.execute(
+            """
+            SELECT entities_json, tags_json, ingest_status, quality_score, quality_reasons,
+                   kind, chunk_count, source, error
+            FROM production_manifest WHERE case_id=? AND rel_path=?
+            """,
+            (case_id, rel_path),
+        ).fetchone()
+        if man:
+            md = dict(man)
+            if md.get("entities_json") and not entities:
+                try:
+                    entities = json.loads(md["entities_json"])
+                except Exception:
+                    pass
+            if md.get("tags_json") and not tags:
+                try:
+                    parsed_tags = json.loads(md["tags_json"])
+                    tags = parsed_tags if isinstance(parsed_tags, list) else tags
+                except Exception:
+                    pass
+            d["manifest"] = {
+                "ingest_status": md.get("ingest_status"),
+                "quality_score": md.get("quality_score"),
+                "quality_reasons": md.get("quality_reasons"),
+                "kind": md.get("kind"),
+                "chunk_count": md.get("chunk_count"),
+                "source": md.get("source"),
+                "error": md.get("error"),
+            }
+        else:
+            d["manifest"] = None
+        d["entities"] = entities if isinstance(entities, list) else []
+        d["tags"] = tags if isinstance(tags, list) else []
+        return d
+
     def list_files(self, case_id: int, prefix: str = "") -> list[dict[str, Any]]:
         if prefix:
             rows = self.conn.execute(
@@ -453,6 +572,210 @@ class Database:
             out.append(d)
         return out
 
+    def list_files_with_meta(self, case_id: int) -> list[dict[str, Any]]:
+        """Ingested files with parsed meta (for category browse)."""
+        rows = self.conn.execute(
+            """
+            SELECT id, rel_path, name, bates, mime, size, status, meta
+            FROM files WHERE case_id=?
+            ORDER BY rel_path
+            """,
+            (case_id,),
+        ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            d = dict(row)
+            meta: dict[str, Any] = {}
+            raw = d.pop("meta", None)
+            if raw:
+                try:
+                    loaded = json.loads(raw) if isinstance(raw, str) else raw
+                    if isinstance(loaded, dict):
+                        meta = loaded
+                except Exception:
+                    meta = {}
+            d["meta"] = meta
+            d["tags"] = meta.get("tags") or []
+            d["entities"] = meta.get("entities") or []
+            out.append(d)
+        return out
+
+    def find_files_by_facet(
+        self,
+        case_id: int,
+        *,
+        tag: str | None = None,
+        entity: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Return ingested files matching a tag and/or entity (case-insensitive)."""
+        if not tag and not entity and not entity_type:
+            return []
+        tag_l = (tag or "").strip().lower()
+        ent_l = (entity or "").strip().lower()
+        type_l = (entity_type or "").strip().lower()
+        out: list[dict[str, Any]] = []
+        rows = self.conn.execute(
+            """
+            SELECT id, rel_path, name, bates, mime, size, status, meta
+            FROM files WHERE case_id=?
+            ORDER BY rel_path
+            """,
+            (case_id,),
+        ).fetchall()
+        for row in rows:
+            d = dict(row)
+            meta: dict[str, Any] = {}
+            raw = d.pop("meta", None)
+            if raw:
+                try:
+                    loaded = json.loads(raw) if isinstance(raw, str) else raw
+                    if isinstance(loaded, dict):
+                        meta = loaded
+                except Exception:
+                    meta = {}
+            ents = meta.get("entities") or []
+            tags = meta.get("tags") or []
+            matched = False
+            if tag_l:
+                for t in tags:
+                    if isinstance(t, str):
+                        label = t
+                    elif isinstance(t, dict):
+                        label = str(t.get("name") or t.get("label") or t.get("tag") or "")
+                    else:
+                        label = str(t)
+                    if label.strip().lower() == tag_l:
+                        matched = True
+                        break
+                if not matched:
+                    continue
+            if ent_l or type_l:
+                ent_hit = False
+                for e in ents:
+                    if isinstance(e, dict):
+                        et = str(e.get("type") or "other").strip().lower()
+                        label = str(
+                            e.get("canonical")
+                            or e.get("text")
+                            or e.get("value")
+                            or e.get("name")
+                            or ""
+                        ).strip()
+                        aliases = e.get("aliases") or []
+                    else:
+                        et, label, aliases = "other", str(e).strip(), []
+                    if type_l and et != type_l:
+                        continue
+                    names = [label] + [str(a) for a in aliases if a]
+                    if ent_l:
+                        if any(n.strip().lower() == ent_l for n in names if n):
+                            ent_hit = True
+                            break
+                    else:
+                        ent_hit = True
+                        break
+                if not ent_hit:
+                    continue
+                matched = True
+            if not matched and not tag_l:
+                continue
+            out.append(
+                {
+                    "id": d["id"],
+                    "rel_path": d["rel_path"],
+                    "name": d["name"],
+                    "bates": d.get("bates"),
+                    "mime": d.get("mime"),
+                    "size": d.get("size"),
+                    "status": d.get("status"),
+                    "type": "file",
+                }
+            )
+            if len(out) >= limit:
+                break
+        return out
+
+    def case_entity_tag_stats(self, case_id: int, top_n: int = 25) -> dict[str, Any]:
+        """Aggregate entities/tags across ingested files for case overview."""
+        from collections import Counter
+
+        type_counts: Counter[str] = Counter()
+        entity_counts: Counter[tuple[str, str]] = Counter()
+        tag_counts: Counter[str] = Counter()
+        files_with_entities = 0
+        files_with_tags = 0
+        entity_mentions = 0
+
+        rows = self.conn.execute(
+            "SELECT meta FROM files WHERE case_id=?",
+            (case_id,),
+        ).fetchall()
+        for row in rows:
+            raw = row["meta"] if isinstance(row, sqlite3.Row) else row[0]
+            if not raw:
+                continue
+            try:
+                meta = json.loads(raw) if isinstance(raw, str) else raw
+            except Exception:
+                continue
+            if not isinstance(meta, dict):
+                continue
+            ents = meta.get("entities") or []
+            tags = meta.get("tags") or []
+            if ents:
+                files_with_entities += 1
+            if tags:
+                files_with_tags += 1
+            for e in ents:
+                entity_mentions += 1
+                if isinstance(e, dict):
+                    et = str(e.get("type") or "other").strip().lower() or "other"
+                    label = str(
+                        e.get("canonical") or e.get("text") or e.get("value") or e.get("name") or ""
+                    ).strip()
+                else:
+                    et, label = "other", str(e).strip()
+                type_counts[et] += 1
+                if label:
+                    entity_counts[(et, label)] += 1
+            for t in tags:
+                if isinstance(t, str):
+                    label = t.strip()
+                elif isinstance(t, dict):
+                    label = str(t.get("name") or t.get("label") or t.get("tag") or "").strip()
+                else:
+                    label = str(t).strip()
+                if label:
+                    tag_counts[label] += 1
+
+        entities_by_type: dict[str, list[dict[str, Any]]] = {}
+        for (et, label), n in entity_counts.most_common():
+            bucket = entities_by_type.setdefault(et, [])
+            # keep a generous per-type list for the overview drill-down
+            if len(bucket) < max(top_n, 200):
+                bucket.append({"type": et, "canonical": label, "count": n})
+
+        return {
+            "files_with_entities": files_with_entities,
+            "files_with_tags": files_with_tags,
+            "entity_mentions": entity_mentions,
+            "unique_entities": len(entity_counts),
+            "unique_tags": len(tag_counts),
+            "by_type": [
+                {"type": t, "count": n} for t, n in type_counts.most_common()
+            ],
+            "entities_by_type": entities_by_type,
+            "top_entities": [
+                {"type": t, "canonical": label, "count": n}
+                for (t, label), n in entity_counts.most_common(top_n)
+            ],
+            "top_tags": [
+                {"tag": tag, "count": n} for tag, n in tag_counts.most_common(max(top_n, 100))
+            ],
+        }
+
     def production_manifest_summary(self, case_id: int) -> dict[str, Any]:
         row = self.conn.execute(
             """
@@ -613,26 +936,30 @@ class Database:
         return count
 
     def fts_search(self, case_id: int, query: str, limit: int = 20) -> list[dict[str, Any]]:
-        # Simple FTS: escape quotes
-        q = query.replace('"', " ").strip()
+        q = sanitize_fts5_query(query)
         if not q:
             return []
-        rows = self.conn.execute(
-            """
-            SELECT c.id AS chunk_id, c.text, c.bates, c.page_start, c.page_end, c.heading,
-                   c.start_sec, c.end_sec,
-                   f.rel_path, f.name, f.bates AS file_bates, f.id AS file_id,
-                   bm25(chunks_fts) AS score
-            FROM chunks_fts
-            JOIN chunks c ON c.id = chunks_fts.rowid
-            JOIN files f ON f.id = c.file_id
-            WHERE c.case_id = ?
-              AND chunks_fts MATCH ?
-            ORDER BY score
-            LIMIT ?
-            """,
-            (case_id, q, limit),
-        ).fetchall()
+        try:
+            rows = self.conn.execute(
+                """
+                SELECT c.id AS chunk_id, c.text, c.bates, c.page_start, c.page_end, c.heading,
+                       c.start_sec, c.end_sec,
+                       f.rel_path, f.name, f.bates AS file_bates, f.id AS file_id,
+                       bm25(chunks_fts) AS score
+                FROM chunks_fts
+                JOIN chunks c ON c.id = chunks_fts.rowid
+                JOIN files f ON f.id = c.file_id
+                WHERE c.case_id = ?
+                  AND chunks_fts MATCH ?
+                ORDER BY score
+                LIMIT ?
+                """,
+                (case_id, q, limit),
+            ).fetchall()
+        except sqlite3.OperationalError as e:
+            # Never fail ask/search on leftover FTS syntax; caller may still use semantic.
+            logger.warning("fts5 MATCH failed for %r (sanitized %r): %s", query, q, e)
+            return []
         return [dict(r) for r in rows]
 
     def all_embeddings(self, case_id: int) -> list[tuple[int, list[float], dict[str, Any]]]:

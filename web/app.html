@@ -1,0 +1,1330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Marshal</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --fg: #0f172a;
+    --muted: #94a3b8;
+    --muted-strong: #64748b;
+    --border: #e2e8f0;
+    --hover: #f1f5f9;
+    --panel: #fff;
+    --ink: #020617;
+    --danger: #b42318;
+    --warn: #b45309;
+    --ok: #166534;
+  }
+  * { box-sizing: border-box }
+  html, body { height: 100%; margin: 0 }
+  body {
+    font: 14px/1.45 Arial, Helvetica, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    display: flex;
+    flex-direction: column;
+  }
+  a { color: var(--fg); text-decoration: none }
+  a:hover { text-decoration: underline }
+
+  header.app-bar { background: var(--panel); border-bottom: 1px solid var(--border) }
+  header .inner {
+    max-width: 90rem; margin: 0 auto; padding: 8px 32px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  header .brand {
+    font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
+    cursor: pointer; border: 0; background: none; padding: 0; color: var(--fg);
+  }
+
+  select, button, input {
+    font: inherit; border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 10px; background: #fff; color: var(--fg);
+  }
+  button { cursor: pointer }
+  button.primary { background: var(--ink); color: #fff; border-color: var(--ink) }
+  button.ghost { background: transparent }
+  button.tab {
+    border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+    background: transparent; padding: 10px 14px; color: var(--muted-strong); font-weight: 600;
+  }
+  button.tab.active { color: var(--fg); border-bottom-color: var(--ink) }
+  button.linkish {
+    border: 0; background: transparent; padding: 0; color: inherit;
+    font: inherit; text-align: left; cursor: pointer;
+  }
+  button.linkish:hover { text-decoration: underline }
+
+  main { flex: 1; min-height: 0; display: flex; flex-direction: column }
+
+  .home-wrap { flex: 1; overflow: auto; padding: 20px 32px 40px }
+  .cases-grid {
+    max-width: 90rem; margin: 0 auto; display: grid; gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); align-items: stretch;
+  }
+  .case-tile {
+    display: flex; flex-direction: column; width: 100%; max-width: 24rem;
+    overflow: hidden; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--panel); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    padding: 0; text-align: left; cursor: pointer; transition: box-shadow 0.15s ease;
+  }
+  .case-tile:hover { box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1) }
+  .case-tile .body { flex: 1; display: flex; flex-direction: column; padding: 20px 24px }
+  .case-tile h2 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--fg) }
+  .case-tile .desc { margin: 8px 0 0; min-height: 1.25rem; font-size: 14px; line-height: 1.25rem; color: var(--muted) }
+  .case-tile .grow { flex: 1 }
+  .case-tile .view-bar {
+    display: flex; align-items: center; justify-content: center;
+    background: #020617; color: #fff; padding: 16px; font-size: 14px; font-weight: 500;
+  }
+  .case-tile:hover .view-bar { background: #000 }
+  .empty-cases {
+    max-width: 36rem; margin: 24px auto 0; border: 1px solid #fde68a;
+    background: #fffbeb; border-radius: 12px; padding: 24px;
+  }
+  .empty-cases h2 { margin: 0; color: #78350f; font-size: 16px }
+  .empty-cases p { margin: 8px 0 0; color: #92400e; font-size: 14px; line-height: 1.5 }
+
+  .case-shell {
+    display: grid; grid-template-columns: 15rem 1fr; height: 100%; min-height: 0;
+  }
+  .case-nav {
+    border-right: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .case-nav-head { border-bottom: 1px solid var(--border); padding: 16px }
+  .case-nav-head .all {
+    font-size: 11px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted); cursor: pointer;
+    border: 0; background: none; padding: 0;
+  }
+  .case-nav-head .all:hover { color: var(--muted-strong) }
+  .case-nav-head h1 { margin: 8px 0 0; font-size: 14px; font-weight: 600; line-height: 1.35 }
+  .case-nav-head .sub { margin: 4px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted) }
+  .case-nav-list { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px }
+  .case-nav-list button {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    border: 0; border-radius: 8px; padding: 8px 12px; text-align: left;
+    background: transparent; color: #334155; font-size: 14px;
+  }
+  .case-nav-list button:hover { background: var(--hover) }
+  .case-nav-list button.active { background: var(--ink); color: #fff }
+  .case-nav-list .nav-ico { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.85 }
+  .case-content { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg) }
+
+  .overview { flex: 1; overflow: auto; padding: 24px }
+  .overview-intro {
+    max-width: 1100px; margin-bottom: 8px;
+  }
+  .overview-intro h1 {
+    margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -0.02em;
+  }
+  .overview-intro p { margin: 6px 0 0; color: var(--muted-strong); font-size: 13px }
+  .overview-grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    max-width: 1100px;
+    margin-top: 16px;
+  }
+  .stat {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+  }
+  .stat .label { font-size: 12px; color: var(--muted-strong); font-weight: 500 }
+  .stat .value { margin-top: 6px; font-size: 20px; font-weight: 650; letter-spacing: -0.02em }
+  .accordion {
+    max-width: 1100px; margin-top: 20px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .acc-item {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  }
+  .acc-head {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border: 0; border-radius: 0; background: transparent;
+    text-align: left; cursor: pointer; color: var(--fg);
+  }
+  .acc-head:hover { background: var(--hover) }
+  .acc-head .chev {
+    width: 16px; height: 16px; flex-shrink: 0; color: var(--muted-strong);
+    transition: transform 0.15s ease;
+  }
+  .acc-item.open .acc-head .chev { transform: rotate(90deg) }
+  .acc-head .acc-title {
+    flex: 1; min-width: 0; font-size: 14px; font-weight: 650;
+  }
+  .acc-head .acc-meta {
+    font-size: 12px; color: var(--muted-strong); white-space: nowrap;
+  }
+  .acc-head .acc-warn { color: var(--warn); font-weight: 600 }
+  .acc-body {
+    display: none; padding: 0 16px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .acc-item.open .acc-body { display: block; padding-top: 14px }
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .section-head h2 { margin: 0; font-size: 13px; font-weight: 650; color: var(--muted-strong) }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 10px; font-size: 12px; background: var(--hover); cursor: pointer;
+  }
+  .chip:hover { border-color: #94a3b8; background: #e2e8f0 }
+  .chip .n { color: var(--muted-strong); font-weight: 600 }
+  .entity-table, .manifest-table { width: 100%; border-collapse: collapse; font-size: 13px }
+  .entity-table th, .entity-table td,
+  .manifest-table th, .manifest-table td {
+    text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  .entity-table th, .manifest-table th {
+    color: var(--muted-strong); font-weight: 600; font-size: 12px; position: sticky; top: 0; background: var(--panel);
+  }
+  .type-pill {
+    display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    color: var(--muted-strong); margin-right: 6px;
+  }
+  .manifest-wrap { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 8px }
+  .manifest-table { font-size: 12px }
+  .manifest-table td.path { max-width: 280px; word-break: break-all }
+  .manifest-table tr.flag-unprocessed { background: #fff7ed }
+  .manifest-table tr.flag-low { background: #fffbeb }
+  .manifest-table tr:hover { background: var(--hover); cursor: pointer }
+  .status-pill {
+    display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px;
+  }
+  .status-pill.ready { background: #dcfce7; color: var(--ok) }
+  .status-pill.skipped, .status-pill.skipped_not_covered { background: #ffedd5; color: var(--warn) }
+  .status-pill.error { background: #fee2e2; color: var(--danger) }
+  .status-pill.pending, .status-pill.unknown { background: #e2e8f0; color: var(--muted-strong) }
+  .conf {
+    font-variant-numeric: tabular-nums; font-weight: 600;
+  }
+  .conf.low { color: var(--warn) }
+  .conf.high { color: var(--ok) }
+  .filter-bar {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px;
+  }
+  .filter-bar .seg {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .filter-bar .seg button {
+    border: 0; border-radius: 0; background: #fff; padding: 5px 10px; font-size: 12px;
+  }
+  .filter-bar .seg button.active { background: var(--ink); color: #fff }
+  .flag-note { color: var(--warn); font-size: 12px; font-weight: 600 }
+
+  .explorer {
+    display: grid; grid-template-columns: minmax(240px, 36%) 1fr;
+    height: 100%; min-height: 0;
+  }
+  .side {
+    border-right: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .side-head {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .facet-banner {
+    background: #f1f5f9; border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .facet-banner strong { font-weight: 650 }
+  .search-row { display: flex; gap: 6px; align-items: center }
+  .search-row input { flex: 1; min-width: 0 }
+  .crumbs { font-size: 12px; color: var(--muted-strong); width: 100% }
+  .crumbs a { cursor: pointer; color: var(--fg) }
+  .file-list { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1 }
+  .file-list li {
+    display: grid; grid-template-columns: 1fr auto; gap: 8px;
+    padding: 9px 12px; border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .file-list li:hover, .file-list li.active { background: var(--hover) }
+  .badge {
+    font-size: 10px; text-transform: uppercase; color: var(--muted-strong);
+    font-weight: 700; margin-right: 6px;
+  }
+  .bates { font-size: 12px; color: var(--fg); font-weight: 600 }
+  .meta { color: var(--muted-strong); font-size: 12px }
+  .doc-pane { min-height: 0; display: flex; flex-direction: column; background: var(--bg) }
+  .doc-empty {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    color: var(--muted-strong); padding: 24px; text-align: center;
+  }
+  .doc-head {
+    background: var(--panel); border-bottom: 1px solid var(--border); padding: 12px 16px 0;
+  }
+  .doc-title-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap }
+  .doc-title-row h1 { margin: 0; font-size: 16px; font-weight: 650; flex: 1; min-width: 160px }
+  .doc-actions { display: flex; gap: 8px; flex-wrap: wrap }
+  .tabs { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto }
+  .doc-body { flex: 1; min-height: 0; overflow: auto; padding: 16px }
+  .panel-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; max-width: 960px;
+  }
+  .preview-frame {
+    width: 100%; height: calc(100vh - 180px); min-height: 360px;
+    border: 1px solid var(--border); border-radius: 8px; background: #111;
+  }
+  .preview-img {
+    max-width: 100%; max-height: calc(100vh - 200px); display: block; margin: 0 auto;
+    border-radius: 8px; background: #111;
+  }
+  .text-body {
+    white-space: pre-wrap; word-break: break-word;
+    font: 13px/1.55 ui-monospace, Menlo, Consolas, monospace; margin: 0;
+  }
+  table.meta-table { width: 100%; border-collapse: collapse; font-size: 13px }
+  table.meta-table th, table.meta-table td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  table.meta-table th { width: 160px; color: var(--muted-strong); font-weight: 600 }
+  .entity-list, .tag-list { display: flex; flex-direction: column; gap: 8px }
+  .entity-row {
+    display: grid; grid-template-columns: 88px 1fr; gap: 10px;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  }
+  .entity-type {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    color: var(--muted-strong); align-self: start; padding-top: 2px;
+  }
+  .tag-chip {
+    display: inline-block; margin: 0 6px 6px 0; padding: 4px 10px;
+    background: var(--hover); color: var(--fg); border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+  }
+  .hits-pane {
+    padding: 12px; border-top: 1px solid var(--border); overflow: auto; max-height: 40%;
+  }
+  .hit {
+    padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 8px; cursor: pointer; background: var(--panel);
+  }
+  .hit:hover { border-color: #94a3b8 }
+  .err { color: var(--danger); padding: 16px }
+  .placeholder { color: var(--muted-strong); padding: 16px }
+  @media (max-width: 900px) {
+    header .inner { padding: 8px 16px }
+    .home-wrap { padding: 16px }
+    .case-shell { grid-template-columns: 1fr }
+    .case-nav { border-right: 0; border-bottom: 1px solid var(--border) }
+    .case-nav-list { flex-direction: row; flex-wrap: wrap }
+    .explorer { grid-template-columns: 1fr }
+    .side { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--border) }
+  }
+</style>
+</head>
+<body>
+<header class="app-bar">
+  <div class="inner">
+    <button type="button" class="brand" id="btnHome">MARSHAL</button>
+  </div>
+</header>
+<main id="main"></main>
+
+<script>
+const state = {
+  route: { name: "home" },
+  cases: [],
+  active: null,
+  caseId: null,
+  caseMeta: null,
+  module: "overview",
+  overview: null,
+  manifestFilter: "all", // all | processed | unprocessed
+  entityBrowseType: null, // null = type list; string = drill into that type
+  overviewOpen: {}, // section id -> bool; default collapsed
+  browseMode: "categories", // categories | folders
+  category: null, // category id when drilling in
+  path: "",
+  entries: [],
+  breadcrumbs: [],
+  selectedPath: null,
+  doc: null,
+  tab: "preview",
+  hits: null,
+  facet: null, // { tag?, entity?, entity_type? }
+  err: null,
+};
+
+function esc(s) {
+  return String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+}
+function fmtSize(n) {
+  if (n == null || n === "") return "—";
+  n = Number(n);
+  if (!Number.isFinite(n)) return "—";
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+  return (n / 1073741824).toFixed(2) + " GB";
+}
+function fmtNum(n) {
+  if (n == null) return "—";
+  return Number(n).toLocaleString();
+}
+/** Viewer label: essex_county / New_Jersey → Essex County / New Jersey */
+function prettyLabel(s) {
+  return String(s ?? "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b([a-zA-Z])/g, (ch) => ch.toUpperCase());
+}
+function prettyType(s) {
+  return prettyLabel(s);
+}
+function fmtConf(score) {
+  if (score == null || score === "") return "—";
+  const n = Number(score);
+  if (!Number.isFinite(n)) return "—";
+  return (n * 100).toFixed(0) + "%";
+}
+function confClass(score) {
+  if (score == null || score === "") return "";
+  const n = Number(score);
+  if (n < 0.72) return "low";
+  if (n >= 0.85) return "high";
+  return "";
+}
+async function api(path) {
+  const res = await fetch(path);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = data.detail;
+    const msg = typeof detail === "string" ? detail
+      : Array.isArray(detail) ? detail.map(d => d.msg || JSON.stringify(d)).join("; ")
+      : (data.error || res.statusText);
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function parseHash() {
+  const h = (location.hash || "#/").replace(/^#/, "") || "/";
+  const [pathPart, queryPart] = h.split("?");
+  const parts = pathPart.split("/").filter(Boolean);
+  const qs = new URLSearchParams(queryPart || "");
+  if (parts[0] === "cases" && parts[1]) {
+    const caseId = Number(parts[1]);
+    const docPath = qs.get("doc") || null;
+    const tab = qs.get("tab") || "preview";
+    const folder = qs.get("path") || "";
+    const tag = qs.get("tag") || null;
+    const entity = qs.get("entity") || null;
+    const entity_type = qs.get("entity_type") || null;
+    const browseMode = qs.get("browse") === "folders" ? "folders" : "categories";
+    const category = qs.get("category") || null;
+    const hasFacet = !!(tag || entity || entity_type);
+    const module = (docPath || folder || category || hasFacet || qs.get("view") === "explorer")
+      ? "explorer"
+      : (qs.get("view") === "explorer" ? "explorer" : "overview");
+    const facet = hasFacet ? { tag, entity, entity_type } : null;
+    return { name: "case", caseId, module, docPath, tab, folder, facet, browseMode, category };
+  }
+  return { name: "home" };
+}
+
+function setHash(route) {
+  if (route.name === "home") {
+    history.replaceState(null, "", "#/");
+    return;
+  }
+  const qs = new URLSearchParams();
+  qs.set("view", route.module || "overview");
+  if (route.module === "explorer") {
+    const browseMode = route.browseMode || "categories";
+    if (browseMode === "folders") qs.set("browse", "folders");
+    else qs.set("browse", "categories");
+    if (browseMode === "folders" && route.folder) qs.set("path", route.folder);
+    if (browseMode === "categories" && route.category) qs.set("category", route.category);
+    if (route.docPath) qs.set("doc", route.docPath);
+    if (route.tab && route.tab !== "preview") qs.set("tab", route.tab);
+    if (route.facet?.tag) qs.set("tag", route.facet.tag);
+    if (route.facet?.entity) qs.set("entity", route.facet.entity);
+    if (route.facet?.entity_type) qs.set("entity_type", route.facet.entity_type);
+  }
+  history.replaceState(null, "", `#/cases/${route.caseId}?${qs.toString()}`);
+}
+
+function navigate(route) {
+  state.route = route;
+  setHash(route);
+  render();
+  loadForRoute();
+}
+
+async function loadForRoute() {
+  state.err = null;
+  try {
+    if (state.route.name === "home") {
+      const data = await api("/api/cases");
+      state.cases = data.cases || [];
+      state.active = data.active || null;
+      state.doc = null;
+      state.hits = null;
+      state.overview = null;
+      state.facet = null;
+      render();
+      return;
+    }
+
+    state.caseId = state.route.caseId;
+    state.module = state.route.module || "overview";
+    state.path = state.route.folder || "";
+    state.tab = state.route.tab || "preview";
+    state.selectedPath = state.route.docPath || null;
+    state.facet = state.route.facet || null;
+    state.browseMode = state.route.browseMode || "categories";
+    state.category = state.route.category || null;
+
+    const casesData = await api("/api/cases");
+    state.cases = casesData.cases || [];
+    state.active = casesData.active || null;
+    state.caseMeta = state.cases.find(c => c.id === state.caseId) || null;
+
+    if (state.module === "overview") {
+      const ov = await api(`/api/cases/${state.caseId}/overview`);
+      state.overview = ov;
+      if (!state.caseMeta) state.caseMeta = ov.case;
+      state.doc = null;
+      render();
+      return;
+    }
+
+    if (state.facet) {
+      const params = new URLSearchParams({ case_id: String(state.caseId) });
+      if (state.facet.tag) params.set("tag", state.facet.tag);
+      if (state.facet.entity) params.set("entity", state.facet.entity);
+      if (state.facet.entity_type) params.set("entity_type", state.facet.entity_type);
+      const data = await api(`/api/files/by-facet?${params}`);
+      state.entries = data.entries || [];
+      state.breadcrumbs = [];
+      if (!state.caseMeta) state.caseMeta = data.case;
+    } else if (state.browseMode === "folders") {
+      const dir = await api(`/api/files/list?case_id=${state.caseId}&path=${encodeURIComponent(state.path)}`);
+      if (!state.caseMeta) state.caseMeta = dir.case || null;
+      state.entries = dir.entries || [];
+      state.breadcrumbs = dir.breadcrumbs || [];
+      state.path = dir.path || state.path;
+    } else {
+      const params = new URLSearchParams({ case_id: String(state.caseId) });
+      if (state.category) params.set("category", state.category);
+      const data = await api(`/api/files/categories?${params}`);
+      if (!state.caseMeta) state.caseMeta = data.case;
+      state.entries = data.entries || [];
+      state.breadcrumbs = state.category
+        ? [{ name: data.category_label || state.category, path: state.category }]
+        : [];
+    }
+
+    if (state.selectedPath) {
+      await loadDoc(state.selectedPath, false);
+    } else {
+      state.doc = null;
+    }
+    render();
+  } catch (e) {
+    state.err = e.message || String(e);
+    render();
+  }
+}
+
+function relativize(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url, location.origin);
+    return u.pathname + u.search;
+  } catch {
+    return url;
+  }
+}
+
+async function loadDoc(relPath, push) {
+  state.selectedPath = relPath;
+  state.hits = null;
+  state.module = "explorer";
+  if (push !== false) {
+    state.route = {
+      name: "case",
+      caseId: state.caseId,
+      module: "explorer",
+      browseMode: state.browseMode || "categories",
+      category: state.facet ? null : state.category,
+      folder: state.facet || state.browseMode !== "folders" ? "" : state.path,
+      docPath: relPath,
+      tab: state.tab || "preview",
+      facet: state.facet,
+    };
+    setHash(state.route);
+  }
+  try {
+    const data = await api(
+      `/api/files/detail?case_id=${state.caseId}&path=${encodeURIComponent(relPath)}`
+    );
+    state.doc = data.file;
+    state.doc.raw_url = relativize(state.doc.raw_url);
+    state.doc.open_url = relativize(state.doc.open_url);
+    state.doc.download_url = relativize(state.doc.download_url);
+    if (!state.route.tab || state.route.tab === "preview") {
+      if (!state.doc.text && state.doc.kind === "other") state.tab = "metadata";
+      else state.tab = "preview";
+    } else {
+      state.tab = state.route.tab;
+    }
+  } catch (e) {
+    const entry = state.entries.find(x => (x.path || x.rel_path) === relPath && (x.type === "file" || !x.type || x.type === "file"));
+    state.doc = {
+      name: entry?.name || relPath.split("/").pop(),
+      rel_path: relPath,
+      bates: entry?.bates || null,
+      mime: entry?.mime || null,
+      size: entry?.size,
+      kind: "other",
+      meta: {},
+      entities: [],
+      tags: [],
+      text: "",
+      chunks: [],
+      chunk_count: 0,
+      open_url: relativize(entry?.open_url),
+      raw_url: relativize(entry?.raw_url || entry?.open_url),
+      download_url: relativize(entry?.download_url),
+      _not_ingested: true,
+      error: e.message,
+    };
+    state.tab = "preview";
+  }
+  render();
+}
+
+async function runSearch() {
+  const qEl = document.getElementById("q");
+  const modeEl = document.getElementById("mode");
+  const q = (qEl && qEl.value || "").trim();
+  if (!q || !state.caseId) return;
+  const mode = (modeEl && modeEl.value) || "hybrid";
+  try {
+    const data = await api(
+      `/api/search?q=${encodeURIComponent(q)}&case_id=${state.caseId}&mode=${encodeURIComponent(mode)}`
+    );
+    state.hits = data.hits || [];
+    render();
+  } catch (e) {
+    state.err = e.message || String(e);
+    render();
+  }
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  state.route = { ...state.route, tab, module: "explorer", facet: state.facet };
+  setHash(state.route);
+  render();
+}
+
+function setModule(module) {
+  navigate({
+    name: "case",
+    caseId: state.caseId,
+    module,
+    browseMode: state.browseMode || "categories",
+    category: module === "explorer" && !state.facet ? state.category : null,
+    folder: module === "explorer" && state.browseMode === "folders" && !state.facet ? (state.path || "") : "",
+    docPath: module === "explorer" ? state.selectedPath : null,
+    tab: state.tab || "preview",
+    facet: module === "explorer" ? state.facet : null,
+  });
+}
+
+function setBrowseMode(mode) {
+  navigate({
+    name: "case",
+    caseId: state.caseId,
+    module: "explorer",
+    browseMode: mode,
+    category: null,
+    folder: "",
+    docPath: null,
+    tab: state.tab || "preview",
+    facet: null,
+  });
+}
+
+function openFacet({ tag = null, entity = null, entity_type = null } = {}) {
+  navigate({
+    name: "case",
+    caseId: state.caseId,
+    module: "explorer",
+    folder: "",
+    docPath: null,
+    tab: "preview",
+    facet: { tag, entity, entity_type },
+  });
+}
+
+function clearFacet() {
+  navigate({
+    name: "case",
+    caseId: state.caseId,
+    module: "explorer",
+    browseMode: state.browseMode || "categories",
+    category: null,
+    folder: "",
+    docPath: null,
+    tab: state.tab || "preview",
+    facet: null,
+  });
+}
+
+function renderHome() {
+  if (!(state.cases || []).length) {
+    return `<div class="home-wrap"><div class="empty-cases">
+      <h2>No cases</h2>
+      <p>No cases are registered yet.</p>
+    </div></div>`;
+  }
+  const tiles = state.cases.map(c => {
+    const title = c.display_name || c.slug;
+    const desc = c.slug && c.slug !== title ? c.slug : "\u00A0";
+    return `
+    <button type="button" class="case-tile" data-id="${c.id}">
+      <div class="body">
+        <h2>${esc(title)}</h2>
+        <p class="desc">${esc(desc)}</p>
+        <div class="grow" aria-hidden="true"></div>
+      </div>
+      <div class="view-bar">View</div>
+    </button>`;
+  }).join("");
+  return `<div class="home-wrap"><div class="cases-grid">${tiles}</div></div>`;
+}
+
+function icoOverview() {
+  return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`;
+}
+function icoExplorer() {
+  return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>`;
+}
+
+function statusPill(status) {
+  const s = status || "unknown";
+  const cls = s.replace(/[^a-z0-9_]/gi, "_");
+  return `<span class="status-pill ${esc(cls)}">${esc(s)}</span>`;
+}
+
+function isOverviewOpen(id) {
+  return !!state.overviewOpen[id];
+}
+
+function toggleOverviewSection(id) {
+  state.overviewOpen = { ...state.overviewOpen, [id]: !state.overviewOpen[id] };
+  render();
+}
+
+function accChevron() {
+  return `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>`;
+}
+
+function accordionItem(id, title, metaHtml, bodyHtml) {
+  const open = isOverviewOpen(id);
+  return `
+    <div class="acc-item ${open ? "open" : ""}" data-acc="${esc(id)}">
+      <button type="button" class="acc-head" data-acc-toggle="${esc(id)}" aria-expanded="${open ? "true" : "false"}">
+        ${accChevron()}
+        <span class="acc-title">${esc(title)}</span>
+        <span class="acc-meta">${metaHtml}</span>
+      </button>
+      <div class="acc-body">${bodyHtml}</div>
+    </div>
+  `;
+}
+
+function renderOverview() {
+  const caseName = state.caseMeta?.display_name || state.caseMeta?.slug || "Case";
+  const s = state.overview?.summary || {};
+  const e = state.overview?.entities || {};
+  const manifest = state.overview?.manifest || [];
+  const unprocessed = manifest.filter(r => !r.processed);
+  const processed = manifest.filter(r => r.processed);
+  const lowConf = processed.filter(r => r.quality_score != null && Number(r.quality_score) < 0.72);
+
+  const stats = [
+    ["Files", fmtNum(s.file_count)],
+    ["Size", fmtSize(s.total_bytes)],
+    ["Processed", fmtNum(s.ready_count)],
+    ["OCR conf.", s.avg_quality != null ? fmtConf(s.avg_quality) : "—"],
+  ];
+
+  const byType = (e.by_type || []).map(t =>
+    `<button type="button" class="chip" data-browse-type="${esc(t.type)}">
+      <span class="type-pill">${esc(prettyType(t.type))}</span><span class="n">${fmtNum(t.count)}</span>
+    </button>`
+  ).join("") || `<span class="placeholder">No entities yet.</span>`;
+
+  const topTags = (e.top_tags || []).map(t =>
+    `<button type="button" class="chip" data-tag="${esc(t.tag)}" title="${esc(t.tag)}">${esc(prettyLabel(t.tag))} <span class="n">${fmtNum(t.count)}</span></button>`
+  ).join("") || `<span class="placeholder">No tags yet.</span>`;
+
+  const browseType = state.entityBrowseType;
+  const typedEntities = browseType
+    ? ((e.entities_by_type && e.entities_by_type[browseType]) || (e.top_entities || []).filter(x => x.type === browseType))
+    : [];
+  const entityDrill = browseType ? `
+    <div class="section-head">
+      <h2 style="text-transform:none;letter-spacing:0;font-size:14px;color:var(--fg)">
+        ${esc(prettyType(browseType))}
+        <span class="meta">· ${fmtNum(typedEntities.length)}</span>
+      </h2>
+      <button type="button" class="ghost" id="btnEntityBack">← All types</button>
+    </div>
+    ${typedEntities.length ? `<table class="entity-table">
+      <thead><tr><th>Entity</th><th>Count</th></tr></thead>
+      <tbody>
+        ${typedEntities.map(row => `
+          <tr>
+            <td><button type="button" class="linkish" data-entity="${esc(row.canonical)}" data-entity-type="${esc(row.type)}">${esc(row.canonical)}</button></td>
+            <td>${fmtNum(row.count)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>` : `<div class="placeholder">No entities in this type.</div>`}
+  ` : `
+    <p class="meta" style="margin:0 0 12px">Choose a type, then pick an entity to open matching documents.</p>
+    <div class="chip-row">${byType}</div>
+  `;
+
+  let rows = manifest;
+  if (state.manifestFilter === "processed") rows = processed;
+  else if (state.manifestFilter === "unprocessed") rows = unprocessed;
+
+  const manifestRows = rows.map(r => {
+    const flag = !r.processed ? "flag-unprocessed"
+      : (r.quality_score != null && Number(r.quality_score) < 0.72 ? "flag-low" : "");
+    const conf = r.processed
+      ? `<span class="conf ${confClass(r.quality_score)}">${esc(fmtConf(r.quality_score))}</span>`
+      : "—";
+    return `<tr class="${flag}" data-path="${esc(r.rel_path)}">
+      <td class="path" title="${esc(r.rel_path)}">${esc(r.name || r.rel_path)}</td>
+      <td>${esc(r.ext || "")}</td>
+      <td>${esc(r.kind || "")}</td>
+      <td>${statusPill(r.ingest_status)}</td>
+      <td>${conf}</td>
+      <td>${r.processed ? fmtNum(r.chunk_count) : "—"}</td>
+      <td>${fmtSize(r.size)}</td>
+      <td class="meta">${esc(r.quality_reasons || r.error || (r.processed ? "" : "Not ingested"))}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" class="placeholder">No manifest rows.</td></tr>`;
+
+  const detailsBody = `
+    <div class="overview-grid" style="margin-top:0">
+      <div class="stat"><div class="label">Not processed</div><div class="value">${esc(fmtNum(unprocessed.length))}</div></div>
+      <div class="stat"><div class="label">Chunks</div><div class="value">${esc(fmtNum(s.total_chunks))}</div></div>
+      <div class="stat"><div class="label">Entities</div><div class="value">${esc(fmtNum(e.unique_entities))}</div></div>
+      <div class="stat"><div class="label">Tags</div><div class="value">${esc(fmtNum(e.unique_tags))}</div></div>
+      <div class="stat"><div class="label">Escalated</div><div class="value">${esc(fmtNum(s.escalated_count))}</div></div>
+      <div class="stat"><div class="label">Low OCR conf.</div><div class="value">${esc(fmtNum(lowConf.length))}</div></div>
+    </div>
+  `;
+
+  const manifestBody = `
+    <div class="section-head">
+      <div class="filter-bar">
+        ${unprocessed.length ? `<span class="flag-note">${fmtNum(unprocessed.length)} not processed</span>` : ""}
+        ${lowConf.length ? `<span class="flag-note">${fmtNum(lowConf.length)} low OCR conf.</span>` : ""}
+        <div class="seg" id="manifestSeg">
+          <button type="button" data-mfilter="all" class="${state.manifestFilter === "all" ? "active" : ""}">All (${fmtNum(manifest.length)})</button>
+          <button type="button" data-mfilter="processed" class="${state.manifestFilter === "processed" ? "active" : ""}">Processed (${fmtNum(processed.length)})</button>
+          <button type="button" data-mfilter="unprocessed" class="${state.manifestFilter === "unprocessed" ? "active" : ""}">Not processed (${fmtNum(unprocessed.length)})</button>
+        </div>
+      </div>
+    </div>
+    <div class="manifest-wrap">
+      <table class="manifest-table">
+        <thead>
+          <tr>
+            <th>File</th><th>Ext</th><th>Kind</th><th>Status</th>
+            <th>OCR conf.</th><th>Chunks</th><th>Size</th><th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>${manifestRows}</tbody>
+      </table>
+    </div>
+  `;
+
+  const manifestMeta = unprocessed.length
+    ? `<span class="acc-warn">${fmtNum(unprocessed.length)} not processed</span> · ${fmtNum(manifest.length)} files`
+    : `${fmtNum(manifest.length)} files · ${fmtNum(processed.length)} processed`;
+
+  const entityMeta = browseType
+    ? `${prettyType(browseType)} · ${fmtNum(typedEntities.length)}`
+    : `${fmtNum(e.unique_entities)} unique · ${(e.by_type || []).length} types`;
+
+  return `
+    <div class="overview">
+      <div class="overview-intro">
+        <h1>${esc(caseName)}</h1>
+        <p>Case snapshot — expand a section for details.</p>
+      </div>
+      <div class="overview-grid">
+        ${stats.map(([label, value]) => `
+          <div class="stat"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>
+        `).join("")}
+      </div>
+
+      <div class="accordion">
+        ${accordionItem("details", "More stats", `${fmtNum(e.unique_entities)} entities · ${fmtNum(e.unique_tags)} tags`, detailsBody)}
+        ${accordionItem("manifest", "Production manifest", manifestMeta, manifestBody)}
+        ${accordionItem("entities", "Entities", esc(entityMeta), entityDrill)}
+        ${accordionItem("tags", "Tags", `${fmtNum((e.top_tags || []).length)} shown · click to filter docs`, `<div class="chip-row">${topTags}</div>`)}
+      </div>
+    </div>
+  `;
+}
+
+function renderCrumbs() {
+  if (state.browseMode === "categories" && !state.facet) {
+    const bits = [`<a data-cat="">Categories</a>`];
+    if (state.category) {
+      const label = (state.breadcrumbs[0] && state.breadcrumbs[0].name) || prettyLabel(state.category);
+      bits.push(` <span>/</span> <span>${esc(label)}</span>`);
+    }
+    return bits.join("");
+  }
+  const bits = [`<a data-path="">Case root</a>`];
+  for (const c of state.breadcrumbs || []) {
+    bits.push(` <span>/</span> <a data-path="${esc(c.path)}">${esc(c.name)}</a>`);
+  }
+  return bits.join("");
+}
+
+function facetLabel() {
+  const f = state.facet || {};
+  const bits = [];
+  if (f.tag) bits.push(`tag: ${prettyLabel(f.tag)}`);
+  if (f.entity) bits.push(`entity: ${f.entity}`);
+  if (f.entity_type && !f.entity) bits.push(`type: ${prettyType(f.entity_type)}`);
+  else if (f.entity_type && f.entity) bits.push(`(${prettyType(f.entity_type)})`);
+  return bits.join(" · ") || "filter";
+}
+
+function entityLabel(e) {
+  if (typeof e === "string") return { type: "other", text: e };
+  const text = e.canonical || e.text || e.value || e.name || e.mention || "";
+  const aliases = Array.isArray(e.aliases) ? e.aliases.filter(a => a && a !== text) : [];
+  return {
+    type: e.type || e.label || "other",
+    text: text || JSON.stringify(e),
+    extra: e.note || e.context || e.snippet || (aliases.length ? "aka: " + aliases.join(", ") : ""),
+  };
+}
+
+function renderDocTabs() {
+  const doc = state.doc;
+  if (!doc) {
+    return `<div class="doc-empty">${state.facet ? "Select a matching file." : "Select a file to open the document viewer."}</div>`;
+  }
+  const tabs = [
+    ["preview", "Preview"],
+    ["text", "Text"],
+    ["metadata", "Metadata"],
+    ["entities", "Entities"],
+    ["tags", "Tags"],
+  ];
+  const tabBtns = tabs.map(([id, label]) =>
+    `<button type="button" class="tab ${state.tab === id ? "active" : ""}" data-tab="${id}">${label}</button>`
+  ).join("");
+
+  let body = "";
+  if (state.tab === "preview") {
+    if (doc.kind === "pdf" && doc.raw_url) {
+      body = `<iframe class="preview-frame" src="${esc(doc.raw_url)}" title="${esc(doc.name)}"></iframe>`;
+    } else if (doc.kind === "image" && doc.raw_url) {
+      body = `<img class="preview-img" src="${esc(doc.raw_url)}" alt="${esc(doc.name)}"/>`;
+    } else if ((doc.kind === "video" || doc.kind === "audio") && doc.raw_url) {
+      const tag = doc.kind === "video" ? "video" : "audio";
+      body = `<${tag} class="preview-frame" controls src="${esc(doc.raw_url)}"></${tag}>`;
+    } else if (doc.text) {
+      body = `<div class="panel-card"><pre class="text-body">${esc(doc.text.slice(0, 8000))}${doc.text.length > 8000 ? "\n…" : ""}</pre></div>`;
+    } else if (doc.open_url || doc.raw_url) {
+      body = `<div class="panel-card">
+        <p>${doc._not_ingested ? "File is on disk but not fully ingested yet." : "No inline preview for this type."}</p>
+        <p><a href="${esc(doc.open_url || doc.raw_url)}" target="_blank" rel="noopener">Open in viewer</a>
+        ${doc.download_url ? ` · <a href="${esc(doc.download_url)}" target="_blank" rel="noopener">Download</a>` : ""}</p>
+        ${doc.error ? `<p class="err">${esc(doc.error)}</p>` : ""}
+      </div>`;
+    } else {
+      body = `<div class="placeholder">Nothing to preview.</div>`;
+    }
+  } else if (state.tab === "text") {
+    if (doc.text) {
+      body = `<div class="panel-card"><pre class="text-body">${esc(doc.text)}</pre>
+        <p class="meta" style="margin-top:12px">${doc.chunk_count || 0} chunk(s)</p></div>`;
+    } else {
+      body = `<div class="panel-card placeholder">No extracted text.</div>`;
+    }
+  } else if (state.tab === "metadata") {
+    const rows = [
+      ["Name", doc.name],
+      ["Path", doc.rel_path],
+      ["Bates", doc.bates],
+      ["MIME", doc.mime],
+      ["Size", fmtSize(doc.size)],
+      ["Status", doc.status],
+      ["Kind", doc.kind],
+    ];
+    if (doc.manifest) {
+      rows.push(
+        ["Ingest", doc.manifest.ingest_status],
+        ["OCR conf.", doc.manifest.quality_score != null ? fmtConf(doc.manifest.quality_score) : null],
+        ["Manifest kind", doc.manifest.kind],
+        ["Source", doc.manifest.source],
+      );
+    }
+    const metaObj = doc.meta || {};
+    const skip = new Set(["entities", "tags"]);
+    for (const [k, v] of Object.entries(metaObj)) {
+      if (skip.has(k)) continue;
+      const val = typeof v === "object" ? JSON.stringify(v, null, 2) : String(v ?? "");
+      rows.push([k, val]);
+    }
+    body = `<div class="panel-card"><table class="meta-table">
+      ${rows.filter(([, v]) => v != null && v !== "").map(([k, v]) =>
+        `<tr><th>${esc(k)}</th><td><pre class="text-body" style="font-size:12px">${esc(v)}</pre></td></tr>`
+      ).join("")}
+    </table></div>`;
+  } else if (state.tab === "entities") {
+    const ents = (doc.entities || []).map(entityLabel);
+    if (!ents.length) {
+      body = `<div class="panel-card placeholder">No entities extracted for this document.</div>`;
+    } else {
+      body = `<div class="panel-card"><div class="entity-list">
+        ${ents.map(e => `<div class="entity-row">
+          <div class="entity-type">${esc(e.type)}</div>
+          <div><div>${esc(e.text)}</div>${e.extra ? `<div class="meta">${esc(e.extra)}</div>` : ""}</div>
+        </div>`).join("")}
+      </div></div>`;
+    }
+  } else if (state.tab === "tags") {
+    const tags = doc.tags || [];
+    if (!tags.length) {
+      body = `<div class="panel-card placeholder">No tags on this document.</div>`;
+    } else {
+      body = `<div class="panel-card"><div class="tag-list">
+        ${tags.map(t => {
+          const raw = typeof t === "string" ? t : (t.name || t.label || t.tag || JSON.stringify(t));
+          return `<span class="tag-chip" title="${esc(raw)}">${esc(prettyLabel(raw))}</span>`;
+        }).join("")}
+      </div></div>`;
+    }
+  }
+
+  return `
+    <div class="doc-head">
+      <div class="doc-title-row">
+        <div>
+          <h1>${esc(doc.name)}</h1>
+          ${doc.bates ? `<div class="bates">${esc(doc.bates)}</div>` : ""}
+          <div class="meta">${esc(doc.rel_path)}</div>
+        </div>
+        <div class="doc-actions">
+          ${doc.open_url ? `<a href="${esc(doc.open_url)}" target="_blank" rel="noopener"><button type="button" class="ghost">Open</button></a>` : ""}
+          ${doc.download_url ? `<a href="${esc(doc.download_url)}" target="_blank" rel="noopener"><button type="button" class="ghost">Download</button></a>` : ""}
+        </div>
+      </div>
+      <div class="tabs">${tabBtns}</div>
+    </div>
+    <div class="doc-body">${body}</div>
+  `;
+}
+
+function renderExplorer() {
+  const hitsHtml = state.hits ? `
+    <div class="hits-pane">
+      <div class="meta" style="margin-bottom:8px">${state.hits.length} search hit(s)
+        <button type="button" class="ghost" id="btnClearHits" style="margin-left:8px">Clear</button>
+      </div>
+      ${state.hits.length ? state.hits.map(h => `
+        <div class="hit" data-path="${esc(h.rel_path)}">
+          <div class="bates">${esc(h.bates || h.name || "")}</div>
+          <div class="meta">${esc(h.rel_path)}</div>
+          <p style="margin:6px 0 0">${esc(h.snippet || h.text || "").slice(0, 280)}</p>
+        </div>
+      `).join("") : `<div class="placeholder">No hits.</div>`}
+    </div>
+  ` : "";
+
+  const facetBanner = state.facet ? `
+    <div class="facet-banner">
+      <strong>Filtered</strong>
+      <span>${esc(facetLabel())}</span>
+      <span class="meta">${fmtNum(state.entries.length)} document(s)</span>
+      <button type="button" class="ghost" id="btnClearFacet">Clear filter</button>
+    </div>
+  ` : "";
+
+  const browseToggle = state.facet ? "" : `
+    <div class="filter-bar">
+      <div class="seg" id="browseSeg">
+        <button type="button" data-browse="categories" class="${state.browseMode !== "folders" ? "active" : ""}">Categories</button>
+        <button type="button" data-browse="folders" class="${state.browseMode === "folders" ? "active" : ""}">Native Folders</button>
+      </div>
+    </div>`;
+
+  return `
+    <div class="explorer">
+      <aside class="side">
+        <div class="side-head">
+          ${facetBanner}
+          ${browseToggle}
+          ${state.facet ? "" : `
+          <div class="search-row">
+            <input id="q" type="search" placeholder="Search this case…"/>
+            <select id="mode" title="Search mode">
+              <option value="hybrid">hybrid</option>
+              <option value="keyword">keyword</option>
+              <option value="semantic">semantic</option>
+            </select>
+            <button type="button" class="primary" id="btnSearch">Search</button>
+          </div>
+          <div class="crumbs">${renderCrumbs()}</div>`}
+        </div>
+        <ul class="file-list">
+          ${(state.entries || []).map(e => {
+            const p = e.path || e.rel_path || e.id;
+            const typ = e.type || "file";
+            if (typ === "category") {
+              return `
+              <li data-type="category" data-path="${esc(e.id || p)}">
+                <div>
+                  <span class="badge">category</span>${esc(e.name)}
+                  <div class="meta">${fmtNum(e.count)} document(s)</div>
+                </div>
+                <div class="meta"></div>
+              </li>`;
+            }
+            return `
+            <li class="${p === state.selectedPath ? "active" : ""}" data-type="${esc(typ)}" data-path="${esc(p)}">
+              <div>
+                <span class="badge">${esc(typ)}</span>${esc(e.name)}
+                ${e.bates ? `<div class="bates">${esc(e.bates)}</div>` : ""}
+              </div>
+              <div class="meta">${typ === "file" ? fmtSize(e.size) : ""}</div>
+            </li>`;
+          }).join("") || `<li class="placeholder">${state.facet ? "No matching documents." : (state.browseMode === "categories" ? "No categorized documents." : "Empty folder.")}</li>`}
+        </ul>
+        ${hitsHtml}
+      </aside>
+      <section class="doc-pane" id="docPane">${renderDocTabs()}</section>
+    </div>
+  `;
+}
+
+function renderCaseShell() {
+  const name = state.caseMeta?.display_name || state.caseMeta?.slug || ("Case " + state.caseId);
+  const sub = state.caseMeta?.slug && state.caseMeta.slug !== name ? state.caseMeta.slug : "";
+  const content = state.module === "explorer" ? renderExplorer() : renderOverview();
+  return `
+    <div class="case-shell">
+      <aside class="case-nav">
+        <div class="case-nav-head">
+          <button type="button" class="all" id="btnAllCases">All cases</button>
+          <h1>${esc(name)}</h1>
+          ${sub ? `<p class="sub">${esc(sub)}</p>` : ""}
+        </div>
+        <nav class="case-nav-list" aria-label="Case views">
+          <button type="button" class="${state.module === "overview" ? "active" : ""}" data-module="overview">
+            ${icoOverview()}<span>Case Overview</span>
+          </button>
+          <button type="button" class="${state.module === "explorer" ? "active" : ""}" data-module="explorer">
+            ${icoExplorer()}<span>Document Explorer</span>
+          </button>
+        </nav>
+      </aside>
+      <div class="case-content" id="caseContent">${content}</div>
+    </div>
+  `;
+}
+
+function bindCaseHandlers() {
+  const all = document.getElementById("btnAllCases");
+  if (all) all.onclick = () => navigate({ name: "home" });
+  document.querySelectorAll("[data-module]").forEach(btn => {
+    btn.onclick = () => {
+      if (btn.dataset.module === "explorer") {
+        state.facet = null;
+        state.browseMode = state.browseMode || "categories";
+        state.category = null;
+      }
+      setModule(btn.dataset.module);
+    };
+  });
+
+  if (state.module === "overview") {
+    document.querySelectorAll("[data-acc-toggle]").forEach(btn => {
+      btn.onclick = () => toggleOverviewSection(btn.dataset.accToggle);
+    });
+    document.querySelectorAll("[data-mfilter]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        state.manifestFilter = btn.dataset.mfilter;
+        state.overviewOpen = { ...state.overviewOpen, manifest: true };
+        render();
+      };
+    });
+    document.querySelectorAll("[data-tag]").forEach(btn => {
+      btn.onclick = () => openFacet({ tag: btn.dataset.tag });
+    });
+    document.querySelectorAll("[data-browse-type]").forEach(btn => {
+      btn.onclick = () => {
+        state.entityBrowseType = btn.dataset.browseType;
+        state.overviewOpen = { ...state.overviewOpen, entities: true };
+        render();
+      };
+    });
+    const back = document.getElementById("btnEntityBack");
+    if (back) back.onclick = () => {
+      state.entityBrowseType = null;
+      state.overviewOpen = { ...state.overviewOpen, entities: true };
+      render();
+    };
+    document.querySelectorAll("[data-entity]").forEach(btn => {
+      btn.onclick = () => openFacet({
+        entity: btn.dataset.entity,
+        entity_type: btn.dataset.entityType || null,
+      });
+    });
+    document.querySelectorAll(".manifest-table tr[data-path]").forEach(tr => {
+      tr.onclick = () => {
+        navigate({
+          name: "case",
+          caseId: state.caseId,
+          module: "explorer",
+          folder: "",
+          docPath: tr.dataset.path,
+          tab: "preview",
+          facet: null,
+        });
+      };
+    });
+    return;
+  }
+
+  const clearFacetBtn = document.getElementById("btnClearFacet");
+  if (clearFacetBtn) clearFacetBtn.onclick = clearFacet;
+
+  document.querySelectorAll("[data-browse]").forEach(btn => {
+    btn.onclick = () => setBrowseMode(btn.dataset.browse);
+  });
+
+  const btnSearch = document.getElementById("btnSearch");
+  if (btnSearch) btnSearch.onclick = runSearch;
+  const q = document.getElementById("q");
+  if (q) q.addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
+  document.querySelectorAll(".crumbs a[data-path]").forEach(a => {
+    a.onclick = (ev) => {
+      ev.preventDefault();
+      navigate({
+        name: "case", caseId: state.caseId, module: "explorer",
+        browseMode: "folders", folder: a.dataset.path || "", category: null,
+        docPath: null, tab: state.tab, facet: null,
+      });
+    };
+  });
+  document.querySelectorAll(".crumbs a[data-cat]").forEach(a => {
+    a.onclick = (ev) => {
+      ev.preventDefault();
+      navigate({
+        name: "case", caseId: state.caseId, module: "explorer",
+        browseMode: "categories", category: null, folder: "",
+        docPath: null, tab: state.tab, facet: null,
+      });
+    };
+  });
+  document.querySelectorAll(".file-list li[data-path]").forEach(li => {
+    li.onclick = () => {
+      const p = li.dataset.path;
+      if (li.dataset.type === "category") {
+        navigate({
+          name: "case", caseId: state.caseId, module: "explorer",
+          browseMode: "categories", category: p, folder: "",
+          docPath: null, tab: state.tab, facet: null,
+        });
+      } else if (li.dataset.type === "dir") {
+        navigate({
+          name: "case", caseId: state.caseId, module: "explorer",
+          browseMode: "folders", folder: p, category: null,
+          docPath: null, tab: state.tab, facet: null,
+        });
+      } else {
+        loadDoc(p, true);
+      }
+    };
+  });
+  document.querySelectorAll(".tab[data-tab]").forEach(btn => {
+    btn.onclick = () => setTab(btn.dataset.tab);
+  });
+  document.querySelectorAll(".hit[data-path]").forEach(hit => {
+    hit.onclick = () => loadDoc(hit.dataset.path, true);
+  });
+  const clear = document.getElementById("btnClearHits");
+  if (clear) clear.onclick = () => { state.hits = null; render(); };
+}
+
+function render() {
+  const main = document.getElementById("main");
+  if (state.err && state.route.name === "home") {
+    main.innerHTML = `<div class="err">${esc(state.err)}</div>`;
+    return;
+  }
+  if (state.route.name === "home") {
+    main.innerHTML = renderHome();
+    main.querySelectorAll(".case-tile").forEach(el => {
+      el.onclick = () => {
+        state.overviewOpen = {};
+        state.entityBrowseType = null;
+        state.manifestFilter = "all";
+        navigate({
+          name: "case",
+          caseId: Number(el.dataset.id),
+          module: "overview",
+          folder: "",
+          docPath: null,
+          tab: "preview",
+          facet: null,
+        });
+      };
+    });
+    return;
+  }
+  main.innerHTML = renderCaseShell();
+  if (state.err) {
+    const pane = document.getElementById("caseContent");
+    if (pane && state.module === "overview" && !state.overview) {
+      pane.innerHTML = `<div class="err">${esc(state.err)}</div>`;
+    }
+  }
+  bindCaseHandlers();
+}
+
+document.getElementById("btnHome").onclick = () => navigate({ name: "home" });
+window.addEventListener("hashchange", () => {
+  state.route = parseHash();
+  loadForRoute();
+});
+
+(async function init() {
+  state.route = parseHash();
+  render();
+  await loadForRoute();
+})();
+</script>
+</body>
+</html>

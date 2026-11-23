@@ -38,7 +38,7 @@ Needs Docker. Elasticsearch **8.19.x** (Datashare 21.25 breaks on ES 7 for highl
 
 ## Sync MarshalOSS text into Datashare
 
-After indexing a case folder in Datashare, push MarshalOSS extracted text, tags, and **NamedEntity** records into Datashare (document Entities tab + project entity widgets), so search/browse uses the defense pipeline (not empty OCR):
+After indexing a case folder in Datashare, push MarshalOSS extracted text, tags, and **NamedEntity** records into Datashare so search/browse uses the defense pipeline (not empty OCR):
 
 ```bash
 python3 review/scripts/sync-from-marshaloss.py \
@@ -48,6 +48,17 @@ python3 review/scripts/sync-from-marshaloss.py \
 ```
 
 Match is by relative path under the project. Documents only in Datashare (player junk, uncovered formats) are left alone.
+
+**Where entities show up in Datashare**
+
+| Place | What it is |
+|-------|------------|
+| **Tasks → Entities** (`#/tasks/entities`) | Marshal **entity browser** (plugin): pick a person/org/place → see all linked docs |
+| Document → **Entities** tab | NamedEntities for that file |
+| **Search** → left filters Person / Organization / Location / Email | Faceted filter on the same NamedEntities |
+| Project **Insights** → Entities widget | Category counts |
+
+The browser is `plugins/marshal-entities` (replaces Datashare’s NLP task list on that route). Sync also rebuilds `{project}.entities` StructuredEntity rollups.
 
 ## Ops notes
 

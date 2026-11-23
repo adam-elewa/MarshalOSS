@@ -2,7 +2,14 @@
 """Push MarshalOSS extracted text, tags, and named entities into Datashare.
 
 Fills document ``content`` / ``tags`` and writes Datashare ``NamedEntity`` child
-documents (what the document Entities tab and project Entities widgets read).
+documents (document Entities tab, Search → Entities filters, Insights counts).
+
+Also rebuilds ``{project}.entities`` StructuredEntity docs (unique mentions
+rolled up across the case) for the project-level entities index.
+
+Note: Datashare's sidebar **Entities** item under Tasks is NLP *job* history,
+not an entity browser. Project-wide browsing is Search → left filters
+(Person / Organization / Location / Email).
 
 Usage:
 
@@ -50,6 +57,17 @@ _TYPE_MAP = {
 }
 _EXTRACTOR = "CORENLP"  # valid Pipeline.Type; IDs stay stable across re-syncs
 
+# FtM-ish schema names for StructuredEntity.entityType
+_ENTITY_TYPE = {
+    "PERSON": "Person",
+    "ORGANIZATION": "Organization",
+    "LOCATION": "Address",
+    "EMAIL": "Email",
+    "DATE": "Date",
+    "MONEY": "Payment",
+    "NUMBER": "Identifier",
+}
+
 
 def _db_path(explicit: str | None) -> Path:
     if explicit:
@@ -67,7 +85,7 @@ def _es_request(es: str, method: str, path: str, body: dict | None = None, docke
     if docker:
         cmd = [
             "docker", "exec", "-i", docker,
-            "curl", "-s", "-X", method,
+            "curl", "-s", "-w", "\n%{http_code}", "-X", method,
             f"http://localhost:9200{url_path}",
             "-H", "Content-Type: application/json",
         ]
@@ -76,7 +94,11 @@ def _es_request(es: str, method: str, path: str, body: dict | None = None, docke
             out = subprocess.check_output(cmd, input=payload.decode("utf-8"), text=True)
         else:
             out = subprocess.check_output(cmd, text=True)
-        return json.loads(out) if out.strip() else {}
+        body_text, _, code_s = out.rstrip().rpartition("\n")
+        code = int(code_s or "0")
+        if code >= 400:
+            raise RuntimeError(f"ES {method} {url_path}: {code} {body_text}")
+        return json.loads(body_text) if body_text.strip() else {}
 
     req = urllib.request.Request(
         f"{es.rstrip('/')}{url_path}",
@@ -250,6 +272,115 @@ def _index_named_entities(
     return n
 
 
+def _rebuild_structured_entities(
+    es: str,
+    project: str,
+    docker: str | None,
+    dry_run: bool,
+) -> int:
+    """Roll NamedEntity mentions into ``{project}.entities`` StructuredEntity docs."""
+    entities_index = f"{project}.entities"
+    # Datashare creates this on project create; skip create if already present.
+    try:
+        _es_request(es, "GET", f"/{entities_index}", None, docker)
+    except RuntimeError as e:
+        if "404" not in str(e):
+            raise
+        print(
+            f"warning: {entities_index} missing — create the Datashare project first; "
+            "skipping StructuredEntity rebuild",
+            file=sys.stderr,
+        )
+        return 0
+
+    # Aggregate by category + mentionNorm; collect document ids via composite-ish terms
+    res = _es_request(
+        es,
+        "POST",
+        f"/{project}/_search",
+        {
+            "size": 0,
+            "query": {"term": {"type": "NamedEntity"}},
+            "aggs": {
+                "by_cat": {
+                    "terms": {"field": "category", "size": 20},
+                    "aggs": {
+                        "by_mention": {
+                            "terms": {"field": "mentionNorm", "size": 5000},
+                            "aggs": {
+                                "docs": {"terms": {"field": "documentId", "size": 500}},
+                                "sample": {
+                                    "top_hits": {
+                                        "size": 1,
+                                        "_source": ["mention", "category"],
+                                    }
+                                },
+                            },
+                        }
+                    },
+                }
+            },
+        },
+        docker,
+    )
+
+    if not dry_run:
+        # Clear previous marshaloss StructuredEntities (keep any FtM rows from ENTITIES stage)
+        _es_request(
+            es,
+            "POST",
+            f"/{entities_index}/_delete_by_query?refresh=true",
+            {"query": {"term": {"model": "marshaloss"}}},
+            docker,
+        )
+
+    written = 0
+    for cat_bucket in (res.get("aggregations") or {}).get("by_cat", {}).get("buckets", []):
+        category = cat_bucket["key"]
+        entity_type = _ENTITY_TYPE.get(category, "Thing")
+        for ment in cat_bucket.get("by_mention", {}).get("buckets", []):
+            mention_norm = ment["key"]
+            hits = (
+                ment.get("sample", {})
+                .get("hits", {})
+                .get("hits", [])
+            )
+            mention = mention_norm
+            if hits:
+                mention = (hits[0].get("_source") or {}).get("mention") or mention_norm
+            doc_ids = [b["key"] for b in ment.get("docs", {}).get("buckets", [])]
+            entity_id = hashlib.sha256(f"{category}|{mention_norm}".encode()).hexdigest()[:32]
+            _id = f"marshaloss_{entity_id}"
+            body = {
+                "type": "StructuredEntity",
+                "entityId": entity_id,
+                "model": "marshaloss",
+                "entityType": entity_type,
+                "modelVersions": ["1"],
+                "documentIds": doc_ids,
+                "properties": {
+                    "marshaloss_name": [mention],
+                    "marshaloss_category": [category],
+                    "marshaloss_mentionNorm": [mention_norm],
+                },
+            }
+            if dry_run:
+                written += 1
+                continue
+            _es_request(
+                es,
+                "PUT",
+                f"/{entities_index}/_doc/{_id}?refresh=false",
+                body,
+                docker,
+            )
+            written += 1
+
+    if not dry_run and written:
+        _es_request(es, "POST", f"/{entities_index}/_refresh", None, docker)
+    return written
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--slug", required=True, help="MarshalOSS case slug")
@@ -369,6 +500,10 @@ def main() -> int:
     if not args.dry_run and updated:
         _es_request(args.es, "POST", f"/{args.project}/_refresh", None, args.es_via_docker)
 
+    structured_written = _rebuild_structured_entities(
+        args.es, args.project, args.es_via_docker, args.dry_run,
+    )
+
     print(
         json.dumps(
             {
@@ -379,6 +514,7 @@ def main() -> int:
                 "matched": matched,
                 "updated": updated,
                 "named_entities_written": entities_written,
+                "structured_entities_written": structured_written,
                 "matched_but_no_text": skipped_empty,
                 "unmatched_datashare_only": unmatched,
                 "dry_run": args.dry_run,

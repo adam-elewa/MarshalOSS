@@ -35,6 +35,20 @@ Needs Docker. Elasticsearch **8.19.x** (Datashare 21.25 breaks on ES 7 for highl
 | NER people/orgs | Add NLP stage after INDEX (see Datashare docs) |
 | Multi-user auth | Switch compose to `--mode SERVER` + auth (see Datashare server docs) |
 
+
+## Sync MarshalOSS text into Datashare
+
+After indexing a case folder in Datashare, push MarshalOSS extracted text, tags, and entities into the Datashare index so search/browse uses the defense pipeline (not empty OCR):
+
+```bash
+python3 review/scripts/sync-from-marshaloss.py \
+  --slug david-jones \
+  --project david-jones \
+  --es-via-docker datashare-elasticsearch-1
+```
+
+Match is by relative path under the project. Documents only in Datashare (player junk, uncovered formats) are left alone.
+
 ## Ops notes
 
 - Do **not** commit case files under `data/` (gitignored).

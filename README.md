@@ -1,5 +1,7 @@
 # MarshalOSS
 
+> Creatively deploy cutting-edge frontier AI models, at the lowest possible cost, to search and analyze the most complex and voluminous discovery on behalf of the poorest clients against the most well-resourced adversaries.
+
 Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal defense discovery: PDFs (including bad or missing OCR), emails, bodycam and surveillance video, radio and call audio, photos, forensic dumps, and similar production material.
 
 MarshalOSS runs on your computer. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions in Cowork or Computer, so query cost stays close to a normal subscription instead of enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.

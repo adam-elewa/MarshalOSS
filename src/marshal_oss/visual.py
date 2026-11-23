@@ -17,6 +17,7 @@ from typing import Any, Callable
 from .config import Settings
 from .escalate import render_image_file, resolve_ai_ocr_client
 from .media_ffmpeg import media_duration_sec
+from .media_info import fmt_clock
 from .quality import join_chunk_text
 
 LogFn = Callable[[str], None]
@@ -125,14 +126,16 @@ def sample_video_frames(
     max_width: int = 1280,
 ) -> list[tuple[float, bytes]]:
     """
-    Extract up to ``max_frames`` PNGs at ``interval_sec`` spacing via ffmpeg.
-    Returns list of (timestamp_sec, png_bytes).
+    Extract PNGs every ``interval_sec`` via ffmpeg. If that would exceed
+    ``max_frames`` (0 = no cap), the interval widens so frames still span the
+    whole video. Returns list of (timestamp_sec, png_bytes).
     """
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg required for video frame sampling")
-    interval = max(float(interval_sec), 0.5)
     dur = media_duration_sec(path)
-    # fps = 1/interval
+    interval = effective_frame_interval(dur, interval_sec, max_frames)
+    if max_frames <= 0:
+        max_frames = 1_000_000
     frames: list[tuple[float, bytes]] = []
     with tempfile.TemporaryDirectory(prefix="marshaloss-frames-") as td:
         out_pat = Path(td) / "f_%05d.png"
@@ -151,7 +154,7 @@ def sample_video_frames(
             str(max_frames),
             str(out_pat),
         ]
-        subprocess.check_call(cmd, timeout=3600)
+        subprocess.check_call(cmd, timeout=3 * 3600)
         paths = sorted(Path(td).glob("f_*.png"))
         for i, fp in enumerate(paths[:max_frames]):
             t = i * interval
@@ -159,6 +162,13 @@ def sample_video_frames(
                 break
             frames.append((t, fp.read_bytes()))
     return frames
+
+
+def effective_frame_interval(dur: float | None, interval_sec: float, max_frames: int) -> float:
+    interval = max(float(interval_sec), 0.5)
+    if max_frames > 0 and dur:
+        interval = max(interval, dur / max_frames)
+    return interval
 
 
 def _chunk(
@@ -236,11 +246,13 @@ def visual_analyze_file(
             _log(f"[yellow]visual image failed[/yellow] {path.name}: {e}")
 
     elif should_visual_video(path, settings):
-        interval = settings.visual_frame_interval_sec
         max_frames = settings.visual_max_frames
+        interval = effective_frame_interval(
+            media_duration_sec(path), settings.visual_frame_interval_sec, max_frames
+        )
         _log(
             f"[cyan]visual[/cyan] video {path.name} "
-            f"(every {interval:g}s, max {max_frames} frames)"
+            f"(every {interval:.0f}s, max {max_frames or 'unlimited'} frames)"
         )
         try:
             frames = sample_video_frames(
@@ -253,20 +265,22 @@ def visual_analyze_file(
                 text = _vision_describe(settings, png)
                 if not text:
                     continue
-                mm = int(t // 60)
-                ss = int(t % 60)
-                chunks.append(
-                    _chunk(
-                        text,
-                        bates=bates,
-                        heading=f"Visual @{mm}:{ss:02d}",
-                        meta={
-                            "source": "visual",
-                            "kind": "video_frame",
-                            "t_sec": round(t, 2),
-                        },
-                    )
+                ch = _chunk(
+                    text,
+                    bates=bates,
+                    heading=f"Visual @{fmt_clock(t)}",
+                    meta={
+                        "source": "visual",
+                        "kind": "video_frame",
+                        "t_sec": round(t, 2),
+                    },
                 )
+                ch["start_sec"] = t
+                ch["end_sec"] = t + interval
+                ch["segments"] = [
+                    {"kind": "visual", "start": t, "end": t + interval, "text": ch["text"]}
+                ]
+                chunks.append(ch)
                 described += 1
             meta.update(
                 {

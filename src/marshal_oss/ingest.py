@@ -17,6 +17,7 @@ from .escalate import ai_ocr_file, resolve_ai_ocr_client
 from .hashing import sha256_file
 from .manifest import prepare_production
 from .media_ffmpeg import as_docling_media, is_docling_native_media, media_duration_sec
+from .media_info import describe_media, fmt_clock
 from .quality import (
     extract_docling_confidence,
     is_media_path,
@@ -103,6 +104,12 @@ def docling_extract(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     confidence["page_count"] = page_count
 
     chunks: list[dict[str, Any]] = []
+    seen_items: set[str] = set()
+    # Chunker doc_items are bare DocItems without text; look text up by self_ref.
+    text_by_ref = {
+        str(t.self_ref): (getattr(t, "text", "") or "").strip()
+        for t in getattr(doc, "texts", None) or []
+    }
     try:
         chunker = HybridChunker()
         for ch in chunker.chunk(dl_doc=doc):
@@ -114,6 +121,7 @@ def docling_extract(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             meta = getattr(ch, "meta", None)
             pages_found: list[int] = []
             headings: list[str] = []
+            segments: list[dict[str, Any]] = []
             if meta is not None:
                 headings = list(getattr(meta, "headings", None) or [])
                 for item in getattr(meta, "doc_items", None) or []:
@@ -121,16 +129,39 @@ def docling_extract(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                         page = getattr(prov, "page_no", None)
                         if page is not None:
                             pages_found.append(int(page))
+                    ref = str(getattr(item, "self_ref", "") or "")
+                    for src in getattr(item, "source", None) or []:
+                        if getattr(src, "kind", None) != "track":
+                            continue
+                        seg = {
+                            "start": float(src.start_time),
+                            "end": float(src.end_time),
+                            "text": text_by_ref.get(ref) or (getattr(item, "text", "") or "").strip(),
+                            "speaker": getattr(src, "voice", None),
+                        }
+                        if ref and ref in seen_items:
+                            seg["dup"] = True
+                        segments.append(seg)
+                    if ref:
+                        seen_items.add(ref)
             pages_found = sorted(set(pages_found))
-            chunks.append(
-                {
-                    "text": (text or "").strip(),
-                    "page_start": pages_found[0] if pages_found else None,
-                    "page_end": pages_found[-1] if pages_found else None,
-                    "heading": " / ".join(str(h) for h in headings) if headings else None,
-                    "bates": None,
-                }
-            )
+            chunk: dict[str, Any] = {
+                "text": (text or "").strip(),
+                "page_start": pages_found[0] if pages_found else None,
+                "page_end": pages_found[-1] if pages_found else None,
+                "heading": " / ".join(str(h) for h in headings) if headings else None,
+                "bates": None,
+            }
+            if segments:
+                chunk["start_sec"] = min(s["start"] for s in segments)
+                chunk["end_sec"] = max(s["end"] for s in segments)
+                chunk["segments"] = [s for s in segments if s["text"] and not s.get("dup")]
+                if not chunk["heading"]:
+                    chunk["heading"] = (
+                        f"Transcript @{fmt_clock(chunk['start_sec'])}"
+                        f"–{fmt_clock(chunk['end_sec'])}"
+                    )
+            chunks.append(chunk)
     except Exception:
         try:
             md = doc.export_to_markdown()
@@ -532,8 +563,21 @@ def _ingest_one_file(
             if not ch.get("bates"):
                 ch["bates"] = bates
 
+        media = describe_media(path, rel)
+        if media:
+            meta["media"] = media
+            if media["kind"] in ("bodycam", "dashcam"):
+                log(
+                    f"[cyan]media[/cyan] {rel}: {media['kind']}"
+                    f" ({', '.join(media['signals'])})"
+                )
+
         # Simple file-level entities/tags (grow with use case later)
-        if settings.entity_extract and resolve_entity_client(settings):
+        if (
+            settings.entity_extract
+            and path.suffix.lower() not in _RAW_TEXT_ONLY_SUFFIXES
+            and resolve_entity_client(settings)
+        ):
             ent = extract_entities_for_chunks(chunks, settings, log=log)
             if ent.get("entities") or ent.get("tags"):
                 meta["entities"] = ent.get("entities") or []
@@ -547,6 +591,10 @@ def _ingest_one_file(
                 meta["entity_error"] = ent["error"]
             elif ent.get("skipped"):
                 meta["entity_skipped"] = ent["skipped"]
+        if media and media["kind"] in ("bodycam", "dashcam"):
+            tags = list(meta.get("tags") or [])
+            if media["kind"] not in tags:
+                meta["tags"] = [media["kind"], *tags]
 
         texts = [c["text"] for c in chunks]
         with embed_lock:

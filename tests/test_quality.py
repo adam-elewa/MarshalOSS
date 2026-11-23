@@ -78,3 +78,15 @@ def test_transcript_good_dialogue_ok():
     r = score_transcript(text, file_size=5_000_000, duration_sec=120)
     assert not r.escalate, r
     assert r.score >= 0.72
+
+
+def test_transcript_quiet_video_not_sparse_by_filesize():
+    # A large video with light, normal speech (~300 chars/min) is fine.
+    text = " ".join(
+        f"Unit {i}, I'm outside by door {i + 3}. Did someone bring the keys for car {i * 7}? "
+        f"They're on desk {i + 1}, I'll pull around front at {i}:{i * 4:02d}."
+        for i in range(7)
+    )
+    r = score_transcript(text, file_size=100_000_000, duration_sec=200)
+    assert not r.escalate, r
+    assert not any(x.startswith("sparse_vs_filesize") for x in r.reasons)

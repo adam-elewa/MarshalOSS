@@ -346,7 +346,8 @@ def score_transcript(
             reasons.append(f"sparse_vs_duration={cpm:.0f}c/min")
             penalties += 0.4
 
-    if file_size > 200_000:
+    # Video bytes are mostly picture, so size says little about speech when duration is known.
+    if file_size > 200_000 and not duration_sec:
         mb = file_size / (1024 * 1024)
         cpmb = n / max(mb, 0.01)
         metrics["chars_per_mb"] = round(cpmb, 1)

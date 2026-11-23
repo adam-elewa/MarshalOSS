@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     visual_analyze_images: bool = True
     visual_analyze_video: bool = True
     visual_frame_interval_sec: float = 5.0
-    visual_max_frames: int = 48  # e.g. 5s × 48 ≈ 4 min of coverage
+    visual_max_frames: int = 48  # longer videos: interval widens to span the whole video; 0 = no cap
     visual_skip_if_ocr_chars: int = 400  # skip stills that already OCR'd well
 
     # File-level AI entities/tags (full extracted text; map+canonicalize if long)

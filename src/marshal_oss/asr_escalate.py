@@ -13,6 +13,7 @@ from .media_ffmpeg import (
     ffmpeg_wav,
     media_duration_sec,
 )
+from .media_info import fmt_clock
 
 LogFn = Callable[[str], None]
 
@@ -77,7 +78,7 @@ def ai_transcribe_file(
     prompt = settings.asr_escalate_prompt or None
     dur = duration_sec if duration_sec is not None else media_duration_sec(path)
 
-    texts: list[str] = []
+    windows: list[tuple[float, float, str]] = []
     with tempfile.TemporaryDirectory(prefix="marshaloss-asr-") as td:
         tmp = Path(td)
         if dur and dur > _CHUNK_SEC:
@@ -93,7 +94,7 @@ def ai_transcribe_file(
                     ffmpeg_wav(path, chunk_path, start_sec=start, duration_sec=span)
                 text = _transcribe_file(client, model, chunk_path, prompt=prompt)
                 if text:
-                    texts.append(text)
+                    windows.append((start, start + span, text))
                 start += span
                 idx += 1
                 if idx > settings.asr_escalate_max_chunks:
@@ -112,27 +113,49 @@ def ai_transcribe_file(
                     ffmpeg_wav(path, chunk_path, start_sec=start, duration_sec=span)
                     text = _transcribe_file(client, model, chunk_path, prompt=prompt)
                     if text:
-                        texts.append(text)
+                        windows.append((start, min(start + span, d), text))
                     start += span
                     idx += 1
             else:
                 text = _transcribe_file(client, model, wav, prompt=prompt)
                 if text:
-                    texts.append(text)
+                    windows.append((0.0, dur or 0.0, text))
 
-    joined = "\n\n".join(t for t in texts if t).strip()
-    if not joined:
-        return []
-    return [
-        {
-            "text": joined,
-            "page_start": None,
-            "page_end": None,
-            "heading": "AI transcript",
-            "bates": bates,
-            "meta": {"source": "gpt-4o-transcribe", "chunks": len(texts)},
-        }
-    ]
+    # gpt-4o-transcribe returns no line timings, so times are per audio window.
+    chunks: list[dict[str, Any]] = []
+    for start, end, text in windows:
+        pieces = _split_text(text.strip(), _PIECE_CHARS)
+        for i, piece in enumerate(pieces):
+            chunks.append(
+                {
+                    "text": piece,
+                    "page_start": None,
+                    "page_end": None,
+                    "heading": f"AI transcript @{fmt_clock(start)}–{fmt_clock(end)}",
+                    "bates": bates,
+                    "start_sec": start,
+                    "end_sec": end,
+                    "segments": [{"start": start, "end": end, "text": text.strip()}] if i == 0 else [],
+                    "meta": {"source": "gpt-4o-transcribe"},
+                }
+            )
+    return chunks
+
+
+_PIECE_CHARS = 1800
+
+
+def _split_text(text: str, max_chars: int) -> list[str]:
+    pieces: list[str] = []
+    while len(text) > max_chars:
+        cut = text.rfind(" ", 0, max_chars)
+        if cut < max_chars // 3:
+            cut = max_chars
+        pieces.append(text[:cut].strip())
+        text = text[cut:].strip()
+    if text:
+        pieces.append(text)
+    return pieces
 
 
 # Back-compat aliases used by ingest imports

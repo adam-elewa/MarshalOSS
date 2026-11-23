@@ -72,8 +72,23 @@ class Database:
               page_end INTEGER,
               heading TEXT,
               bates TEXT,
+              start_sec REAL,
+              end_sec REAL,
               UNIQUE(file_id, chunk_index)
             );
+            CREATE TABLE IF NOT EXISTS media_segments (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+              case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+              seg_index INTEGER NOT NULL,
+              kind TEXT NOT NULL,
+              start_sec REAL NOT NULL,
+              end_sec REAL NOT NULL,
+              text TEXT NOT NULL,
+              speaker TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_media_segments_file
+              ON media_segments(file_id, start_sec);
             CREATE TABLE IF NOT EXISTS embeddings (
               chunk_id INTEGER PRIMARY KEY REFERENCES chunks(id) ON DELETE CASCADE,
               model TEXT NOT NULL,
@@ -130,6 +145,13 @@ class Database:
         }
         if "meta" not in cols:
             self.conn.execute("ALTER TABLE files ADD COLUMN meta TEXT")
+        ccols = {
+            r[1]
+            for r in self.conn.execute("PRAGMA table_info(chunks)").fetchall()
+        }
+        for col in ("start_sec", "end_sec"):
+            if col not in ccols:
+                self.conn.execute(f"ALTER TABLE chunks ADD COLUMN {col} REAL")
         # Additive production_manifest ingest/quality columns (older DBs)
         mcols = {
             r[1]
@@ -515,24 +537,32 @@ class Database:
         chunks: Iterable[dict[str, Any]],
         embeddings: Iterable[tuple[list[float], str]] | None = None,
     ) -> int:
-        # Clear old FTS rows for this file's chunks
-        old_ids = [
-            r["id"]
-            for r in self.conn.execute(
-                "SELECT id FROM chunks WHERE file_id=?", (file_id,)
-            ).fetchall()
-        ]
-        for cid in old_ids:
-            self.conn.execute("DELETE FROM chunks_fts WHERE rowid=?", (cid,))
+        # Contentless FTS5 rows can only be removed by re-supplying the indexed values.
+        old_rows = self.conn.execute(
+            """
+            SELECT c.id, c.text, c.bates, f.rel_path
+            FROM chunks c JOIN files f ON f.id = c.file_id
+            WHERE c.file_id=?
+            """,
+            (file_id,),
+        ).fetchall()
+        for r in old_rows:
+            self.conn.execute(
+                "INSERT INTO chunks_fts(chunks_fts, rowid, text, bates, rel_path) VALUES('delete',?,?,?,?)",
+                (r["id"], r["text"], r["bates"] or "", r["rel_path"]),
+            )
         self.conn.execute("DELETE FROM chunks WHERE file_id=?", (file_id,))
+        self.conn.execute("DELETE FROM media_segments WHERE file_id=?", (file_id,))
 
         emb_list = list(embeddings) if embeddings is not None else None
         count = 0
+        seg_index = 0
         for i, ch in enumerate(chunks):
             cur = self.conn.execute(
                 """
-                INSERT INTO chunks(file_id, case_id, chunk_index, text, page_start, page_end, heading, bates)
-                VALUES(?,?,?,?,?,?,?,?)
+                INSERT INTO chunks(file_id, case_id, chunk_index, text, page_start, page_end,
+                                   heading, bates, start_sec, end_sec)
+                VALUES(?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     file_id,
@@ -543,8 +573,29 @@ class Database:
                     ch.get("page_end"),
                     ch.get("heading"),
                     ch.get("bates"),
+                    ch.get("start_sec"),
+                    ch.get("end_sec"),
                 ),
             )
+            for seg in ch.get("segments") or []:
+                self.conn.execute(
+                    """
+                    INSERT INTO media_segments(file_id, case_id, seg_index, kind,
+                                               start_sec, end_sec, text, speaker)
+                    VALUES(?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        file_id,
+                        case_id,
+                        seg_index,
+                        seg.get("kind") or "speech",
+                        float(seg["start"]),
+                        float(seg["end"]),
+                        seg["text"],
+                        seg.get("speaker"),
+                    ),
+                )
+                seg_index += 1
             chunk_id = cur.lastrowid
             self.conn.execute(
                 "INSERT INTO chunks_fts(rowid, text, bates, rel_path) VALUES(?,?,?,?)",
@@ -569,6 +620,7 @@ class Database:
         rows = self.conn.execute(
             """
             SELECT c.id AS chunk_id, c.text, c.bates, c.page_start, c.page_end, c.heading,
+                   c.start_sec, c.end_sec,
                    f.rel_path, f.name, f.bates AS file_bates, f.id AS file_id,
                    bm25(chunks_fts) AS score
             FROM chunks_fts
@@ -587,6 +639,7 @@ class Database:
         rows = self.conn.execute(
             """
             SELECT e.chunk_id, e.vector, c.text, c.bates, c.page_start, c.page_end, c.heading,
+                   c.start_sec, c.end_sec,
                    f.rel_path, f.name, f.bates AS file_bates, f.id AS file_id
             FROM embeddings e
             JOIN chunks c ON c.id = e.chunk_id
@@ -605,9 +658,20 @@ class Database:
                 "page_start": r["page_start"],
                 "page_end": r["page_end"],
                 "heading": r["heading"],
+                "start_sec": r["start_sec"],
+                "end_sec": r["end_sec"],
                 "rel_path": r["rel_path"],
                 "name": r["name"],
                 "file_id": r["file_id"],
             }
             out.append((r["chunk_id"], vec, meta))
         return out
+
+    def list_media_segments(self, file_id: int, kind: str | None = None) -> list[dict[str, Any]]:
+        sql = "SELECT kind, start_sec, end_sec, text, speaker FROM media_segments WHERE file_id=?"
+        args: list[Any] = [file_id]
+        if kind:
+            sql += " AND kind=?"
+            args.append(kind)
+        sql += " ORDER BY start_sec, seg_index"
+        return [dict(r) for r in self.conn.execute(sql, args).fetchall()]

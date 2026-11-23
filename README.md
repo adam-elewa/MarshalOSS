@@ -92,11 +92,11 @@ Zips are expanded automatically. If Docling or ffmpeg cannot open a file, conver
 
 **1. Prepare.** Expands zips, hashes every file (SHA-256), guesses Bates numbers from paths, and writes a **production manifest** — a list of everything produced. This is your "did we get everything?" check before any OCR runs.
 
-**2. Extract.** [Docling](https://github.com/docling-project/docling) runs on your machine and turns documents, email, images, and common audio/video into text. For other A/V formats, **ffmpeg** (installed on the host, not part of this repo) converts to WAV first. This step costs compute time, not API money, and is most of the runtime on a large case.
+**2. Extract.** [Docling](https://github.com/docling-project/docling) runs on your machine and turns documents, email, images, and common audio/video into text. For other A/V formats, **ffmpeg** (installed on the host, not part of this repo) converts to WAV first. Transcripts keep the start and end time of every line. Videos are also classified as bodycam, dashcam, or other, with device, serial, and recording start where the filename or video metadata provides them. This step costs compute time, not API money, and is most of the runtime on a large case.
 
 **3. Quality gate.** Local checks score the output. Bad document OCR (empty, gibberish, mojibake) goes to an OpenAI or Anthropic vision model, capped at 25 pages per file by default. A bad transcript (empty, looping, junk like "thanks for watching") goes to OpenAI `gpt-4o-transcribe`. If Docling did fine, no API call is made.
 
-**4. Visual index.** OCR doesn't tell you what's *in* a scene photo. A vision model writes a short factual description (clothing, vehicles, objects, who is where), which is indexed like any other text — so "red hoodie in the hallway" or "silver sedan" can match. Video gets the same treatment on frames sampled every 5 seconds (up to 48). Images that are really document scans with plenty of OCR text are skipped.
+**4. Visual index.** OCR doesn't tell you what's *in* a scene photo. A vision model writes a short factual description (clothing, vehicles, objects, who is where), which is indexed like any other text — so "red hoodie in the hallway" or "silver sedan" can match. Video gets the same treatment on sampled frames: every 5 seconds, up to 48 frames; longer videos get the 48 frames spread evenly across the whole recording. Each frame description keeps its time in the video. Images that are really document scans with plenty of OCR text are skipped.
 
 **5. Entities and tags.** Search finds passages; entities answer a different question: *what names and topics does this file involve?* A cheap chat model reads each file once and produces a cover sheet:
 
@@ -235,10 +235,7 @@ Some defense work needs a purpose-built view that a general review app will neve
 |---|---|---|
 | **Bodycam viewer** | Video with a synced, clickable transcript and frame descriptions; videos grouped by officer; a multi-camera timeline aligned by recording time, with per-camera clock offsets; transcript search | Planned (porting from legacy Marshal) |
 
-Planned groundwork for the bodycam viewer:
-1. Store start/end times on transcript and frame chunks so clicking a line seeks the video.
-2. Detect bodycam footage at ingest from file paths, video metadata (device, serial, recording start), and the existing vision pass (camera type, burned-in overlay text).
-3. Serve the viewer from MarshalOSS and add the Datashare plugin.
+Ingest already stores what the bodycam viewer needs: start/end times for every transcript line and frame description, and each video's camera type, device, serial, and recording start. Remaining work: serve the viewer from MarshalOSS and add the Datashare plugin.
 
 New tools should follow the same pattern. General browse/tag/annotate features still belong in Datashare itself.
 
@@ -262,7 +259,7 @@ Environment variables, prefix `MARSHALOSS_`:
 | `OCR_ESCALATE_MIN_SCORE` | `0.72` | Quality threshold |
 | `ASR_ESCALATE` / `ASR_ESCALATE_MODEL` | `true` / `gpt-4o-transcribe` | Transcription re-run |
 | `VISUAL_ANALYZE` | `true` | Photo / video frame descriptions |
-| `VISUAL_FRAME_INTERVAL_SEC` / `VISUAL_MAX_FRAMES` | `5` / `48` | Video sampling |
+| `VISUAL_FRAME_INTERVAL_SEC` / `VISUAL_MAX_FRAMES` | `5` / `48` | Video sampling; frames spread across long videos (`0` = no cap) |
 | `ENTITY_EXTRACT` | `true` | Per-file entities/tags |
 | `ENTITY_EXTRACT_SEGMENT_CHARS` | `14000` | Segment size for long files |
 | `ENTITY_EXTRACT_MAX_CHARS` | `0` | `0` = all extracted text |

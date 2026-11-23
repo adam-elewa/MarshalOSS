@@ -15,9 +15,9 @@ Commercial AI-over-discovery tools are priced for large civil matters. Criminal 
 The project does two things at low cost, while still using paid models when local extraction is wrong or empty:
 
 1. **AI search and analysis** over the production (MarshalOSS + Cowork / Computer)
-2. **Basic human review** — browsing, tagging, and annotating (via **Datashare**)
+2. **Basic human review** — case overview, categorized document browse, and a document viewer (native web UI in this repo)
 
-It is not designed to rebuild Relativity. It wires together existing open-source tools (Docling, Datashare, ffmpeg, SQLite, MCP) and adapts them for defense work. It is not a full enterprise review desk (privilege logs, redaction workflows, reviewer assignment).
+It is not designed to rebuild Relativity. It wires together existing open-source tools (Docling, ffmpeg, SQLite, MCP) and adapts them for defense work. It is not a full enterprise review desk (privilege logs, redaction workflows, reviewer assignment).
 
 **Hosting:** the project is hosting-agnostic. Do not expose the port on the public internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Optional helpers are in [`tools/networking/`](tools/networking/README.md).
 
@@ -31,19 +31,18 @@ It is not designed to rebuild Relativity. It wires together existing open-source
          ▼
   MarshalOSS ingest (local)  ──►  SQLite: text chunks + Voyage vectors + keyword index
                                          │
-                ┌────────────────────────┼─────────────────────────┐
-                ▼                        ▼                         ▼
-     MCP  /mcp :7340           REST / browser :7340        Datashare :8100
-     Cowork / Computer         search, manifest, files     browse / tag / annotate
-     (questions, drafting,
+                ┌────────────────────────┴─────────────────────────┐
+                ▼                                                  ▼
+     MCP  /mcp :7340                                    Web UI + REST :7340
+     Cowork / Computer                                  case overview, categories,
+     (questions, drafting,                              document viewer, search APIs
       Outlook, Word, …)
 ```
 
 | Layer | Role | Cost |
 |---|---|---|
-| MarshalOSS | Ingest, search, file links, MCP | Mostly local compute; small API spend (see below) |
+| MarshalOSS | Ingest, search, file links, MCP, native review UI | Mostly local compute; small API spend (see below) |
 | Cowork / Computer | Questions, analysis, drafting, connectors | Subscription usage |
-| Datashare | Human browse / tag / annotate | Open source (AGPL upstream) |
 
 MarshalOSS never answers questions itself. `search` / `ask` return text chunks and file links; Cowork or Computer writes the response.
 
@@ -168,7 +167,6 @@ Review each provider's data retention and training terms, and your jurisdiction'
 | [Docling](https://github.com/docling-project/docling) | Open-source document conversion: OCR, parsing, speech-to-text | First-pass text extraction for every file |
 | [ffmpeg](https://ffmpeg.org/) | Standard open-source audio/video toolkit | Converts other A/V formats for transcription and samples video frames. Install with your OS package manager and keep it updated. |
 | [SQLite](https://www.sqlite.org/) | Embedded database (built into Python) | Stores text, vectors, and the keyword index |
-| [Datashare](https://github.com/ICIJ/datashare) | Open-source document review app from ICIJ (runs in Docker) | Human browse / tag / annotate |
 | Python 3.12+ and [uv](https://docs.astral.sh/uv/) | Runtime and package manager | Runs MarshalOSS |
 
 ---
@@ -194,7 +192,7 @@ uv run marshaloss serve
 uv run marshaloss search "bodycam booking" --mode hybrid --top-k 8
 ```
 
-Endpoints: `/` and `/browser` (file browser), `/health`, `/api/manifest`, `/mcp`.
+Endpoints: `/` (case review UI), `/health`, `/api/manifest`, `/api/files/categories`, `/mcp`.
 
 ### Connect Cowork / Claude Desktop
 
@@ -217,29 +215,30 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 
 ---
 
-## Human review (Datashare)
+## Human review (native web UI)
 
-Browsing, tagging, and annotating are handled by [Datashare](https://github.com/ICIJ/datashare), running beside MarshalOSS on `:8100`. Defense-specific review features (coding, tags, annotation, privilege, layouts) should be built by **extending or revising Datashare**, not by creating a separate review UI in this repo.
+Case management and document review run in MarshalOSS on `:7340` (`web/app.html`):
 
-Setup: [`review/`](review/README.md). Details: [docs/DUAL_STACK.md](docs/DUAL_STACK.md). Both Datashare and MarshalOSS are AGPL-3.0.
+- **Cases** — pick a matter
+- **Case Overview** — stats, production manifest (processed / OCR confidence / not processed), entities, tags
+- **Document Explorer** — auto categories (criminal history, police reports, bodycam, …) or **Native Folders**; search; document viewer (preview, text, metadata, entities, tags)
+
+Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 
 ---
 
 ## Defense tools (specialized viewers)
 
-Some defense work needs a purpose-built view that a general review app will never ship — for example, watching several officers' bodycam footage on one synced timeline. These tools follow one pattern:
+Some defense work needs a purpose-built view — for example, watching several officers' bodycam footage on one synced timeline. These tools follow one pattern:
 
 - **Built and served by MarshalOSS.** The tool reads MarshalOSS's own data (transcripts, frame descriptions, timestamps, file metadata), so it needs no separate processing and also works on its own in a browser.
-- **Shown inside Datashare.** A thin Datashare plugin adds the tool as its own view: a sidebar page for case-wide views, and a panel on the matching documents. Reviewers stay in one app.
 - **Fed by ingest.** Where a tool needs special inputs (like knowing which videos are bodycam), ingest detects and stores them automatically.
 
 | Tool | What it does | Status |
 |---|---|---|
 | **Bodycam viewer** | Video with a synced, clickable transcript and frame descriptions; videos grouped by officer; a multi-camera timeline aligned by recording time, with per-camera clock offsets; transcript search | Planned (porting from legacy Marshal) |
 
-Ingest already stores what the bodycam viewer needs: start/end times for every transcript line and frame description, and each video's camera type, device, serial, and recording start. Remaining work: serve the viewer from MarshalOSS and add the Datashare plugin.
-
-New tools should follow the same pattern. General browse/tag/annotate features still belong in Datashare itself.
+Ingest already stores what the bodycam viewer needs: start/end times for every transcript line and frame description, and each video's camera type, device, serial, and recording start. Remaining work: serve the viewer from MarshalOSS and wire it into the native review UI.
 
 ---
 
@@ -286,10 +285,10 @@ Contributions from practicing criminal defense attorneys are welcome. The most u
 |---|---|
 | Docling for documents, OCR, transcription | Homegrown PDF/Office/email parsers |
 | ffmpeg for media conversion | Custom demuxers per vendor format |
-| Extending Datashare for review UX | A new review UI or Relativity clone |
+| Extending the native MarshalOSS review UI | A Relativity clone or third-party review dependency |
 | Thin adapters around mature libraries | Format connectors only this project maintains |
 
-If Docling or ffmpeg can't read a file, convert it upstream or add a thin adapter around an existing open project. The one exception to "extend Datashare" is specialized defense viewers; see [Defense tools](#defense-tools-specialized-viewers).
+If Docling or ffmpeg can't read a file, convert it upstream or add a thin adapter around an existing open project. Specialized defense viewers belong in this codebase; see [Defense tools](#defense-tools-specialized-viewers).
 
 **3. Local first, unless a paid model is much better for little money.** Extract locally where local results are good, and call paid APIs when the local result is bad or missing. The exception is where a frontier model is far better at low cost: audio/video transcription goes to OpenAI by default because local Whisper misses names and words that matter.
 

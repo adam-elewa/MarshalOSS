@@ -1,33 +1,14 @@
-# Dual stack: MarshalOSS + Datashare
+# Stack layout
 
-Same host can run both planes.
+MarshalOSS is a single stack: ingest, search/MCP, and the native review UI on one host.
 
-| Role | Product | Default URL |
+| Role | Surface | Default URL |
 |------|---------|-------------|
-| MCP / hybrid search / Bates ingest | **MarshalOSS** | `http://<host>:7340/mcp` |
-| File open URLs | MarshalOSS | `http://<host>:7340/` |
-| Manual, human-led review | **Datashare** | `http://<host>:8100/` |
+| MCP for Cowork / Computer | MarshalOSS | `http://<host>:7340/mcp` |
+| Case review UI | MarshalOSS web app | `http://<host>:7340/` |
+| File open / download | MarshalOSS | `http://<host>:7340/files/…` · `/view/…` |
+| Health / APIs | MarshalOSS | `http://<host>:7340/health` · `/api/…` |
 
-## Review plane
+Human browse, case overview, document categories, and the document viewer live in this repo (`web/app.html`). Specialized defense viewers (for example a synced bodycam timeline) should also be served from MarshalOSS, not a separate review product.
 
-The stack is also meant to provide **basic review tools**: browsing, tagging, and annotating discovery. That work goes through **Datashare**. Defense-specific needs (coding UX, tags, annotation, privilege, layouts) should be met by **extending or revising Datashare**, not by building a second review product inside MarshalOSS.
-
-Compose + index scripts live in [`review/`](../review/README.md).
-
-```bash
-cd review
-cp .env.example .env
-docker compose up -d
-./scripts/create-and-index.sh <project> <subdir-under-data>
-```
-
-FreeEed / OpenContracts were earlier experiments; Datashare is the supported review plane.
-
-## License
-
-Both are AGPL-3.0:
-
-- **MarshalOSS** (this repo): AGPL-3.0-or-later
-- **Datashare** (upstream image / any fork of its code): AGPL-3.0
-
-If you modify either and offer it as a network service, you must provide the corresponding source.
+Do not expose the port on the public internet without auth; prefer Tailscale or a Cloudflare Tunnel. Optional helpers: [`tools/networking/`](../tools/networking/README.md).

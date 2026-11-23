@@ -1,7 +1,0 @@
-{
-  "name": "marshal-entities",
-  "version": "1.0.0",
-  "description": "Project-wide entity browser for MarshalOSS / Datashare — replaces the NLP task list at #/tasks/entities",
-  "main": "index.js",
-  "license": "AGPL-3.0-or-later"
-}

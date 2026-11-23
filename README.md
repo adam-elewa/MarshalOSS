@@ -57,6 +57,7 @@ Default allowlist (override with `MARSHALOSS_INGEST_EXTENSIONS`):
 |---|---|
 | Documents | `.pdf` `.docx` `.doc` `.pptx` `.ppt` `.xlsx` `.xls` `.csv` `.txt` `.md` `.html` `.htm` |
 | Email | `.eml` `.msg` |
+| Metadata (plain text) | `.xml` `.kml` `.st3` (e.g. camera recording logs, GPS tracks) |
 | Images | `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.webp` |
 | Audio | `.mp3` `.wav` `.m4a` `.aac` `.ogg` `.flac` |
 | Video | `.mp4` `.mov` `.avi` `.mkv` `.webm` |

@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     # Docling-native + ffmpeg-bridge A/V (see media_ffmpeg.AUDIO_VIDEO_EXTS)
     ingest_extensions: str = (
         ".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt,.md,"
-        ".html,.htm,.eml,.msg,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,"
+        ".html,.htm,.xml,.kml,.st3,.eml,.msg,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,"
         ".mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.avi,.mkv,.webm,"
         ".wma,.wmv,.flv,.asf,.ts,.m4v,.mpeg,.mpg,.3gp,.caf,.dav,.vob,.h264,.m2ts,.mts,.mxf"
     )

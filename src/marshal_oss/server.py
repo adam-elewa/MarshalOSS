@@ -211,7 +211,7 @@ def create_app(
         lower = name.lower()
         is_pdf = mime == "application/pdf" or lower.endswith(".pdf")
         is_image = mime.startswith("image/")
-        is_text = mime.startswith("text/") or lower.endswith((".txt", ".md", ".csv", ".log", ".json"))
+        is_text = mime.startswith("text/") or lower.endswith((".txt", ".md", ".csv", ".log", ".json", ".xml", ".kml", ".st3"))
         if is_pdf or is_image:
             body = f"""<!doctype html><html><head><meta charset=utf-8><title>{safe}</title>
             <style>html,body{{margin:0;height:100%;background:#111;color:#eee;font:14px system-ui}}

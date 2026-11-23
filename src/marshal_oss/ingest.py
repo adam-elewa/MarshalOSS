@@ -49,6 +49,11 @@ def iter_case_files(root: Path, allowed: set[str]) -> list[Path]:
     return files
 
 
+_PLAIN_TEXT_SUFFIXES = {".txt", ".md", ".csv", ".log"}
+# Docling has no reader for these; read them as plain text without trying it.
+_RAW_TEXT_ONLY_SUFFIXES = {".xml", ".kml", ".st3"}
+
+
 def _chunk_plain_text(text: str, bates: str | None, max_chars: int = 1800) -> list[dict[str, Any]]:
     text = (text or "").strip()
     if not text:
@@ -421,7 +426,14 @@ def _ingest_one_file(
 
         meta: dict[str, Any] = {}
         try:
-            if is_media_path(path) and not is_docling_native_media(path):
+            if path.suffix.lower() in _RAW_TEXT_ONLY_SUFFIXES:
+                chunks = _chunk_plain_text(
+                    path.read_text(encoding="utf-8", errors="replace"),
+                    bates,
+                )
+                confidence = {}
+                meta["source"] = "raw_text"
+            elif is_media_path(path) and not is_docling_native_media(path):
                 with as_docling_media(path) as (media_path, bridge_meta):
                     log(
                         f"[cyan]media bridge[/cyan] {rel} "
@@ -433,7 +445,7 @@ def _ingest_one_file(
             else:
                 chunks, confidence = docling_extract(path)
         except Exception as e:
-            if path.suffix.lower() in {".txt", ".md", ".csv", ".log"}:
+            if path.suffix.lower() in _PLAIN_TEXT_SUFFIXES:
                 chunks = _chunk_plain_text(
                     path.read_text(encoding="utf-8", errors="replace"),
                     bates,

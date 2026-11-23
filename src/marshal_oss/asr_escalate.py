@@ -1,11 +1,16 @@
-"""Escalate poor Docling ASR to OpenAI gpt-4o-transcribe (ffmpeg preprocess)."""
+"""OpenAI transcription for audio/video (ffmpeg → 16 kHz mono WAV windows).
+
+Primary path when ``asr_provider=openai``; otherwise re-runs poor Docling transcripts.
+Diarize models return speaker-labelled lines with times; plain models return text
+per upload window.
+"""
 
 from __future__ import annotations
 
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from .config import Settings
 from .media_ffmpeg import (
@@ -19,13 +24,12 @@ LogFn = Callable[[str], None]
 
 # Stay under typical API upload limits; chunk long media.
 _CHUNK_SEC = 600.0  # 10 minutes
+_SMALL_CHUNK_SEC = 180.0
 _MAX_UPLOAD_BYTES = 24 * 1024 * 1024
+_PIECE_CHARS = 1800
 
 
-def resolve_asr_client(settings: Settings) -> str | None:
-    """Return OpenAI API key if ASR escalate can run."""
-    if not settings.asr_escalate:
-        return None
+def _openai_key(settings: Settings) -> str | None:
     return (
         settings.openai_api_key
         or os.environ.get("OPENAI_API_KEY")
@@ -33,22 +37,82 @@ def resolve_asr_client(settings: Settings) -> str | None:
     )
 
 
-def _transcribe_file(client: Any, model: str, audio_path: Path, *, prompt: str | None) -> str:
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "file": audio_path.open("rb"),
-        "response_format": "text",
-    }
+def resolve_asr_client(settings: Settings) -> str | None:
+    """OpenAI key if poor local transcripts may be re-run."""
+    return _openai_key(settings) if settings.asr_escalate else None
+
+
+def use_ai_asr(settings: Settings) -> bool:
+    """True when every A/V file should go straight to the OpenAI model."""
+    return settings.asr_provider == "openai" and _openai_key(settings) is not None
+
+
+def _audio_windows(
+    path: Path,
+    tmp: Path,
+    dur: float | None,
+    max_windows: int,
+    log: LogFn,
+) -> Iterator[tuple[float, float, Path]]:
+    """Yield (start_sec, end_sec, wav_path) upload-sized windows."""
+    if not dur or dur <= _CHUNK_SEC:
+        wav = tmp / "full.wav"
+        ffmpeg_wav(path, wav)
+        if wav.stat().st_size <= _MAX_UPLOAD_BYTES:
+            yield 0.0, dur or 0.0, wav
+            return
+        step, total = _SMALL_CHUNK_SEC, dur or 1800.0
+    else:
+        step, total = _CHUNK_SEC, dur
+    start, idx = 0.0, 0
+    while start < total - 0.5 and idx < max_windows:
+        span = min(step, total - start)
+        wav = tmp / f"w_{idx:04d}.wav"
+        log(f"[cyan]asr[/cyan] {path.name} window {idx} @ {fmt_clock(start)}")
+        ffmpeg_wav(path, wav, start_sec=start, duration_sec=span)
+        if wav.stat().st_size > _MAX_UPLOAD_BYTES:
+            span = min(_SMALL_CHUNK_SEC, span)
+            ffmpeg_wav(path, wav, start_sec=start, duration_sec=span)
+        yield start, start + span, wav
+        start += span
+        idx += 1
+    if start < total - 0.5:
+        log(f"[yellow]asr[/yellow] {path.name}: stopped at {fmt_clock(start)} (asr_max_windows={max_windows})")
+
+
+def _transcribe_text(client: Any, model: str, wav: Path, *, prompt: str | None) -> str:
+    kwargs: dict[str, Any] = {"model": model, "response_format": "text"}
     if prompt:
         kwargs["prompt"] = prompt
-    try:
-        result = client.audio.transcriptions.create(**kwargs)
-    finally:
-        kwargs["file"].close()
+    with wav.open("rb") as f:
+        result = client.audio.transcriptions.create(file=f, **kwargs)
     if isinstance(result, str):
         return result.strip()
-    text = getattr(result, "text", None)
-    return (text or str(result)).strip()
+    return (getattr(result, "text", None) or str(result)).strip()
+
+
+def _transcribe_diarized(client: Any, model: str, wav: Path) -> list[dict[str, Any]]:
+    with wav.open("rb") as f:
+        result = client.audio.transcriptions.create(
+            model=model,
+            file=f,
+            response_format="diarized_json",
+            chunking_strategy="auto",
+        )
+    data = result.model_dump() if hasattr(result, "model_dump") else dict(result)
+    out = []
+    for s in data.get("segments") or []:
+        text = (s.get("text") or "").strip()
+        if text:
+            out.append(
+                {
+                    "start": float(s["start"]),
+                    "end": float(s["end"]),
+                    "speaker": s.get("speaker"),
+                    "text": text,
+                }
+            )
+    return out
 
 
 def ai_transcribe_file(
@@ -59,73 +123,39 @@ def ai_transcribe_file(
     duration_sec: float | None = None,
     log: LogFn | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    ffmpeg → 16 kHz mono → OpenAI gpt-4o-transcribe (chunked if long/large).
-    Returns Marshal-style chunks (plain text segments).
-    Works for Docling-native and ffmpeg-bridge A/V formats.
-    """
+    """Transcribe A/V with ``settings.asr_model``; returns timed transcript chunks."""
     _log = log or (lambda _m: None)
-    key = resolve_asr_client(settings)
+    key = _openai_key(settings)
     if not key:
-        raise RuntimeError("OPENAI_API_KEY required for ASR escalate")
+        raise RuntimeError("OPENAI_API_KEY required for OpenAI transcription")
     if path.suffix.lower() not in AUDIO_VIDEO_EXTS:
         raise ValueError(f"not a media file: {path}")
 
     from openai import OpenAI
 
     client = OpenAI(api_key=key)
-    model = settings.asr_escalate_model
-    prompt = settings.asr_escalate_prompt or None
+    model = settings.asr_model
+    diarize = "diarize" in model
     dur = duration_sec if duration_sec is not None else media_duration_sec(path)
 
-    windows: list[tuple[float, float, str]] = []
+    windows: list[tuple[float, float, list[dict[str, Any]] | str]] = []
     with tempfile.TemporaryDirectory(prefix="marshaloss-asr-") as td:
-        tmp = Path(td)
-        if dur and dur > _CHUNK_SEC:
-            start = 0.0
-            idx = 0
-            while start < dur - 0.5:
-                chunk_path = tmp / f"chunk_{idx:04d}.wav"
-                span = min(_CHUNK_SEC, dur - start)
-                _log(f"[yellow]asr[/yellow] chunk {idx} @ {start:.0f}s ({span:.0f}s)")
-                ffmpeg_wav(path, chunk_path, start_sec=start, duration_sec=span)
-                if chunk_path.stat().st_size > _MAX_UPLOAD_BYTES:
-                    span = min(180.0, span)
-                    ffmpeg_wav(path, chunk_path, start_sec=start, duration_sec=span)
-                text = _transcribe_file(client, model, chunk_path, prompt=prompt)
-                if text:
-                    windows.append((start, start + span, text))
-                start += span
-                idx += 1
-                if idx > settings.asr_escalate_max_chunks:
-                    _log(f"[yellow]asr[/yellow] hit max chunks ({settings.asr_escalate_max_chunks})")
-                    break
-        else:
-            wav = tmp / "full.wav"
-            ffmpeg_wav(path, wav)
-            if wav.stat().st_size > _MAX_UPLOAD_BYTES:
-                d = dur or 1800.0
-                start = 0.0
-                idx = 0
-                while start < d - 0.5 and idx < settings.asr_escalate_max_chunks:
-                    chunk_path = tmp / f"part_{idx:04d}.wav"
-                    span = 180.0
-                    ffmpeg_wav(path, chunk_path, start_sec=start, duration_sec=span)
-                    text = _transcribe_file(client, model, chunk_path, prompt=prompt)
-                    if text:
-                        windows.append((start, min(start + span, d), text))
-                    start += span
-                    idx += 1
+        for start, end, wav in _audio_windows(path, Path(td), dur, settings.asr_max_windows, _log):
+            if diarize:
+                windows.append((start, end, _transcribe_diarized(client, model, wav)))
             else:
-                text = _transcribe_file(client, model, wav, prompt=prompt)
-                if text:
-                    windows.append((0.0, dur or 0.0, text))
+                prompt = settings.asr_escalate_prompt or None
+                windows.append((start, end, _transcribe_text(client, model, wav, prompt=prompt)))
 
-    # gpt-4o-transcribe returns no line timings, so times are per audio window.
+    if diarize:
+        segments = _offset_segments(windows)
+        return _chunk_segments(segments, bates=bates, source=model)
+
+    # Plain models return no line timings, so times are per upload window.
     chunks: list[dict[str, Any]] = []
     for start, end, text in windows:
-        pieces = _split_text(text.strip(), _PIECE_CHARS)
-        for i, piece in enumerate(pieces):
+        text = str(text).strip()
+        for i, piece in enumerate(_split_text(text, _PIECE_CHARS)):
             chunks.append(
                 {
                     "text": piece,
@@ -135,14 +165,74 @@ def ai_transcribe_file(
                     "bates": bates,
                     "start_sec": start,
                     "end_sec": end,
-                    "segments": [{"start": start, "end": end, "text": text.strip()}] if i == 0 else [],
-                    "meta": {"source": "gpt-4o-transcribe"},
+                    "segments": [{"start": start, "end": end, "text": text}] if i == 0 else [],
+                    "meta": {"source": model},
                 }
             )
     return chunks
 
 
-_PIECE_CHARS = 1800
+def _offset_segments(windows: list[tuple[float, float, Any]]) -> list[dict[str, Any]]:
+    """Shift window-relative times to file times. Speaker labels are only consistent
+    within one upload window, so multi-window files get the part number in the label."""
+    multi = len(windows) > 1
+    out = []
+    for i, (start, _end, segs) in enumerate(windows):
+        for s in segs:
+            label = s.get("speaker")
+            speaker = None
+            if label:
+                speaker = f"Speaker {label}" + (f", part {i + 1}" if multi else "")
+            out.append(
+                {
+                    "start": start + s["start"],
+                    "end": start + s["end"],
+                    "speaker": speaker,
+                    "text": s["text"],
+                }
+            )
+    return out
+
+
+def _chunk_segments(
+    segments: list[dict[str, Any]],
+    *,
+    bates: str | None,
+    source: str,
+    max_chars: int = _PIECE_CHARS,
+) -> list[dict[str, Any]]:
+    chunks: list[dict[str, Any]] = []
+    group: list[dict[str, Any]] = []
+    size = 0
+
+    def flush() -> None:
+        if not group:
+            return
+        lines = [f"{s['speaker']}: {s['text']}" if s.get("speaker") else s["text"] for s in group]
+        start, end = group[0]["start"], group[-1]["end"]
+        chunks.append(
+            {
+                "text": "\n".join(lines),
+                "page_start": None,
+                "page_end": None,
+                "heading": f"Transcript @{fmt_clock(start)}–{fmt_clock(end)}",
+                "bates": bates,
+                "start_sec": start,
+                "end_sec": end,
+                "segments": list(group),
+                "meta": {"source": source},
+            }
+        )
+
+    for s in segments:
+        line_len = len(s["text"]) + len(s.get("speaker") or "") + 3
+        if group and size + line_len > max_chars:
+            flush()
+            group, size = [], 0
+        group.append(s)
+        size += line_len
+    flush()
+    return chunks
 
 
 def _split_text(text: str, max_chars: int) -> list[str]:
@@ -158,5 +248,5 @@ def _split_text(text: str, max_chars: int) -> list[str]:
     return pieces
 
 
-# Back-compat aliases used by ingest imports
+# Back-compat alias used by ingest imports
 _ffmpeg_wav = ffmpeg_wav

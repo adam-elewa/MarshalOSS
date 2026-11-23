@@ -120,8 +120,8 @@ def ingest_cmd(
         f"(provider={settings.ocr_escalate_provider})"
     )
     console.print(
-        f"ASR escalate: {settings.asr_escalate} "
-        f"(model={settings.asr_escalate_model})"
+        f"Transcription: provider={settings.asr_provider} model={settings.asr_model} "
+        f"(local escalate={settings.asr_escalate})"
     )
     console.print(
         f"ZIP expand: {settings.expand_zips} "

@@ -75,7 +75,8 @@ Zips are expanded automatically. If Docling or ffmpeg cannot open a file, conver
   1. PREPARE    unzip, hash every file, guess Bates, write manifest      local, $0
         │
         ▼  (each file, in parallel)
-  2. EXTRACT    Docling OCR/parse/transcribe; ffmpeg for other A/V       local, $0
+  2. EXTRACT    Docling OCR/parse locally; audio/video → OpenAI          local + A/V API
+                transcription (speakers, line times)
         │
         ▼
   3. QUALITY    score the text; re-run with paid AI only if it's bad     API only on failure
@@ -92,9 +93,9 @@ Zips are expanded automatically. If Docling or ffmpeg cannot open a file, conver
 
 **1. Prepare.** Expands zips, hashes every file (SHA-256), guesses Bates numbers from paths, and writes a **production manifest** — a list of everything produced. This is your "did we get everything?" check before any OCR runs.
 
-**2. Extract.** [Docling](https://github.com/docling-project/docling) runs on your machine and turns documents, email, images, and common audio/video into text. For other A/V formats, **ffmpeg** (installed on the host, not part of this repo) converts to WAV first. Transcripts keep the start and end time of every line. Videos are also classified as bodycam, dashcam, or other, with device, serial, and recording start where the filename or video metadata provides them. This step costs compute time, not API money, and is most of the runtime on a large case.
+**2. Extract.** [Docling](https://github.com/docling-project/docling) runs on your machine and turns documents, email, and images into text. Audio and video are transcribed by OpenAI `gpt-4o-transcribe-diarize`: **ffmpeg** (installed on the host, not part of this repo) pulls the audio track, and the model returns each spoken line with its start/end time and a speaker label (Speaker A, Speaker B). It is far more accurate than the small local Whisper model on bodycam, radio, and 911 audio. Without an OpenAI key, or with `ASR_PROVIDER=local`, Docling's local Whisper is used instead (still with line times, no speaker labels). Videos are also classified as bodycam, dashcam, or other, with device, serial, and recording start where the filename or video metadata provides them. Document extraction costs compute time, not API money, and is most of the runtime on a large case.
 
-**3. Quality gate.** Local checks score the output. Bad document OCR (empty, gibberish, mojibake) goes to an OpenAI or Anthropic vision model, capped at 25 pages per file by default. A bad transcript (empty, looping, junk like "thanks for watching") goes to OpenAI `gpt-4o-transcribe`. If Docling did fine, no API call is made.
+**3. Quality gate.** Local checks score the output. Bad document OCR (empty, gibberish, mojibake) goes to an OpenAI or Anthropic vision model, capped at 25 pages per file by default. In local transcription mode, a bad transcript (empty, looping, junk like "thanks for watching") is re-run on OpenAI. If local extraction did fine, no API call is made.
 
 **4. Visual index.** OCR doesn't tell you what's *in* a scene photo. A vision model writes a short factual description (clothing, vehicles, objects, who is where), which is indexed like any other text — so "red hoodie in the hallway" or "silver sedan" can match. Video gets the same treatment on sampled frames: every 5 seconds, up to 48 frames; longer videos get the 48 frames spread evenly across the whole recording. Each frame description keeps its time in the video. Images that are really document scans with plenty of OCR text are skipped.
 
@@ -111,9 +112,9 @@ It merges name variants, so "Smith", "J. Smith", and "Jane Smith" become one ent
 
 | Stage | Service | When | Rough cost |
 |---|---|---|---|
-| Prepare, Extract | none (local) | Always | $0 API; dominates runtime |
+| Prepare, Extract (documents) | none (local) | Always | $0 API; dominates runtime |
+| Extract (audio/video) | OpenAI `gpt-4o-transcribe-diarize` | Every audio/video file | Billed per audio minute; roughly a few dollars per 10 hours of audio |
 | Quality — documents | OpenAI or Anthropic vision | OCR looks bad | Only failures |
-| Quality — A/V | OpenAI `gpt-4o-transcribe` | Transcript looks bad | Can dominate A/V-heavy cases |
 | Visual | OpenAI or Anthropic vision | Photos, video frames | Cheap |
 | Entities | OpenAI mini or Anthropic Haiku | Each file with text | Cheap |
 | Index + search | Voyage | Every chunk, every search query | Cents to low dollars per case |
@@ -131,10 +132,10 @@ Each manifest row records `ingest_status` (`ready` / `error` / `skipped` / …),
 | Service | Key | What it is | Why MarshalOSS needs it | Required? |
 |---|---|---|---|---|
 | [Voyage AI](https://www.voyageai.com/) ([docs](https://docs.voyageai.com/)) | `VOYAGE_API_KEY` | Embedding service. Turns text into vectors that represent meaning. `voyage-law-2` is tuned for legal text. | Semantic search: finding passages by meaning, not just exact words. Called for every text chunk at ingest and for every search query. | Strongly recommended. Without it, search falls back to a weak local method. |
-| [OpenAI API](https://platform.openai.com/) ([keys](https://platform.openai.com/api-keys)) | `OPENAI_API_KEY` | API access to OpenAI models (billed separately from a ChatGPT subscription). | `gpt-4o-transcribe` re-transcribes bad audio/video. `gpt-4o-mini` re-OCRs bad pages, describes photos and video frames, and extracts entities/tags. | Recommended. It is the only option for transcription re-runs. |
+| [OpenAI API](https://platform.openai.com/) ([keys](https://platform.openai.com/api-keys)) | `OPENAI_API_KEY` | API access to OpenAI models (billed separately from a ChatGPT subscription). | `gpt-4o-transcribe-diarize` transcribes audio/video with speakers and line times. `gpt-4o-mini` re-OCRs bad pages, describes photos and video frames, and extracts entities/tags. | Recommended. Without it, audio/video uses the weaker local Whisper model. |
 | [Anthropic API](https://www.anthropic.com/api) ([console](https://console.anthropic.com/)) | `ANTHROPIC_API_KEY` | API access to Claude models (billed separately from a Claude subscription). | Claude Haiku can do OCR re-runs, photo/frame descriptions, and entities/tags instead of OpenAI. | Optional. An alternative to OpenAI for everything except transcription. |
 
-If neither OpenAI nor Anthropic is configured, ingest still works. Poor OCR and transcripts are kept as-is, and photo descriptions and entities are skipped.
+If neither OpenAI nor Anthropic is configured, ingest still works. Audio/video is transcribed locally, poor OCR and transcripts are kept as-is, and photo descriptions and entities are skipped.
 
 Keys can be set as environment variables or loaded from `~/.marshal/env.sh`.
 
@@ -154,10 +155,11 @@ Confidentiality matters in defense work, so be aware of what each service receiv
 | Service | Receives |
 |---|---|
 | Voyage | Extracted text chunks and search queries |
-| OpenAI / Anthropic | Page images that failed OCR, audio that failed transcription, photos and video frames, and extracted text for entity tagging |
+| OpenAI | The audio track of every audio/video file (for transcription) |
+| OpenAI / Anthropic | Page images that failed OCR, photos and video frames, and extracted text for entity tagging |
 | Cowork / Computer | Whatever search results and file content the assistant retrieves while you work |
 
-Review each provider's data retention and training terms, and your jurisdiction's ethics guidance, before using them on client material. To keep everything local, set `MARSHALOSS_EMBED_BACKEND=hash`, `MARSHALOSS_OCR_ESCALATE=false`, `MARSHALOSS_ASR_ESCALATE=false`, `MARSHALOSS_VISUAL_ANALYZE=false`, and `MARSHALOSS_ENTITY_EXTRACT=false`. You lose semantic search and AI cleanup, but nothing is sent out during ingest.
+Review each provider's data retention and training terms, and your jurisdiction's ethics guidance, before using them on client material. To keep everything local, set `MARSHALOSS_EMBED_BACKEND=hash`, `MARSHALOSS_ASR_PROVIDER=local`, `MARSHALOSS_OCR_ESCALATE=false`, `MARSHALOSS_ASR_ESCALATE=false`, `MARSHALOSS_VISUAL_ANALYZE=false`, and `MARSHALOSS_ENTITY_EXTRACT=false`. You lose semantic search and AI cleanup, but nothing is sent out during ingest.
 
 ### Local tools (free, run on your machine)
 
@@ -257,7 +259,8 @@ Environment variables, prefix `MARSHALOSS_`:
 | `OCR_ESCALATE_PROVIDER` | `auto` | `auto` / `openai` / `anthropic` |
 | `OCR_ESCALATE_MAX_PAGES` | `25` | Max AI OCR pages per file |
 | `OCR_ESCALATE_MIN_SCORE` | `0.72` | Quality threshold |
-| `ASR_ESCALATE` / `ASR_ESCALATE_MODEL` | `true` / `gpt-4o-transcribe` | Transcription re-run |
+| `ASR_PROVIDER` / `ASR_MODEL` | `openai` / `gpt-4o-transcribe-diarize` | Audio/video transcription; `local` = Docling Whisper |
+| `ASR_ESCALATE` | `true` | In local mode, re-run poor transcripts on `ASR_MODEL` |
 | `VISUAL_ANALYZE` | `true` | Photo / video frame descriptions |
 | `VISUAL_FRAME_INTERVAL_SEC` / `VISUAL_MAX_FRAMES` | `5` / `48` | Video sampling; frames spread across long videos (`0` = no cap) |
 | `ENTITY_EXTRACT` | `true` | Per-file entities/tags |
@@ -288,7 +291,7 @@ Contributions from practicing criminal defense attorneys are welcome. The most u
 
 If Docling or ffmpeg can't read a file, convert it upstream or add a thin adapter around an existing open project. The one exception to "extend Datashare" is specialized defense viewers; see [Defense tools](#defense-tools-specialized-viewers).
 
-**3. Local first; pay only when quality is bad.** Extract locally where possible and call paid vision, transcription, or embedding APIs only when the result is bad or missing.
+**3. Local first, unless a paid model is much better for little money.** Extract locally where local results are good, and call paid APIs when the local result is bad or missing. The exception is where a frontier model is far better at low cost: audio/video transcription goes to OpenAI by default because local Whisper misses names and words that matter.
 
 **4. Defense workflow first.** Prefer features that help counsel find and trust material in a real production: Bates, manifests, ingest status/quality, searchable media.
 

@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from marshal_oss.asr_escalate import _split_text
+from marshal_oss.asr_escalate import _chunk_segments, _offset_segments, _split_text, use_ai_asr
+from marshal_oss.config import Settings
 from marshal_oss.db import Database
 from marshal_oss.media_info import describe_media, fmt_clock
 from marshal_oss.visual import effective_frame_interval
@@ -55,6 +56,40 @@ def test_split_text_keeps_all_words():
     pieces = _split_text(text, 1800)
     assert all(len(p) <= 1800 for p in pieces)
     assert " ".join(pieces) == text
+
+
+def test_diarized_windows_offset_and_label():
+    one = _offset_segments([(0.0, 600.0, [{"start": 1.0, "end": 2.0, "speaker": "A", "text": "911."}])])
+    assert one[0]["speaker"] == "Speaker A"
+
+    two = _offset_segments(
+        [
+            (0.0, 600.0, [{"start": 1.0, "end": 2.0, "speaker": "A", "text": "Stop."}]),
+            (600.0, 900.0, [{"start": 3.0, "end": 4.5, "speaker": "A", "text": "Okay."}]),
+        ]
+    )
+    assert two[0]["speaker"] == "Speaker A, part 1"
+    assert (two[1]["start"], two[1]["end"], two[1]["speaker"]) == (603.0, 604.5, "Speaker A, part 2")
+
+
+def test_chunk_segments_groups_with_times():
+    segs = [
+        {"start": float(i), "end": i + 0.9, "speaker": "Speaker B", "text": "x" * 500}
+        for i in range(6)
+    ]
+    chunks = _chunk_segments(segs, bates=None, source="m", max_chars=1200)
+    assert [len(c["segments"]) for c in chunks] == [2, 2, 2]
+    assert (chunks[1]["start_sec"], chunks[1]["end_sec"]) == (2.0, 3.9)
+    assert chunks[0]["text"].startswith("Speaker B: ")
+    assert chunks[0]["heading"] == "Transcript @0:00–0:01"
+
+
+def test_use_ai_asr_needs_provider_and_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("MARSHALOSS_OPENAI_API_KEY", raising=False)
+    assert not use_ai_asr(Settings(asr_provider="openai", openai_api_key=None))
+    assert use_ai_asr(Settings(asr_provider="openai", openai_api_key="k"))
+    assert not use_ai_asr(Settings(asr_provider="local", openai_api_key="k"))
 
 
 def test_chunk_times_and_segments_roundtrip(tmp_path: Path):

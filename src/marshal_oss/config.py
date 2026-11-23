@@ -34,11 +34,15 @@ class Settings(BaseSettings):
     ocr_escalate_min_score: float = 0.72  # escalate when quality.score below this AND reasons
     # When Docling marks specific bad pages, only those are sent (else whole doc up to max_pages)
 
-    # ASR escalate when Docling local transcript looks empty/hallucinated/sparse
+    # Audio/video transcription. "openai": every A/V file goes to asr_model (speaker labels +
+    # line times); local Docling Whisper is the fallback with no key or on API error.
+    # "local": Docling Whisper first; asr_escalate re-runs poor transcripts on asr_model.
+    asr_provider: str = "openai"  # openai | local
+    asr_model: str = "gpt-4o-transcribe-diarize"
     asr_escalate: bool = True
-    asr_escalate_model: str = "gpt-4o-transcribe"
     asr_escalate_min_score: float = 0.72
-    asr_escalate_max_chunks: int = 40  # ~10 min windows → ~6.5h max by default
+    asr_max_windows: int = 60  # 10-minute upload windows → 10 h per file
+    # Used only by models that accept a prompt (not the diarize model)
     asr_escalate_prompt: str = (
         "Body-worn camera, surveillance, or emergency radio audio. "
         "Prefer verbatim speech; do not invent dialogue over silence or noise. "

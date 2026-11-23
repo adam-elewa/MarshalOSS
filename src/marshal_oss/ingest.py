@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 from rich.console import Console
 
-from .asr_escalate import ai_transcribe_file, resolve_asr_client
+from .asr_escalate import ai_transcribe_file, resolve_asr_client, use_ai_asr
 from .bates import extract_bates
 from .config import Settings
 from .db import Database
@@ -179,6 +179,27 @@ def docling_extract(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return [c for c in chunks if c.get("text")], confidence
 
 
+def _docling_media(
+    path: Path,
+    rel: str,
+    meta: dict[str, Any],
+    delta: dict[str, int],
+    log: Callable[[str], None],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Local Docling Whisper; non-native formats go through an ffmpeg WAV first."""
+    if is_docling_native_media(path):
+        return docling_extract(path)
+    with as_docling_media(path) as (media_path, bridge_meta):
+        log(
+            f"[cyan]media bridge[/cyan] {rel} "
+            f"({bridge_meta.get('original_suffix')}→wav)"
+        )
+        chunks, confidence = docling_extract(media_path)
+        meta.update(bridge_meta)
+        delta["media_bridged"] = 1
+    return chunks, confidence
+
+
 def _maybe_asr_escalate(
     path: Path,
     chunks: list[dict[str, Any]],
@@ -188,7 +209,7 @@ def _maybe_asr_escalate(
     bates: str | None,
     log: Callable[[str], None],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Score Docling ASR; if poor, replace with OpenAI gpt-4o-transcribe."""
+    """Score Docling ASR; if poor, replace with the OpenAI transcription model."""
     text = join_chunk_text(chunks)
     duration = media_duration_sec(path)
     report = score_transcript(text, file_size=file_size, duration_sec=duration)
@@ -249,7 +270,7 @@ def _maybe_asr_escalate(
         meta["escalate_error"] = "asr_empty"
         return chunks, meta
 
-    meta["source"] = "gpt-4o-transcribe"
+    meta["source"] = settings.asr_model
     meta["escalated"] = True
     meta["escalate_kind"] = "asr"
     log(f"[green]asr escalate ok[/green] {path.name}: {len(join_chunk_text(ai_chunks))} chars")
@@ -456,6 +477,7 @@ def _ingest_one_file(
         log(f"[cyan]ingest[/cyan] {rel}")
 
         meta: dict[str, Any] = {}
+        ai_asr_done = False
         try:
             if path.suffix.lower() in _RAW_TEXT_ONLY_SUFFIXES:
                 chunks = _chunk_plain_text(
@@ -464,15 +486,18 @@ def _ingest_one_file(
                 )
                 confidence = {}
                 meta["source"] = "raw_text"
-            elif is_media_path(path) and not is_docling_native_media(path):
-                with as_docling_media(path) as (media_path, bridge_meta):
-                    log(
-                        f"[cyan]media bridge[/cyan] {rel} "
-                        f"({bridge_meta.get('original_suffix')}→wav)"
-                    )
-                    chunks, confidence = docling_extract(media_path)
-                    meta.update(bridge_meta)
-                    delta["media_bridged"] = 1
+            elif is_media_path(path) and use_ai_asr(settings):
+                try:
+                    chunks = ai_transcribe_file(path, settings, bates=bates, log=log)
+                    confidence = {}
+                    meta.update({"source": settings.asr_model, "modality": "audio_video"})
+                    ai_asr_done = True
+                except Exception as asr_err:
+                    log(f"[yellow]openai transcription failed → local[/yellow] {rel}: {asr_err}")
+                    meta["asr_error"] = str(asr_err)[:500]
+                    chunks, confidence = _docling_media(path, rel, meta, delta, log)
+            elif is_media_path(path):
+                chunks, confidence = _docling_media(path, rel, meta, delta, log)
             else:
                 chunks, confidence = docling_extract(path)
         except Exception as e:
@@ -485,7 +510,11 @@ def _ingest_one_file(
                 meta["source"] = "raw_text_fallback"
                 meta["docling_error"] = str(e)[:500]
             else:
-                if is_media_path(path) and settings.asr_escalate and resolve_asr_client(settings):
+                if (
+                    is_media_path(path)
+                    and not meta.get("asr_error")
+                    and resolve_asr_client(settings)
+                ):
                     log(f"[yellow]docling failed → asr escalate[/yellow] {rel}: {e}")
                     chunks = ai_transcribe_file(
                         path,
@@ -496,7 +525,7 @@ def _ingest_one_file(
                     confidence = {}
                     meta = {
                         **meta,
-                        "source": "gpt-4o-transcribe",
+                        "source": settings.asr_model,
                         "escalated": True,
                         "escalate_kind": "asr",
                         "docling_error": str(e)[:500],
@@ -531,20 +560,21 @@ def _ingest_one_file(
                 else:
                     raise e
         else:
-            chunks, qmeta = _maybe_ai_escalate(
-                path,
-                chunks,
-                confidence,
-                settings=settings,
-                file_size=st.st_size,
-                bates=bates,
-                log=log,
-            )
-            meta.update(qmeta)
-            if qmeta.get("escalated"):
-                delta["escalated"] = 1
-            if qmeta.get("escalate_skipped") == "no_api_key":
-                delta["escalate_skipped_no_key"] = 1
+            if not ai_asr_done:
+                chunks, qmeta = _maybe_ai_escalate(
+                    path,
+                    chunks,
+                    confidence,
+                    settings=settings,
+                    file_size=st.st_size,
+                    bates=bates,
+                    log=log,
+                )
+                meta.update(qmeta)
+                if qmeta.get("escalated"):
+                    delta["escalated"] = 1
+                if qmeta.get("escalate_skipped") == "no_api_key":
+                    delta["escalate_skipped_no_key"] = 1
 
         if settings.visual_analyze:
             v_chunks, v_meta = visual_analyze_file(

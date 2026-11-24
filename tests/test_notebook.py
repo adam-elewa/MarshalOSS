@@ -23,6 +23,7 @@ def test_dedupe_persons():
         {"canonical": "David Eli Jones", "count": 10},
         {"canonical": "Diane Carl", "count": 3},
         {"canonical": "Speaker A", "count": 9},
+        {"canonical": "Tracy", "count": 5},
         {"canonical": "Someone", "count": 1},
     ]
     out = dedupe_person_entities(people, min_count=2)
@@ -32,6 +33,7 @@ def test_dedupe_persons():
     assert "David Eli Jones" not in names
     assert "Diane Carl" in names
     assert "Speaker A" not in names
+    assert "Tracy" not in names
     assert "Someone" not in names
 
 

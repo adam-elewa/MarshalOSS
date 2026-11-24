@@ -84,12 +84,38 @@ def dedupe_person_entities(persons: list[dict[str, Any]], *, min_count: int = 2)
         name = str(p["canonical"]).strip()
         if junk.match(name):
             continue
+        toks = [t for t in re.sub(r"[^a-z0-9]+", " ", name.lower()).split() if len(t) > 1]
+        # Require first + last (skip "Tracy", "Mom", etc.)
+        if len(toks) < 2:
+            continue
         k = core_key(name)
         if not k or k in seen_keys:
             continue
         kept.append({"type": "person", "canonical": name, "count": int(p.get("count") or 0)})
         seen_keys.add(k)
     return kept
+
+
+def prune_stale_witness_pages(
+    db: Database,
+    case_id: int,
+    keep_names: set[str],
+) -> list[str]:
+    """Delete Witnesses/* pages that are not for the current witness set."""
+    removed: list[str] = []
+    keep_roots = {f"Witnesses/{n}" for n in keep_names}
+    for page in db.list_notebook_pages(case_id):
+        path = page["path"]
+        if path == "Witnesses" or not path.startswith("Witnesses/"):
+            continue
+        # path is Witnesses/{Name} or Witnesses/{Name}/...
+        rest = path[len("Witnesses/") :]
+        witness_name = rest.split("/", 1)[0]
+        root = f"Witnesses/{witness_name}"
+        if root not in keep_roots:
+            if db.delete_notebook_page(case_id, path):
+                removed.append(path)
+    return removed
 
 
 def build_witness_pack(
@@ -105,8 +131,10 @@ def build_witness_pack(
     stats = db.case_entity_tag_stats(case.id, top_n=500)
     persons = (stats.get("entities_by_type") or {}).get("person") or []
     witnesses = dedupe_person_entities(persons, min_count=min_count)[:max_witnesses]
+    keep_names = {w["canonical"] for w in witnesses}
 
     db.ensure_notebook_home(case.id, case.display_name)
+    removed = prune_stale_witness_pages(db, case.id, keep_names)
 
     created: list[str] = []
     updated: list[str] = []
@@ -116,21 +144,24 @@ def build_witness_pack(
         db.upsert_notebook_page(case.id, path, title, body)
         (updated if prev else created).append(path)
 
-    # Index
+    # Index — one row per witness → cross outline (clean hierarchy)
     lines = [
         "# Witnesses",
         "",
-        f"Auto-built from person entities (min mentions: {min_count}). "
-        "Edit freely; re-running the pack refreshes linked docs and outline stubs "
-        "but preserves custom pages you add under each witness.",
+        "Each witness has a **Cross outline** underneath. "
+        f"Built from person entities (min mentions: {min_count}).",
         "",
     ]
     if not witnesses:
-        lines.append("_No person entities met the threshold. Lower min_count or run entity extract._")
+        lines.append("_No person entities met the threshold._")
     else:
         for w in witnesses:
             name = w["canonical"]
-            lines.append(f"- {page_wiki_link(f'Witnesses/{name}', name)} ({w['count']} mentions)")
+            outline = f"Witnesses/{name}/Cross outline"
+            lines.append(
+                f"- **{page_wiki_link(f'Witnesses/{name}', name)}** → "
+                f"{page_wiki_link(outline, 'Cross outline')} ({w['count']} mentions)"
+            )
     write("Witnesses", "Witnesses", "\n".join(lines) + "\n")
 
     for w in witnesses:
@@ -141,19 +172,19 @@ def build_witness_pack(
             entity_type="person",
             limit=max_docs_per_witness,
         )
-        # Enrich with URLs for MCP consumers
         for f in files:
             f.update(file_urls(settings, case, f["rel_path"]))
 
         overview_path = f"Witnesses/{name}"
         outline_path = f"Witnesses/{name}/Cross outline"
 
+        # Witness hub: short — docs + link to outline only
         overview_lines = [
             f"# {name}",
             "",
-            f"Person entity · **{w['count']}** mentions across the production.",
+            f"{w['count']} mentions in the production.",
             "",
-            f"- {page_wiki_link(outline_path, 'Cross outline')}",
+            f"→ {page_wiki_link(outline_path, 'Cross outline')}",
             "",
             "## Linked documents",
             "",
@@ -163,24 +194,16 @@ def build_witness_pack(
                 label = f.get("bates") or f.get("name") or f["rel_path"]
                 overview_lines.append(f"- {doc_wiki_link(f['rel_path'], str(label))}")
         else:
-            overview_lines.append("_No ingested files matched this entity yet._")
+            overview_lines.append("_No matching files yet._")
         overview_lines.append("")
         write(overview_path, name, "\n".join(overview_lines))
 
-        # Cross outline: only seed if missing so human/AI edits aren't wiped
         existing_outline = db.get_notebook_page(case.id, outline_path)
         if not existing_outline:
             q_lines = [
                 f"# Cross outline — {name}",
                 "",
-                "_Stub for court exam. Edit questions; keep `[[doc:…]]` links inline._",
-                "",
-                "## Themes",
-                "",
-                "1. Identity / role",
-                "2. Opportunity / perception",
-                "3. Prior statements / consistency",
-                "4. Bias / interest",
+                "_Court exam stub. Keep `[[doc:…]]` links next to questions._",
                 "",
                 "## Questions",
                 "",
@@ -194,17 +217,7 @@ def build_witness_pack(
             else:
                 q_lines.append("1. [ ] _______________________________")
                 q_lines.append("")
-            q_lines.extend(
-                [
-                    "## Impeachment / exhibits",
-                    "",
-                    "| # | Point | Exhibit |",
-                    "|---|-------|---------|",
-                    "| 1 |  |  |",
-                    "",
-                ]
-            )
-            write(outline_path, f"Cross outline — {name}", "\n".join(q_lines))
+            write(outline_path, "Cross outline", "\n".join(q_lines))
 
     return {
         "case": case.__dict__,
@@ -212,5 +225,6 @@ def build_witness_pack(
         "witnesses": [w["canonical"] for w in witnesses],
         "created": created,
         "updated": updated,
+        "removed": removed,
         "pages": db.list_notebook_pages(case.id),
     }

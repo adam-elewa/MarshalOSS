@@ -212,6 +212,8 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 | `search` | Keyword / semantic / hybrid hits with snippets and links |
 | `ask` | Top chunks as context; the host model answers |
 | `get_file_link` / `open_file_browser` | File links |
+| `notebook_list` / `notebook_get` / `notebook_upsert` / `notebook_delete` | Case notebook (wiki) pages |
+| `notebook_build_witness_pack` | Scaffold witness folders + cross-outline stubs with doc links |
 
 ---
 
@@ -222,6 +224,7 @@ Case management and document review run in MarshalOSS on `:7340` (`web/app.html`
 - **Cases** — pick a matter
 - **Case Overview** — stats, production manifest (processed / OCR confidence / not processed), entities, tags
 - **Document Explorer** — auto categories (criminal history, police reports, bodycam, …) or **Native Folders**; search; document viewer (preview, text, metadata, entities, tags)
+- **Notebook** — case wiki (Markdown) editable by humans or Cowork via MCP; **Witness pack** scaffolds per-witness pages and cross outlines with `[[doc:…]]` links into the production
 
 Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 

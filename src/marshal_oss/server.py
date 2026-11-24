@@ -15,6 +15,7 @@ from .config import Settings, get_settings
 from .db import Database
 from .embed import Embedder
 from .fsbrowse import list_dir
+from .notebook import build_witness_pack
 from .search import encode_rel_path, file_urls, search_case
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
@@ -376,6 +377,66 @@ def create_app(
             },
         }
 
+    @app.get("/api/notebook/pages")
+    def api_notebook_pages(case_id: int | None = None) -> dict[str, Any]:
+        c = resolve_case(case_id=case_id)
+        db.ensure_notebook_home(c.id, c.display_name)
+        return {"case": c.__dict__, "pages": db.list_notebook_pages(c.id)}
+
+    @app.get("/api/notebook/page")
+    def api_notebook_get(
+        path: str = Query(..., min_length=1),
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        c = resolve_case(case_id=case_id)
+        page = db.get_notebook_page(c.id, path)
+        if not page:
+            raise HTTPException(404, "notebook page not found")
+        return {"case": c.__dict__, "page": page}
+
+    @app.put("/api/notebook/page")
+    async def api_notebook_put(request: Request) -> dict[str, Any]:
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        path = payload.get("path") or ""
+        title = payload.get("title") or ""
+        body = payload.get("body")
+        if body is None:
+            body = ""
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            page = db.upsert_notebook_page(c.id, str(path), str(title), str(body))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return {"ok": True, "case": c.__dict__, "page": page}
+
+    @app.delete("/api/notebook/page")
+    def api_notebook_delete(
+        path: str = Query(..., min_length=1),
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        c = resolve_case(case_id=case_id)
+        ok = db.delete_notebook_page(c.id, path)
+        if not ok:
+            raise HTTPException(404, "notebook page not found")
+        return {"ok": True, "path": db.normalize_notebook_path(path)}
+
+    @app.post("/api/notebook/witness-pack")
+    async def api_notebook_witness_pack(request: Request) -> dict[str, Any]:
+        payload = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+        case_id = payload.get("case_id")
+        min_count = int(payload.get("min_count") or 2)
+        max_witnesses = int(payload.get("max_witnesses") or 40)
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        result = build_witness_pack(
+            db,
+            settings,
+            c,
+            min_count=max(1, min_count),
+            max_witnesses=max(1, min(max_witnesses, 100)),
+        )
+        return {"ok": True, **result}
+
     @app.get("/browser", response_class=HTMLResponse)
     def browser() -> HTMLResponse:
         html_path = WEB_DIR / "browser.html"
@@ -465,6 +526,11 @@ def create_app(
                 "ask",
                 "get_file_link",
                 "open_file_browser",
+                "notebook_list",
+                "notebook_get",
+                "notebook_upsert",
+                "notebook_delete",
+                "notebook_build_witness_pack",
             ]
         }
 
@@ -564,11 +630,66 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     @mcp.tool()
     def open_file_browser(case_id: int | None = None, path: str = "") -> dict[str, Any]:
-        """Return URL to the MarshalOSS web file browser."""
+        """Return URL to the MarshalOSS case UI (Document Explorer)."""
         c = active_or(case_id)
-        url = f"{settings.public_base.rstrip('/')}/browser?case_id={c.id}"
+        base = settings.public_base.rstrip("/")
         if path:
-            url += f"&path={encode_rel_path(path)}"
+            url = f"{base}/#/cases/{c.id}?view=explorer&browse=folders&path={encode_rel_path(path)}"
+        else:
+            url = f"{base}/#/cases/{c.id}?view=explorer"
         return {"ok": True, "browser_url": url, "case": c.__dict__}
+
+    @mcp.tool()
+    def notebook_list(case_id: int | None = None) -> dict[str, Any]:
+        """List case notebook (wiki) pages: path, title, updated_at."""
+        c = active_or(case_id)
+        db.ensure_notebook_home(c.id, c.display_name)
+        return {"case": c.__dict__, "pages": db.list_notebook_pages(c.id)}
+
+    @mcp.tool()
+    def notebook_get(path: str, case_id: int | None = None) -> dict[str, Any]:
+        """Read a notebook page by path (e.g. 'Witnesses/Jane Doe/Cross outline')."""
+        c = active_or(case_id)
+        page = db.get_notebook_page(c.id, path)
+        if not page:
+            raise ValueError(f"notebook page not found: {path}")
+        return {"case": c.__dict__, "page": page}
+
+    @mcp.tool()
+    def notebook_upsert(
+        path: str,
+        body: str,
+        title: str = "",
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Create or update a notebook Markdown page. Use [[doc:rel/path|label]] and [[page:Path|label]] wiki links."""
+        c = active_or(case_id)
+        page = db.upsert_notebook_page(c.id, path, title or path.split("/")[-1], body)
+        return {"ok": True, "page": page}
+
+    @mcp.tool()
+    def notebook_delete(path: str, case_id: int | None = None) -> dict[str, Any]:
+        """Delete a notebook page by path."""
+        c = active_or(case_id)
+        ok = db.delete_notebook_page(c.id, path)
+        if not ok:
+            raise ValueError(f"notebook page not found: {path}")
+        return {"ok": True, "path": db.normalize_notebook_path(path)}
+
+    @mcp.tool()
+    def notebook_build_witness_pack(
+        case_id: int | None = None,
+        min_count: int = 2,
+        max_witnesses: int = 40,
+    ) -> dict[str, Any]:
+        """Scaffold Witnesses pages + per-witness folders and cross-outline stubs with [[doc:…]] links from person entities."""
+        c = active_or(case_id)
+        return build_witness_pack(
+            db,
+            settings,
+            c,
+            min_count=max(1, int(min_count)),
+            max_witnesses=max(1, min(int(max_witnesses), 100)),
+        )
 
     return mcp

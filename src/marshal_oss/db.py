@@ -225,6 +225,23 @@ class Database:
         ]:
             if mcols and col not in mcols:
                 self.conn.execute(f"ALTER TABLE production_manifest ADD COLUMN {col} {decl}")
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notebook_pages (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+              path TEXT NOT NULL,
+              title TEXT NOT NULL,
+              body TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              UNIQUE(case_id, path)
+            )
+            """
+        )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notebook_pages_case ON notebook_pages(case_id, path)"
+        )
         self.conn.commit()
 
     def close(self) -> None:
@@ -1002,3 +1019,98 @@ class Database:
             args.append(kind)
         sql += " ORDER BY start_sec, seg_index"
         return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
+
+    # --- notebook (case wiki) ---
+    @staticmethod
+    def normalize_notebook_path(path: str) -> str:
+        parts = [p.strip() for p in (path or "").replace("\\", "/").split("/") if p.strip()]
+        return "/".join(parts)
+
+    def list_notebook_pages(self, case_id: int) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT id, case_id, path, title, length(body) AS body_len, created_at, updated_at
+            FROM notebook_pages
+            WHERE case_id=?
+            ORDER BY path COLLATE NOCASE
+            """,
+            (case_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_notebook_page(self, case_id: int, path: str) -> dict[str, Any] | None:
+        norm = self.normalize_notebook_path(path)
+        if not norm:
+            return None
+        row = self.conn.execute(
+            """
+            SELECT id, case_id, path, title, body, created_at, updated_at
+            FROM notebook_pages WHERE case_id=? AND path=?
+            """,
+            (case_id, norm),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_notebook_page_by_id(self, case_id: int, page_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, case_id, path, title, body, created_at, updated_at
+            FROM notebook_pages WHERE case_id=? AND id=?
+            """,
+            (case_id, page_id),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def upsert_notebook_page(
+        self,
+        case_id: int,
+        path: str,
+        title: str,
+        body: str,
+    ) -> dict[str, Any]:
+        norm = self.normalize_notebook_path(path)
+        if not norm:
+            raise ValueError("notebook path required")
+        title = (title or norm.split("/")[-1]).strip() or norm.split("/")[-1]
+        body = body if body is not None else ""
+        now = utc_now()
+        self.conn.execute(
+            """
+            INSERT INTO notebook_pages(case_id, path, title, body, created_at, updated_at)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(case_id, path) DO UPDATE SET
+              title=excluded.title,
+              body=excluded.body,
+              updated_at=excluded.updated_at
+            """,
+            (case_id, norm, title, body, now, now),
+        )
+        self.conn.commit()
+        page = self.get_notebook_page(case_id, norm)
+        assert page is not None
+        return page
+
+    def delete_notebook_page(self, case_id: int, path: str) -> bool:
+        norm = self.normalize_notebook_path(path)
+        if not norm:
+            return False
+        cur = self.conn.execute(
+            "DELETE FROM notebook_pages WHERE case_id=? AND path=?",
+            (case_id, norm),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def ensure_notebook_home(self, case_id: int, case_name: str) -> dict[str, Any]:
+        existing = self.get_notebook_page(case_id, "Home")
+        if existing:
+            return existing
+        body = (
+            f"# {case_name}\n\n"
+            "Case notebook — editable by humans and AI (Cowork via MCP).\n\n"
+            "## Quick links\n\n"
+            "- [[page:Witnesses|Witnesses]]\n"
+            "- Use **Build witness pack** to scaffold witness folders and cross outlines "
+            "with links into the production.\n"
+        )
+        return self.upsert_notebook_page(case_id, "Home", "Home", body)

@@ -1,13 +1,44 @@
-"""Case notebook helpers: wiki links and witness-pack scaffolding."""
+"""Case notebook helpers: wiki links, skill text, and optional witness recipe."""
 
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
+from .config import Settings
 from .db import Case, Database
 from .search import file_urls
-from .config import Settings
+
+
+def notebook_skill_path() -> Path:
+    """Prefer packaged copy; fall back to project skill / docs."""
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here / "notebook_skill.md",
+        here.parents[1] / ".cursor" / "skills" / "marshal-notebook" / "SKILL.md",
+        here.parents[1] / "docs" / "notebook-skill.md",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    return candidates[0]
+
+
+def load_notebook_skill_text(*, strip_frontmatter: bool = True) -> str:
+    path = notebook_skill_path()
+    if not path.is_file():
+        return (
+            "# MarshalOSS Notebook\n\n"
+            "Dynamic case wiki. Use notebook_list / notebook_get / notebook_upsert.\n"
+            "Link docs with [[doc:path|label]] and pages with [[page:Path|label]].\n"
+        )
+    text = path.read_text(encoding="utf-8")
+    if strip_frontmatter and text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end != -1:
+            text = text[end + 4 :].lstrip("\n")
+    return text
 
 _DOC_LINK = re.compile(
     r"\[\[doc:([^\]|]+)(?:\|([^\]]+))?\]\]",

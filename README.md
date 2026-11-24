@@ -212,8 +212,9 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 | `search` | Keyword / semantic / hybrid hits with snippets and links |
 | `ask` | Top chunks as context; the host model answers |
 | `get_file_link` / `open_file_browser` | File links |
-| `notebook_list` / `notebook_get` / `notebook_upsert` / `notebook_delete` | Case notebook (wiki) pages |
-| `notebook_build_witness_pack` | Scaffold witness folders + cross-outline stubs with doc links |
+| `notebook_list` / `notebook_get` / `notebook_upsert` / `notebook_delete` | Dynamic case notebook (wiki) pages |
+| `notebook_skill` | Playbook for AI wiki scaffolding (also page `Meta/Notebook skill`) |
+| `notebook_build_witness_pack` | Optional witness-folder recipe (not the only IA) |
 
 ---
 
@@ -224,7 +225,7 @@ Case management and document review run in MarshalOSS on `:7340` (`web/app.html`
 - **Cases** — pick a matter
 - **Case Overview** — stats, production manifest (processed / OCR confidence / not processed), entities, tags
 - **Document Explorer** — auto categories (criminal history, police reports, bodycam, …) or **Native Folders**; search; document viewer (preview, text, metadata, entities, tags)
-- **Notebook** — case wiki (Markdown) editable by humans or Cowork via MCP; **Witness pack** scaffolds per-witness pages and cross outlines with `[[doc:…]]` links into the production
+- **Notebook** — dynamic case wiki (Markdown). Structure is invented by humans/AI (witnesses, timeline, theory, …) using the **marshal-notebook** skill / MCP `notebook_skill`; optional stock **witness recipe** only when you want that shortcut
 
 Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 

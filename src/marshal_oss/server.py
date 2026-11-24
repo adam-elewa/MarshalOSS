@@ -15,7 +15,7 @@ from .config import Settings, get_settings
 from .db import Database
 from .embed import Embedder
 from .fsbrowse import list_dir
-from .notebook import build_witness_pack
+from .notebook import build_witness_pack, load_notebook_skill_text
 from .search import encode_rel_path, file_urls, search_case
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
@@ -377,6 +377,14 @@ def create_app(
             },
         }
 
+    @app.get("/api/notebook/skill")
+    def api_notebook_skill() -> dict[str, Any]:
+        return {
+            "ok": True,
+            "path_in_case": "Meta/Notebook skill",
+            "skill": load_notebook_skill_text(strip_frontmatter=False),
+        }
+
     @app.get("/api/notebook/pages")
     def api_notebook_pages(case_id: int | None = None) -> dict[str, Any]:
         c = resolve_case(case_id=case_id)
@@ -530,6 +538,7 @@ def create_app(
                 "notebook_get",
                 "notebook_upsert",
                 "notebook_delete",
+                "notebook_skill",
                 "notebook_build_witness_pack",
             ]
         }
@@ -641,14 +650,14 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     @mcp.tool()
     def notebook_list(case_id: int | None = None) -> dict[str, Any]:
-        """List case notebook (wiki) pages: path, title, updated_at."""
+        """List all notebook wiki pages for the case (dynamic tree — no fixed schema)."""
         c = active_or(case_id)
         db.ensure_notebook_home(c.id, c.display_name)
         return {"case": c.__dict__, "pages": db.list_notebook_pages(c.id)}
 
     @mcp.tool()
     def notebook_get(path: str, case_id: int | None = None) -> dict[str, Any]:
-        """Read a notebook page by path (e.g. 'Witnesses/Jane Doe/Cross outline')."""
+        """Read a notebook page by path (e.g. 'Theory' or 'Witnesses/Jane Doe/Cross outline')."""
         c = active_or(case_id)
         page = db.get_notebook_page(c.id, path)
         if not page:
@@ -662,7 +671,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         title: str = "",
         case_id: int | None = None,
     ) -> dict[str, Any]:
-        """Create or update a notebook Markdown page. Use [[doc:rel/path|label]] and [[page:Path|label]] wiki links."""
+        """Create or update any notebook Markdown page. Invent paths freely. Use [[doc:rel/path|label]] and [[page:Path|label]]. Follow Meta/Notebook skill."""
         c = active_or(case_id)
         page = db.upsert_notebook_page(c.id, path, title or path.split("/")[-1], body)
         return {"ok": True, "page": page}
@@ -677,12 +686,25 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         return {"ok": True, "path": db.normalize_notebook_path(path)}
 
     @mcp.tool()
+    def notebook_skill() -> dict[str, Any]:
+        """Return the MarshalOSS Notebook skill playbook (dynamic wiki conventions). Prefer this over reinventing a long prompt."""
+        return {
+            "ok": True,
+            "path_in_case": "Meta/Notebook skill",
+            "skill": load_notebook_skill_text(strip_frontmatter=False),
+            "instructions": (
+                "Follow this skill when creating/editing notebook pages. "
+                "Also available as page Meta/Notebook skill inside each case."
+            ),
+        }
+
+    @mcp.tool()
     def notebook_build_witness_pack(
         case_id: int | None = None,
         min_count: int = 2,
         max_witnesses: int = 40,
     ) -> dict[str, Any]:
-        """Scaffold Witnesses pages + per-witness folders and cross-outline stubs with [[doc:…]] links from person entities."""
+        """Optional recipe: scaffold Witnesses/* from person entities. For custom IA, invent pages with notebook_upsert instead (see notebook_skill)."""
         c = active_or(case_id)
         return build_witness_pack(
             db,

@@ -1102,15 +1102,34 @@ class Database:
         return cur.rowcount > 0
 
     def ensure_notebook_home(self, case_id: int, case_name: str) -> dict[str, Any]:
-        existing = self.get_notebook_page(case_id, "Home")
-        if existing:
-            return existing
+        """Ensure Home + Meta skill page. Home is created once; skill page stays fresh."""
+        from .notebook import load_notebook_skill_text
+
+        skill_body = load_notebook_skill_text(strip_frontmatter=True)
+        self.upsert_notebook_page(
+            case_id,
+            "Meta/Notebook skill",
+            "Notebook skill",
+            skill_body,
+        )
         body = (
             f"# {case_name}\n\n"
-            "Case notebook — editable by humans and AI (Cowork via MCP).\n\n"
-            "## Quick links\n\n"
-            "- [[page:Witnesses|Witnesses]]\n"
-            "- Use **Build witness pack** to scaffold witness folders and cross outlines "
-            "with links into the production.\n"
+            "This is a **dynamic case wiki** — not a fixed layout. "
+            "Humans and AI (Cowork / Computer via MCP) invent pages as needed: "
+            "witnesses, timeline, defense theory, motions, whatever the case needs.\n\n"
+            "## Start here\n\n"
+            "- Read [[page:Meta/Notebook skill|Notebook skill]] before scaffolding "
+            "(same playbook Cursor/Cowork should follow).\n"
+            "- Ask the AI: e.g. *“Create witness folders with cross outlines”* or "
+            "*“Build a defense-theory section with linked discovery.”*\n"
+            "- Edit any page in Preview/Edit; link production files with "
+            "`[[doc:path|label]]`.\n"
         )
+        existing = self.get_notebook_page(case_id, "Home")
+        # Refresh stock Home if still the old witness-centric stub
+        if existing:
+            old = existing.get("body") or ""
+            if "Build witness pack" in old or "Quick links" in old and "Witnesses" in old and "dynamic case wiki" not in old:
+                return self.upsert_notebook_page(case_id, "Home", "Home", body)
+            return existing
         return self.upsert_notebook_page(case_id, "Home", "Home", body)

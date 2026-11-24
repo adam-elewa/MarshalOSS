@@ -819,7 +819,7 @@ async function deleteNotebookPage() {
 }
 
 async function runWitnessPack() {
-  if (!confirm("Build / refresh Witnesses pack from person entities? Existing cross outlines are kept; index and witness overview pages are refreshed.")) return;
+  if (!confirm("Optional stock recipe: scaffold Witnesses/* from person entities.\n\nFor timelines, theory, motions, or custom layout, ask Cowork/Cursor with the Notebook skill instead.\n\nExisting cross outlines are kept; index/overview pages refresh.")) return;
   const res = await fetch("/api/notebook/witness-pack", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1477,7 +1477,8 @@ function renderNotebook() {
         <div class="nb-side-head">
           <div class="row">
             <button type="button" class="primary" id="btnNbNew">New page</button>
-            <button type="button" class="ghost" id="btnNbWitness">Witness pack</button>
+            <button type="button" class="ghost" id="btnNbSkill" title="Open the Notebook skill playbook">Skill</button>
+            <button type="button" class="ghost" id="btnNbWitness" title="Optional stock recipe — prefer asking AI for custom structure">Recipe: witnesses</button>
           </div>
         </div>
         <ul class="nb-tree">${tree}</ul>
@@ -1552,6 +1553,14 @@ function bindCaseHandlers() {
     if (del) del.onclick = () => deleteNotebookPage().catch(e => alert(e.message || String(e)));
     const ins = document.getElementById("btnNbInsertDoc");
     if (ins) ins.onclick = insertDocLink;
+    const skillBtn = document.getElementById("btnNbSkill");
+    if (skillBtn) skillBtn.onclick = async () => {
+      try {
+        await loadNotebook("Meta/Notebook skill", true);
+        state.notebookMode = "preview";
+        render();
+      } catch (e) { alert(e.message || String(e)); }
+    };
     const wit = document.getElementById("btnNbWitness");
     if (wit) wit.onclick = () => runWitnessPack().catch(e => alert(e.message || String(e)));
     document.querySelectorAll("a.doc-link[data-doc]").forEach(a => {

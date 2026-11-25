@@ -26,12 +26,14 @@ def test_estimate_ingest_hq_includes_asr_and_voyage():
     )
     est = estimate_costs(tallies, settings, mode="ingest", root_label="/tmp/case")
     stages = {ln.stage for ln in est.lines}
-    assert "asr_hq" in stages
-    assert "embed" in stages
+    assert stages >= {"asr_hq", "ocr_escalate", "visual", "entities", "embed"}
     assert est.usd_high >= est.usd_low
     assert est.tallies["media_minutes"] == 10.0
+    assert est.tallies["documents"] == 1
+    assert est.tallies["images"] == 1
     text = format_estimate(est)
     assert "TOTAL" in text
+    assert "full ingest" in text.lower()
     assert "openai" in text.lower()
 
 

@@ -1,4 +1,4 @@
-"""Case notebook helpers: wiki links, skill text, and optional witness recipe."""
+"""Case notebook helpers: wiki links, git-backed skills, optional witness recipe."""
 
 from __future__ import annotations
 
@@ -11,8 +11,147 @@ from .db import Case, Database
 from .search import file_urls
 
 
+def repo_skills_root() -> Path:
+    """Repo ``skills/`` directory (git-backed playbooks)."""
+    here = Path(__file__).resolve().parent
+    # src/marshal_oss → repo root
+    return here.parents[1] / "skills"
+
+
+def notebook_skills_dir() -> Path:
+    """Repo ``skills/`` — single folder for Cowork playbook + notebook recipes."""
+    return repo_skills_root()
+
+
+def cowork_playbook_path() -> Path:
+    return repo_skills_root() / "cowork.md"
+
+
+def load_cowork_playbook(*, strip_frontmatter: bool = True) -> str:
+    path = cowork_playbook_path()
+    if not path.is_file():
+        return (
+            "# MarshalOSS Cowork\n\n"
+            "search / ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
+            "Discovery is read-only; writable: notebook, user_note, user_tags.\n"
+        )
+    text = path.read_text(encoding="utf-8")
+    return _strip_frontmatter(text) if strip_frontmatter else text
+
+
+def playbook_pointer(public_base: str) -> dict[str, str]:
+    """Compact pointer so hosts can load the full playbook only when needed."""
+    base = (public_base or "").rstrip("/") or "http://127.0.0.1:7340"
+    return {
+        "hint": (
+            "Skills live in repo skills/. Call notebook_skill for the list; "
+            "get_instructions(full=true) or notebook_skill(name='cowork') for the Cowork playbook."
+        ),
+        "mcp": "get_instructions",
+        "mcp_skill_list": "notebook_skill",
+        "http": f"{base}/api/mcp/instructions",
+        "http_full": f"{base}/api/mcp/instructions?full=1",
+        "skills_list_http": f"{base}/api/notebook/skill",
+        "skills_dir": "skills/",
+    }
+
+
+def _strip_frontmatter(text: str) -> str:
+    if not text.startswith("---"):
+        return text
+    end = text.find("\n---", 3)
+    if end == -1:
+        return text
+    return text[end + 4 :].lstrip("\n")
+
+
+def _parse_frontmatter(text: str) -> dict[str, str]:
+    meta: dict[str, str] = {}
+    if not text.startswith("---"):
+        return meta
+    end = text.find("\n---", 3)
+    if end == -1:
+        return meta
+    block = text[3:end]
+    key = None
+    buf: list[str] = []
+    for line in block.splitlines():
+        if line.startswith("  ") and key:
+            buf.append(line.strip())
+            continue
+        if ":" in line and not line.startswith(" "):
+            if key:
+                meta[key] = " ".join(buf).strip().strip("\"'")
+            k, _, v = line.partition(":")
+            key = k.strip()
+            v = v.strip()
+            if v == ">|" or v == ">":
+                buf = []
+            elif v.startswith(">-"):
+                buf = [v[2:].strip()]
+            elif v.startswith(">"):
+                buf = [v[1:].strip()]
+            else:
+                buf = [v.strip("\"'")] if v else []
+        elif key:
+            buf.append(line.strip())
+    if key:
+        meta[key] = " ".join(buf).strip().strip("\"'")
+    return meta
+
+
+def list_notebook_skills() -> list[dict[str, str]]:
+    """List every skill Markdown under ``skills/`` (excludes README)."""
+    root = notebook_skills_dir()
+    out: list[dict[str, str]] = []
+    if not root.is_dir():
+        return out
+    for path in sorted(root.glob("*.md")):
+        if path.name.lower() == "readme.md":
+            continue
+        raw = path.read_text(encoding="utf-8")
+        meta = _parse_frontmatter(raw)
+        name = meta.get("name") or path.stem
+        # Prefer short stem for MCP name when frontmatter uses a long id
+        stem = path.stem
+        kind = "playbook" if stem in {"cowork", "playbook"} else "recipe"
+        out.append(
+            {
+                "name": stem,
+                "aliases": sorted({stem, name.lower()} - {""}),
+                "file": path.name,
+                "path": str(path),
+                "title": stem.replace("-", " ").title(),
+                "description": meta.get("description") or "",
+                "kind": kind,
+                "wiki_path": f"Meta/Skills/{stem}",
+            }
+        )
+    return out
+
+
+def load_notebook_skill_recipe(name: str, *, strip_frontmatter: bool = True) -> str:
+    """Load one skill by stem, alias, or frontmatter name from ``skills/``."""
+    root = notebook_skills_dir()
+    needle = name.strip().lower().replace(" ", "-")
+    # Allow marshaloss-cowork → cowork
+    if needle.startswith("marshaloss-"):
+        needle = needle[len("marshaloss-") :]
+    if not root.is_dir():
+        raise FileNotFoundError(f"skills directory missing: {root}")
+    for path in root.glob("*.md"):
+        if path.name.lower() == "readme.md":
+            continue
+        raw = path.read_text(encoding="utf-8")
+        meta = _parse_frontmatter(raw)
+        aliases = {path.stem.lower(), (meta.get("name") or "").lower()}
+        if needle in aliases:
+            return _strip_frontmatter(raw) if strip_frontmatter else raw
+    raise FileNotFoundError(f"skill not found: {name} (skills/: {[p.stem for p in root.glob('*.md') if p.name.lower() != 'readme.md']})")
+
+
 def notebook_skill_path() -> Path:
-    """Prefer packaged copy; fall back to project skill / docs."""
+    """Prefer packaged overview; fall back to project skill / docs."""
     here = Path(__file__).resolve().parent
     candidates = [
         here / "notebook_skill.md",
@@ -26,19 +165,89 @@ def notebook_skill_path() -> Path:
 
 
 def load_notebook_skill_text(*, strip_frontmatter: bool = True) -> str:
+    """Overview playbook (points at repo ``skills/``)."""
     path = notebook_skill_path()
     if not path.is_file():
         return (
             "# MarshalOSS Notebook\n\n"
             "Dynamic case wiki. Use notebook_list / notebook_get / notebook_upsert.\n"
-            "Link docs with [[doc:path|label]] and pages with [[page:Path|label]].\n"
+            "Load recipes with notebook_skill(name). Link docs with [[doc:path|label]].\n"
         )
     text = path.read_text(encoding="utf-8")
-    if strip_frontmatter and text.startswith("---"):
-        end = text.find("\n---", 3)
-        if end != -1:
-            text = text[end + 4 :].lstrip("\n")
+    if strip_frontmatter:
+        text = _strip_frontmatter(text)
     return text
+
+
+def sync_skill_wiki_pages(db: Database, case_id: int) -> list[str]:
+    """
+    Mirror git recipes into Meta/Skills/* so the UI stays raw wiki.
+    Returns wiki paths written.
+    """
+    written: list[str] = []
+    skills = list_notebook_skills()
+    index = [
+        "# Skills",
+        "",
+        "All MarshalOSS skills from repo folder **`skills/`** "
+        "(Cowork playbook + notebook recipes). "
+        "Load the same text via MCP `notebook_skill` (lists skills when called with no name). "
+        "These pages refresh from git when the notebook opens — edit the repo files, not these mirrors.",
+        "",
+    ]
+    if not skills:
+        index.append("_No skill files found under `skills/`._")
+    else:
+        for s in skills:
+            kind = s.get("kind") or "recipe"
+            index.append(
+                f"- **{page_wiki_link(s['wiki_path'], s['title'])}** "
+                f"(`{s['name']}`, {kind}) — {s['description'] or 'see page'}"
+            )
+            body = load_notebook_skill_recipe(s["name"], strip_frontmatter=True)
+            db.upsert_notebook_page(case_id, s["wiki_path"], s["title"], body)
+            written.append(s["wiki_path"])
+    index.append("")
+    db.upsert_notebook_page(case_id, "Meta/Skills", "Skills", "\n".join(index) + "\n")
+    written.append("Meta/Skills")
+    return written
+
+
+def home_notebook_body(case_name: str) -> str:
+    skills = list_notebook_skills()
+    skill_lines = []
+    for s in skills:
+        skill_lines.append(
+            f"- {page_wiki_link(s['wiki_path'], s['title'])} — "
+            f"MCP: `notebook_skill` with name `{s['name']}`"
+        )
+    if not skill_lines:
+        skill_lines.append("- _(add `.md` files under `skills/` in the repo)_")
+
+    return (
+        f"# {case_name}\n\n"
+        "This **Notebook** is a blank Markdown wiki for the case — raw pages all the "
+        "way down. Humans and AI invent folders as needed (people, timeline, theory, "
+        "motions, …). There is no fixed layout and no special “wizard” chrome: create "
+        "and edit pages like any wiki.\n\n"
+        "## Discovery links\n\n"
+        "Cite production files inline with `[[doc:relative/path|Label]]`. In the web UI, "
+        "those links open a **side viewer** next to this page so you can read the wiki "
+        "and the exhibit together. Link other wiki pages with `[[page:Path|Label]]`.\n\n"
+        "## Skills (`skills/`)\n\n"
+        "Call MCP `notebook_skill` with **no name** for the skill list. "
+        "Repo folder `skills/` is mirrored here:\n\n"
+        + "\n".join(skill_lines)
+        + "\n\n"
+        "Ask Cowork / Computer / Claude to load a skill (`notebook_skill` with a name), "
+        "then scaffold pages with `notebook_upsert` using real paths from `search` / "
+        "`browse_case_files`. Prefer organizing by **person / entity**, with direct "
+        "cites on every material claim.\n\n"
+        "## Editing\n\n"
+        "- Use Preview / Edit in the toolbar to change a page, then Save.\n"
+        "- Prefer AI or MCP to add new paths; keep the tree as ordinary wiki pages.\n"
+    )
+
 
 _DOC_LINK = re.compile(
     r"\[\[doc:([^\]|]+)(?:\|([^\]]+))?\]\]",
@@ -73,7 +282,6 @@ def dedupe_person_entities(persons: list[dict[str, Any]], *, min_count: int = 2)
         toks = [t for t in re.sub(r"[^a-z0-9]+", " ", name.lower()).split() if len(t) > 1]
         if not toks:
             return ""
-        # first + last collapses "David E. Jones" / "David Eli Jones" → david jones
         if len(toks) >= 2:
             return f"{toks[0]} {toks[-1]}"
         return toks[0]
@@ -85,7 +293,6 @@ def dedupe_person_entities(persons: list[dict[str, Any]], *, min_count: int = 2)
         if junk.match(name):
             continue
         toks = [t for t in re.sub(r"[^a-z0-9]+", " ", name.lower()).split() if len(t) > 1]
-        # Require first + last (skip "Tracy", "Mom", etc.)
         if len(toks) < 2:
             continue
         k = core_key(name)
@@ -108,7 +315,6 @@ def prune_stale_witness_pages(
         path = page["path"]
         if path == "Witnesses" or not path.startswith("Witnesses/"):
             continue
-        # path is Witnesses/{Name} or Witnesses/{Name}/...
         rest = path[len("Witnesses/") :]
         witness_name = rest.split("/", 1)[0]
         root = f"Witnesses/{witness_name}"
@@ -127,7 +333,7 @@ def build_witness_pack(
     max_witnesses: int = 40,
     max_docs_per_witness: int = 15,
 ) -> dict[str, Any]:
-    """Create/refresh Witnesses index + per-witness page and cross-outline stubs."""
+    """Optional MCP recipe helper: Witnesses index + per-person cross outline stubs."""
     stats = db.case_entity_tag_stats(case.id, top_n=500)
     persons = (stats.get("entities_by_type") or {}).get("person") or []
     witnesses = dedupe_person_entities(persons, min_count=min_count)[:max_witnesses]
@@ -144,12 +350,12 @@ def build_witness_pack(
         db.upsert_notebook_page(case.id, path, title, body)
         (updated if prev else created).append(path)
 
-    # Index — one row per witness → cross outline (clean hierarchy)
     lines = [
         "# Witnesses",
         "",
-        "Each witness has a **Cross outline** underneath. "
-        f"Built from person entities (min mentions: {min_count}).",
+        "Each person has a **Cross outline** underneath. "
+        f"Built from person entities (min mentions: {min_count}). "
+        "Prefer refining with the `cross-examination` skill.",
         "",
     ]
     if not witnesses:
@@ -178,7 +384,6 @@ def build_witness_pack(
         overview_path = f"Witnesses/{name}"
         outline_path = f"Witnesses/{name}/Cross outline"
 
-        # Witness hub: short — docs + link to outline only
         overview_lines = [
             f"# {name}",
             "",
@@ -203,7 +408,7 @@ def build_witness_pack(
             q_lines = [
                 f"# Cross outline — {name}",
                 "",
-                "_Court exam stub. Keep `[[doc:…]]` links next to questions._",
+                "_Exam stub. Keep `[[doc:…]]` links next to questions._",
                 "",
                 "## Questions",
                 "",

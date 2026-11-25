@@ -534,8 +534,13 @@ def estimate_costs(
 
 
 def format_estimate(est: CostEstimate) -> str:
+    scope = (
+        "full ingest (ASR + OCR + visual + entities + embed)"
+        if est.mode == "ingest"
+        else "ASR retranscribe only (docs/visual/entities/embed not re-billed)"
+    )
     lines = [
-        f"MarshalOSS cost estimate  ({est.mode})",
+        f"MarshalOSS cost estimate  ({est.mode}) — {scope}",
         f"  root:     {est.root or '(db)'}",
         f"  profile:  {est.profile}",
         f"  providers:{est.providers_default}",

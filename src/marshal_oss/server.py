@@ -418,12 +418,40 @@ def create_app(
             },
         }
 
-    @app.get("/api/notebook/skill")
-    def api_notebook_skill() -> dict[str, Any]:
+    @app.get("/api/notebook/skills")
+    def api_notebook_skills() -> dict[str, Any]:
+        from .notebook import list_notebook_skills, notebook_skills_dir
+
         return {
             "ok": True,
-            "path_in_case": "Meta/Notebook skill",
-            "skill": load_notebook_skill_text(strip_frontmatter=False),
+            "dir": str(notebook_skills_dir()),
+            "skills": list_notebook_skills(),
+        }
+
+    @app.get("/api/notebook/skill")
+    def api_notebook_skill(name: str | None = None) -> dict[str, Any]:
+        from .notebook import list_notebook_skills, load_notebook_skill_recipe
+
+        if not name:
+            return {
+                "ok": True,
+                "dir": "skills/",
+                "overview": load_notebook_skill_text(strip_frontmatter=False),
+                "skills": list_notebook_skills(),
+                "instructions": (
+                    "This is the skill list. Pass ?name=cowork | cross-examination | timeline "
+                    "(or another skills/*.md stem) for full Markdown. Mirrored at Meta/Skills/*."
+                ),
+            }
+        try:
+            body = load_notebook_skill_recipe(name, strip_frontmatter=False)
+        except FileNotFoundError as e:
+            raise HTTPException(404, str(e)) from e
+        return {
+            "ok": True,
+            "name": name,
+            "wiki_path": f"Meta/Skills/{name}",
+            "skill": body,
         }
 
     @app.get("/api/notebook/pages")
@@ -563,32 +591,101 @@ def create_app(
         return FileResponse(str(target), filename=name, content_disposition_type="attachment")
 
     # --- MCP JSON tools via simple HTTP helpers used by mcp_app ---
+    @app.get("/api/mcp/instructions")
+    def api_mcp_instructions(full: bool = False) -> dict[str, Any]:
+        """Short pointer by default; ?full=1 returns the Cowork playbook Markdown."""
+        from .notebook import load_cowork_playbook, playbook_pointer
+
+        ptr = playbook_pointer(settings.public_base)
+        if not full:
+            return {
+                "ok": True,
+                "summary": (
+                    "search/ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
+                    "Discovery read-only; writable: notebook, user_note, user_tags."
+                ),
+                "playbook": ptr,
+            }
+        return {
+            "ok": True,
+            "playbook": ptr,
+            "skill": load_cowork_playbook(strip_frontmatter=False),
+        }
+
     @app.get("/api/mcp/tools")
     def mcp_tools_catalog() -> dict[str, Any]:
+        from .notebook import playbook_pointer
+
         return {
+            "discovery_writable": False,
+            "notes": (
+                "Discovery files on disk are read-only via MCP/API. "
+                "Writable surfaces: notebook pages, file user_note, file user_tags."
+            ),
+            "playbook": playbook_pointer(settings.public_base),
             "tools": [
                 "list_cases",
                 "set_active_case",
                 "get_active_case",
+                "get_instructions",
                 "browse_case_files",
                 "search",
                 "ask",
+                "get_file",
                 "get_file_link",
                 "open_file_browser",
+                "set_file_note",
+                "set_file_tags",
                 "notebook_list",
                 "notebook_get",
                 "notebook_upsert",
                 "notebook_delete",
                 "notebook_skill",
                 "notebook_build_witness_pack",
-            ]
+            ],
         }
+
+    @app.put("/api/files/note")
+    async def api_file_note(request: Request) -> dict[str, Any]:
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        path = str(payload.get("path") or "")
+        note = payload.get("note")
+        if note is None:
+            note = ""
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            out = db.set_file_user_note(c.id, path, str(note))
+        except ValueError as e:
+            raise HTTPException(404, str(e)) from e
+        return {"ok": True, "case": c.__dict__, **out}
+
+    @app.put("/api/files/tags")
+    async def api_file_tags(request: Request) -> dict[str, Any]:
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        path = str(payload.get("path") or "")
+        tags = payload.get("tags") or []
+        if not isinstance(tags, list):
+            raise HTTPException(400, "tags must be a list of strings")
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            out = db.set_file_user_tags(c.id, path, [str(t) for t in tags])
+        except ValueError as e:
+            raise HTTPException(404, str(e)) from e
+        return {"ok": True, "case": c.__dict__, **out}
 
     return app
 
 
 def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
-    """FastMCP server sharing the same DB/search stack."""
+    """
+    FastMCP server sharing the same DB/search stack.
+
+    Discovery dump on disk is **read-only** here (no create/delete/modify of
+    production files). Writable via MCP: notebook pages, per-file user_note,
+    per-file user_tags. Ingest remains a separate CLI/ops path.
+    """
     from mcp.server.mcpserver import MCPServer
 
     mcp = MCPServer("marshaloss")
@@ -601,6 +698,13 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         if not c:
             raise ValueError("No active case. Ingest a case first.")
         return c
+
+    def resolve_under_root(case: Any, path: str) -> Path:
+        root = Path(case.files_root).resolve()
+        target = (root / path).resolve()
+        if not str(target).startswith(str(root)):
+            raise ValueError("path escapes case root")
+        return target
 
     @mcp.tool()
     def list_cases() -> dict[str, Any]:
@@ -616,12 +720,38 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
     @mcp.tool()
     def get_active_case() -> dict[str, Any]:
         """Return the active case."""
+        from .notebook import playbook_pointer
+
         c = db.get_active_case()
-        return {"active": c.__dict__ if c else None}
+        return {
+            "active": c.__dict__ if c else None,
+            "playbook": playbook_pointer(settings.public_base),
+        }
+
+    @mcp.tool()
+    def get_instructions(full: bool = False) -> dict[str, Any]:
+        """Return a short Cowork playbook pointer, or full=True for the complete Markdown skill (skills/cowork.md). Prefer the pointer unless you need the full rules."""
+        from .notebook import load_cowork_playbook, playbook_pointer
+
+        ptr = playbook_pointer(settings.public_base)
+        if not full:
+            return {
+                "ok": True,
+                "summary": (
+                    "search/ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
+                    "Discovery read-only; writable: notebook, user_note, user_tags."
+                ),
+                "playbook": ptr,
+            }
+        return {
+            "ok": True,
+            "playbook": ptr,
+            "skill": load_cowork_playbook(strip_frontmatter=False),
+        }
 
     @mcp.tool()
     def browse_case_files(case_id: int | None = None, path: str = "") -> dict[str, Any]:
-        """List files/folders with Bates labels and open_url/download_url for files."""
+        """Read-only: list files/folders with Bates labels and open_url/download_url."""
         c = active_or(case_id)
         data = list_dir(db, settings, c, path)
         data["browser_url"] = f"{settings.public_base.rstrip('/')}/browser?case_id={c.id}"
@@ -636,16 +766,26 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         mode: str = "hybrid",
         top_k: int = 12,
     ) -> dict[str, Any]:
-        """Hybrid/keyword/semantic search over the active case. Returns Bates, snippets, open_url."""
+        """Read-only: hybrid/keyword/semantic search. Returns structured hits (Bates, snippet, rel_path, open_url). Prefer this when you need individual chunks to cite or push into the notebook."""
+        from .notebook import playbook_pointer
+
         c = active_or(case_id)
         if mode not in ("hybrid", "keyword", "semantic"):
             raise ValueError("mode must be hybrid|keyword|semantic")
         hits = search_case(db, settings, embedder, c, query, mode=mode, top_k=top_k)  # type: ignore
-        return {"case": c.__dict__, "query": query, "mode": mode, "hits": hits}
+        return {
+            "case": c.__dict__,
+            "query": query,
+            "mode": mode,
+            "hits": hits,
+            "playbook": playbook_pointer(settings.public_base),
+        }
 
     @mcp.tool()
     def ask(question: str, case_id: int | None = None, top_k: int = 8) -> dict[str, Any]:
-        """Retrieve top hybrid chunks for a question (client LLM does final RAG reasoning)."""
+        """Read-only convenience over search: same hybrid hits plus a single packed `context` string for the host LLM to answer. Use search when you need structured cites; use ask when drafting an answer from chunks."""
+        from .notebook import playbook_pointer
+
         c = active_or(case_id)
         hits = search_case(db, settings, embedder, c, question, mode="hybrid", top_k=top_k)
         context = "\n\n".join(
@@ -657,16 +797,109 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             "question": question,
             "hits": hits,
             "context": context,
-            "instructions": "Use the context/hits to answer. Open open_url for full documents.",
+            "instructions": (
+                "Answer from context/hits. Cite rel_path with [[doc:rel_path|label]] "
+                "when writing notebook pages. Discovery files are read-only."
+            ),
+            "playbook": playbook_pointer(settings.public_base),
+        }
+
+    @mcp.tool()
+    def get_file(
+        path: str,
+        case_id: int | None = None,
+        max_chars: int = 8000,
+        offset_chars: int = 0,
+        chunk_offset: int = 0,
+        chunk_limit: int = 0,
+    ) -> dict[str, Any]:
+        """
+        Read-only: metadata + extracted text for a discovery file (never dumps the binary).
+
+        Defaults return a modest text window so you do not load a whole exhibit at once.
+        To walk the full extracted text, loop with offset_chars += max_chars while has_more
+        is true (or set max_chars=0 for one shot). Optional chunk_offset/chunk_limit pages
+        ingest chunks (page/time metadata) instead of a flat string.
+        """
+        c = active_or(case_id)
+        resolve_under_root(c, path)  # path-traversal guard; file may be DB-only if missing on disk
+        detail = db.get_file_detail(c.id, path)
+        if not detail:
+            raise ValueError(f"file not found: {path}")
+        full = detail.get("text") or ""
+        total = len(full)
+        start = max(0, int(offset_chars or 0))
+        if max_chars is None or int(max_chars) < 0:
+            raise ValueError("max_chars must be >= 0 (0 = remainder from offset)")
+        limit = int(max_chars)
+        if limit == 0:
+            text = full[start:]
+            next_off = None
+            has_more = False
+        else:
+            text = full[start : start + limit]
+            nxt = start + len(text)
+            has_more = nxt < total
+            next_off = nxt if has_more else None
+
+        chunks_out: list[dict[str, Any]] | None = None
+        chunks_has_more = False
+        chunks_next: int | None = None
+        all_chunks = detail.get("chunks") or []
+        n_chunks = len(all_chunks)
+        if int(chunk_limit or 0) > 0:
+            c0 = max(0, int(chunk_offset or 0))
+            c1 = c0 + int(chunk_limit)
+            page = all_chunks[c0:c1]
+            chunks_out = [
+                {
+                    "chunk_index": ch.get("chunk_index"),
+                    "page_start": ch.get("page_start"),
+                    "page_end": ch.get("page_end"),
+                    "heading": ch.get("heading"),
+                    "start_sec": ch.get("start_sec"),
+                    "end_sec": ch.get("end_sec"),
+                    "text": ch.get("text") or "",
+                }
+                for ch in page
+            ]
+            chunks_has_more = c1 < n_chunks
+            chunks_next = c1 if chunks_has_more else None
+
+        return {
+            "ok": True,
+            "case": c.__dict__,
+            "path": path,
+            "name": detail.get("name"),
+            "bates": detail.get("bates"),
+            "mime": detail.get("mime"),
+            "status": detail.get("status"),
+            "entities": detail.get("entities") or [],
+            "tags": detail.get("tags") or [],
+            "user_note": detail.get("user_note") or "",
+            "user_tags": detail.get("user_tags") or [],
+            "text": text,
+            "text_total_chars": total,
+            "offset_chars": start,
+            "max_chars": limit,
+            "next_offset_chars": next_off,
+            "has_more": has_more,
+            "chunk_count": n_chunks,
+            "chunks": chunks_out,
+            "chunk_offset": int(chunk_offset or 0) if chunks_out is not None else None,
+            "chunk_limit": int(chunk_limit or 0) if chunks_out is not None else None,
+            "chunks_next_offset": chunks_next,
+            "chunks_has_more": chunks_has_more if chunks_out is not None else None,
+            "wiki_doc_link": f"[[doc:{path}|{detail.get('bates') or detail.get('name') or path}]]",
+            **file_urls(settings, c, path),
         }
 
     @mcp.tool()
     def get_file_link(path: str, case_id: int | None = None) -> dict[str, Any]:
-        """Return open/download URLs (via PUBLIC_BASE) for a case-relative file path."""
+        """Read-only: open/download URLs for a case-relative discovery path."""
         c = active_or(case_id)
-        root = Path(c.files_root)
-        target = (root / path).resolve()
-        if not str(target).startswith(str(root.resolve())) or not target.is_file():
+        target = resolve_under_root(c, path)
+        if not target.is_file():
             raise ValueError("file not found under case root")
         row = db.get_file(c.id, path)
         return {
@@ -680,7 +913,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     @mcp.tool()
     def open_file_browser(case_id: int | None = None, path: str = "") -> dict[str, Any]:
-        """Return URL to the MarshalOSS case UI (Document Explorer)."""
+        """Read-only: URL to the MarshalOSS Document Explorer for this path."""
         c = active_or(case_id)
         base = settings.public_base.rstrip("/")
         if path:
@@ -688,6 +921,20 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         else:
             url = f"{base}/#/cases/{c.id}?view=explorer"
         return {"ok": True, "browser_url": url, "case": c.__dict__}
+
+    @mcp.tool()
+    def set_file_note(path: str, note: str, case_id: int | None = None) -> dict[str, Any]:
+        """Writable annotation: set reviewer note on a file (SQLite meta only — never writes discovery bytes)."""
+        c = active_or(case_id)
+        out = db.set_file_user_note(c.id, path, note)
+        return {"ok": True, "case": c.__dict__, **out}
+
+    @mcp.tool()
+    def set_file_tags(path: str, tags: list[str], case_id: int | None = None) -> dict[str, Any]:
+        """Writable annotation: set reviewer tags on a file (SQLite meta only — never writes discovery bytes). Ingest/AI tags remain separate."""
+        c = active_or(case_id)
+        out = db.set_file_user_tags(c.id, path, list(tags or []))
+        return {"ok": True, "case": c.__dict__, **out}
 
     @mcp.tool()
     def notebook_list(case_id: int | None = None) -> dict[str, Any]:
@@ -712,14 +959,14 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         title: str = "",
         case_id: int | None = None,
     ) -> dict[str, Any]:
-        """Create or update any notebook Markdown page. Invent paths freely. Use [[doc:rel/path|label]] and [[page:Path|label]]. Follow Meta/Notebook skill."""
+        """Writable: create/update a notebook Markdown page (not discovery files). Use [[doc:rel/path|label]] and [[page:Path|label]]. Load recipes via notebook_skill."""
         c = active_or(case_id)
         page = db.upsert_notebook_page(c.id, path, title or path.split("/")[-1], body)
         return {"ok": True, "page": page}
 
     @mcp.tool()
     def notebook_delete(path: str, case_id: int | None = None) -> dict[str, Any]:
-        """Delete a notebook page by path."""
+        """Writable: delete a notebook page (never deletes discovery files)."""
         c = active_or(case_id)
         ok = db.delete_notebook_page(c.id, path)
         if not ok:
@@ -727,16 +974,31 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         return {"ok": True, "path": db.normalize_notebook_path(path)}
 
     @mcp.tool()
-    def notebook_skill() -> dict[str, Any]:
-        """Return the MarshalOSS Notebook skill playbook (dynamic wiki conventions). Prefer this over reinventing a long prompt."""
+    def notebook_skill(name: str | None = None) -> dict[str, Any]:
+        """List git-backed notebook recipes, or return one by name (e.g. cross-examination, timeline). Prefer this over reinventing prompts."""
+        from .notebook import list_notebook_skills, load_notebook_skill_recipe
+
+        if not name:
+            return {
+                "ok": True,
+                "dir": "skills/",
+                "overview": load_notebook_skill_text(strip_frontmatter=False),
+                "skills": list_notebook_skills(),
+                "instructions": (
+                    "Skill list from repo skills/. Call again with name='cowork', "
+                    "'cross-examination', 'timeline', or another skills/*.md stem. "
+                    "Mirrored in the wiki at Meta/Skills/*."
+                ),
+            }
+        try:
+            body = load_notebook_skill_recipe(name, strip_frontmatter=False)
+        except FileNotFoundError as e:
+            raise ValueError(str(e)) from e
         return {
             "ok": True,
-            "path_in_case": "Meta/Notebook skill",
-            "skill": load_notebook_skill_text(strip_frontmatter=False),
-            "instructions": (
-                "Follow this skill when creating/editing notebook pages. "
-                "Also available as page Meta/Notebook skill inside each case."
-            ),
+            "name": name,
+            "wiki_path": f"Meta/Skills/{name}",
+            "skill": body,
         }
 
     @mcp.tool()
@@ -745,7 +1007,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         min_count: int = 2,
         max_witnesses: int = 40,
     ) -> dict[str, Any]:
-        """Optional recipe: scaffold Witnesses/* from person entities. For custom IA, invent pages with notebook_upsert instead (see notebook_skill)."""
+        """Optional helper: seed Witnesses/* from person entities. Prefer following the cross-examination skill via notebook_skill for full exam prep."""
         c = active_or(case_id)
         return build_witness_pack(
             db,

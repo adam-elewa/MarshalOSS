@@ -222,10 +222,13 @@
   .filter-bar .seg button.active { background: var(--ink); color: #fff }
   .flag-note { color: var(--warn); font-size: 12px; font-weight: 600 }
 
-  /* Notebook */
+  /* Notebook — raw wiki (tree | page | optional discovery side viewer) */
   .notebook {
-    display: grid; grid-template-columns: minmax(200px, 28%) 1fr;
+    display: grid; grid-template-columns: minmax(180px, 22%) minmax(280px, 1fr);
     height: 100%; min-height: 0;
+  }
+  .notebook.nb-split {
+    grid-template-columns: minmax(160px, 18%) minmax(240px, 1fr) minmax(280px, 38%);
   }
   .nb-side {
     border-right: 1px solid var(--border); background: var(--panel);
@@ -233,9 +236,9 @@
   }
   .nb-side-head {
     padding: 10px 12px; border-bottom: 1px solid var(--border);
-    display: flex; flex-direction: column; gap: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--muted);
   }
-  .nb-side-head .row { display: flex; gap: 6px; flex-wrap: wrap }
   .nb-tree { list-style: none; margin: 0; padding: 8px 0; overflow: auto; flex: 1 }
   .nb-tree .nb-item {
     display: flex; align-items: center; gap: 4px;
@@ -297,6 +300,17 @@
     border: 1px solid var(--border); padding: 6px 8px; text-align: left;
   }
   .nb-dirty { color: var(--warn); font-size: 12px; font-weight: 600 }
+  .nb-doc {
+    border-left: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  }
+  .nb-doc .doc-head { flex-shrink: 0 }
+  .nb-doc .doc-body { flex: 1; min-height: 0; overflow: auto }
+  .nb-doc .preview-frame { width: 100%; height: 100%; min-height: 360px; border: 0; background: #111 }
+  .nb-doc .preview-img { max-width: 100%; height: auto; display: block; margin: 0 auto }
+  .nb-doc-empty {
+    padding: 24px; color: var(--muted); font-size: 13px; line-height: 1.45;
+  }
 
   .explorer {
     display: grid; grid-template-columns: minmax(240px, 36%) 1fr;
@@ -438,6 +452,9 @@ const state = {
   notebookDirty: false,
   notebookMode: "preview", // edit | preview
   notebookExpanded: {}, // path -> bool for tree twisties
+  notebookDocPath: null, // discovery file open in side viewer
+  notebookDoc: null,
+  notebookDocTab: "preview",
   err: null,
 };
 
@@ -795,28 +812,6 @@ async function saveNotebook() {
   render();
 }
 
-async function createNotebookPage() {
-  const path = prompt("New page path (e.g. Notes/Theory or Witnesses/Jane Doe)", "Notes/");
-  if (!path) return;
-  const title = path.split("/").filter(Boolean).pop() || "Untitled";
-  await fetch("/api/notebook/page", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      case_id: state.caseId,
-      path,
-      title,
-      body: `# ${title}\n\n`,
-    }),
-  }).then(async (res) => {
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || res.statusText);
-  });
-  await loadNotebook(path, true);
-  state.notebookMode = "edit";
-  render();
-}
-
 async function deleteNotebookPage() {
   if (!state.notebookPath || state.notebookPath === "Home") {
     alert("Home page cannot be deleted.");
@@ -833,29 +828,115 @@ async function deleteNotebookPage() {
   render();
 }
 
-async function runWitnessPack() {
-  if (!confirm("Optional stock recipe: scaffold Witnesses/* from person entities.\n\nFor timelines, theory, motions, or custom layout, ask Cowork/Cursor with the Notebook skill instead.\n\nExisting cross outlines are kept; index/overview pages refresh.")) return;
-  const res = await fetch("/api/notebook/witness-pack", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ case_id: state.caseId, min_count: 2 }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || res.statusText);
-  await loadNotebook("Witnesses", true);
-  state.notebookMode = "preview";
+/** Open a discovery file beside the notebook (does not leave the wiki module). */
+async function loadNotebookDoc(relPath) {
+  state.notebookDocPath = relPath;
+  state.notebookDocTab = "preview";
+  try {
+    const data = await api(
+      `/api/files/detail?case_id=${state.caseId}&path=${encodeURIComponent(relPath)}`
+    );
+    const doc = data.file;
+    doc.raw_url = relativize(doc.raw_url);
+    doc.open_url = relativize(doc.open_url);
+    doc.download_url = relativize(doc.download_url);
+    state.notebookDoc = doc;
+    if (!doc.text && doc.kind === "other") state.notebookDocTab = "metadata";
+  } catch (e) {
+    state.notebookDoc = {
+      name: relPath.split("/").pop(),
+      rel_path: relPath,
+      kind: "other",
+      text: "",
+      meta: {},
+      entities: [],
+      tags: [],
+      _not_ingested: true,
+      error: e.message || String(e),
+    };
+  }
   render();
 }
 
-function insertDocLink() {
-  const path = prompt("Case-relative file path to link (e.g. David Jones Arrest report.pdf)");
-  if (!path) return;
-  const label = prompt("Link label (optional)", path.split("/").pop()) || path.split("/").pop();
-  const snip = `[[doc:${path}|${label}]]`;
-  state.notebookDraftBody = (state.notebookDraftBody || "") + (state.notebookDraftBody.endsWith("\n") || !state.notebookDraftBody ? "" : "\n") + snip;
-  state.notebookDirty = true;
-  state.notebookMode = "edit";
+function closeNotebookDoc() {
+  state.notebookDocPath = null;
+  state.notebookDoc = null;
   render();
+}
+
+function renderNotebookDocPane() {
+  const doc = state.notebookDoc;
+  if (!doc) {
+    return `<aside class="nb-doc"><div class="nb-doc-empty">Select a <code>[[doc:]]</code> link to open discovery beside the wiki.</div></aside>`;
+  }
+  const tab = state.notebookDocTab || "preview";
+  const tabs = [
+    ["preview", "Preview"],
+    ["text", "Text"],
+    ["metadata", "Metadata"],
+  ];
+  const tabBtns = tabs.map(([id, label]) =>
+    `<button type="button" class="tab ${tab === id ? "active" : ""}" data-nb-doc-tab="${id}">${label}</button>`
+  ).join("");
+  let body = "";
+  if (tab === "preview") {
+    if (doc.kind === "pdf" && doc.raw_url) {
+      body = `<iframe class="preview-frame" src="${esc(doc.raw_url)}" title="${esc(doc.name)}"></iframe>`;
+    } else if (doc.kind === "image" && doc.raw_url) {
+      body = `<img class="preview-img" src="${esc(doc.raw_url)}" alt="${esc(doc.name)}"/>`;
+    } else if ((doc.kind === "video" || doc.kind === "audio") && doc.raw_url) {
+      const tag = doc.kind === "video" ? "video" : "audio";
+      body = `<${tag} class="preview-frame" controls src="${esc(doc.raw_url)}"></${tag}>`;
+    } else if (doc.text) {
+      body = `<div class="panel-card"><pre class="text-body">${esc(doc.text.slice(0, 8000))}${doc.text.length > 8000 ? "\n…" : ""}</pre></div>`;
+    } else if (doc.open_url || doc.raw_url) {
+      body = `<div class="panel-card">
+        <p>${doc._not_ingested ? "File is on disk but not fully ingested yet." : "No inline preview for this type."}</p>
+        <p><a href="${esc(doc.open_url || doc.raw_url)}" target="_blank" rel="noopener">Open in viewer</a>
+        ${doc.download_url ? ` · <a href="${esc(doc.download_url)}" target="_blank" rel="noopener">Download</a>` : ""}</p>
+        ${doc.error ? `<p class="err">${esc(doc.error)}</p>` : ""}
+      </div>`;
+    } else {
+      body = `<div class="placeholder">Nothing to preview.</div>`;
+    }
+  } else if (tab === "text") {
+    body = doc.text
+      ? `<div class="panel-card"><pre class="text-body">${esc(doc.text)}</pre></div>`
+      : `<div class="panel-card placeholder">No extracted text.</div>`;
+  } else {
+    const rows = [
+      ["Name", doc.name],
+      ["Path", doc.rel_path],
+      ["Bates", doc.bates],
+      ["MIME", doc.mime],
+      ["Size", fmtSize(doc.size)],
+      ["Kind", doc.kind],
+    ];
+    body = `<div class="panel-card"><table class="meta-table">
+      ${rows.filter(([, v]) => v != null && v !== "").map(([k, v]) =>
+        `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`
+      ).join("")}
+    </table></div>`;
+  }
+  return `
+    <aside class="nb-doc">
+      <div class="doc-head">
+        <div class="doc-title-row">
+          <div>
+            <h1>${esc(doc.name)}</h1>
+            ${doc.bates ? `<div class="bates">${esc(doc.bates)}</div>` : ""}
+            <div class="meta">${esc(doc.rel_path)}</div>
+          </div>
+          <div class="doc-actions">
+            ${doc.open_url ? `<a href="${esc(doc.open_url)}" target="_blank" rel="noopener"><button type="button" class="ghost">Open</button></a>` : ""}
+            <button type="button" class="ghost" id="btnNbDocClose">Close</button>
+          </div>
+        </div>
+        <div class="tabs">${tabBtns}</div>
+      </div>
+      <div class="doc-body">${body}</div>
+    </aside>
+  `;
 }
 
 /** Minimal Markdown + wiki links → HTML (no external deps). */
@@ -1502,7 +1583,7 @@ function notebookTreeHtml(pages) {
   const expanded = state.notebookExpanded || {};
   // Auto-expand ancestors of current page + top areas
   const cur = state.notebookPath || "";
-  const auto = new Set(["Witnesses"]);
+  const auto = new Set(["Meta", "Meta/Skills", "Witnesses", "People", "Timeline", "Cross"]);
   if (cur) {
     const bits = cur.split("/");
     for (let i = 1; i <= bits.length; i++) auto.add(bits.slice(0, i).join("/"));
@@ -1551,21 +1632,17 @@ function notebookTreeHtml(pages) {
 
 function renderNotebook() {
   const tree = notebookTreeHtml(state.notebookPages || []);
+  const split = !!state.notebookDocPath;
+  const docPane = split ? renderNotebookDocPane() : "";
 
   const body = state.notebookMode === "edit"
     ? `<div class="nb-editor"><textarea id="nbBody">${esc(state.notebookDraftBody)}</textarea></div>`
     : `<div class="nb-preview">${renderMarkdown(state.notebookDraftBody)}</div>`;
 
   return `
-    <div class="notebook">
+    <div class="notebook ${split ? "nb-split" : ""}">
       <aside class="nb-side">
-        <div class="nb-side-head">
-          <div class="row">
-            <button type="button" class="primary" id="btnNbNew">New page</button>
-            <button type="button" class="ghost" id="btnNbSkill" title="Open the Notebook skill playbook">Skill</button>
-            <button type="button" class="ghost" id="btnNbWitness" title="Rebuild Witness → Cross outline tree">Rebuild witnesses</button>
-          </div>
-        </div>
+        <div class="nb-side-head">Wiki</div>
         <ul class="nb-tree">${tree}</ul>
       </aside>
       <section class="nb-main">
@@ -1576,12 +1653,12 @@ function renderNotebook() {
             <button type="button" data-nb-mode="preview" class="${state.notebookMode === "preview" ? "active" : ""}">Preview</button>
             <button type="button" data-nb-mode="edit" class="${state.notebookMode === "edit" ? "active" : ""}">Edit</button>
           </div>
-          <button type="button" class="ghost" id="btnNbInsertDoc">Insert doc link</button>
           <button type="button" class="primary" id="btnNbSave">Save</button>
           <button type="button" class="ghost" id="btnNbDelete">Delete</button>
         </div>
         ${body}
       </section>
+      ${docPane}
     </div>
   `;
 }
@@ -1643,36 +1720,12 @@ function bindCaseHandlers() {
       if (b) state.notebookDraftBody = b.value;
       try { await saveNotebook(); } catch (e) { alert(e.message || String(e)); }
     };
-    const neu = document.getElementById("btnNbNew");
-    if (neu) neu.onclick = () => createNotebookPage().catch(e => alert(e.message || String(e)));
     const del = document.getElementById("btnNbDelete");
     if (del) del.onclick = () => deleteNotebookPage().catch(e => alert(e.message || String(e)));
-    const ins = document.getElementById("btnNbInsertDoc");
-    if (ins) ins.onclick = insertDocLink;
-    const skillBtn = document.getElementById("btnNbSkill");
-    if (skillBtn) skillBtn.onclick = async () => {
-      try {
-        await loadNotebook("Meta/Notebook skill", true);
-        state.notebookMode = "preview";
-        render();
-      } catch (e) { alert(e.message || String(e)); }
-    };
-    const wit = document.getElementById("btnNbWitness");
-    if (wit) wit.onclick = () => runWitnessPack().catch(e => alert(e.message || String(e)));
     document.querySelectorAll("a.doc-link[data-doc]").forEach(a => {
       a.onclick = (ev) => {
         ev.preventDefault();
-        navigate({
-          name: "case",
-          caseId: state.caseId,
-          module: "explorer",
-          browseMode: "categories",
-          category: null,
-          folder: "",
-          docPath: a.dataset.doc,
-          tab: "preview",
-          facet: null,
-        });
+        loadNotebookDoc(a.dataset.doc).catch(e => alert(e.message || String(e)));
       };
     });
     document.querySelectorAll("a.page-link[data-page]").forEach(a => {
@@ -1683,6 +1736,14 @@ function bindCaseHandlers() {
           state.notebookMode = "preview";
           render();
         } catch (e) { alert(e.message || String(e)); }
+      };
+    });
+    const docClose = document.getElementById("btnNbDocClose");
+    if (docClose) docClose.onclick = () => closeNotebookDoc();
+    document.querySelectorAll("[data-nb-doc-tab]").forEach(btn => {
+      btn.onclick = () => {
+        state.notebookDocTab = btn.dataset.nbDocTab;
+        render();
       };
     });
     return;

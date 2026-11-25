@@ -424,7 +424,57 @@ class Database:
             d["manifest"] = None
         d["entities"] = entities if isinstance(entities, list) else []
         d["tags"] = tags if isinstance(tags, list) else []
+        # User annotations (editable via MCP/API) — separate from ingest tags
+        d["user_note"] = meta.get("user_note") if isinstance(meta.get("user_note"), str) else (
+            str(meta["user_note"]) if meta.get("user_note") is not None else ""
+        )
+        ut = meta.get("user_tags")
+        d["user_tags"] = [str(t) for t in ut] if isinstance(ut, list) else []
         return d
+
+    def _load_file_meta(self, case_id: int, rel_path: str) -> tuple[int, dict[str, Any]] | None:
+        row = self.get_file(case_id, rel_path)
+        if not row:
+            return None
+        meta: dict[str, Any] = {}
+        raw = row["meta"]
+        if raw:
+            try:
+                loaded = json.loads(raw) if isinstance(raw, str) else raw
+                if isinstance(loaded, dict):
+                    meta = loaded
+            except Exception:
+                meta = {}
+        return int(row["id"]), meta
+
+    def set_file_user_note(self, case_id: int, rel_path: str, note: str) -> dict[str, Any]:
+        """Set reviewer note on a file (does not modify discovery bytes on disk)."""
+        loaded = self._load_file_meta(case_id, rel_path)
+        if not loaded:
+            raise ValueError(f"file not found: {rel_path}")
+        file_id, meta = loaded
+        meta["user_note"] = note
+        self.conn.execute(
+            "UPDATE files SET meta=? WHERE id=?",
+            (json.dumps(meta, ensure_ascii=False), file_id),
+        )
+        self.conn.commit()
+        return {"rel_path": rel_path, "user_note": note}
+
+    def set_file_user_tags(self, case_id: int, rel_path: str, tags: list[str]) -> dict[str, Any]:
+        """Set reviewer tags on a file (does not modify discovery bytes on disk)."""
+        loaded = self._load_file_meta(case_id, rel_path)
+        if not loaded:
+            raise ValueError(f"file not found: {rel_path}")
+        file_id, meta = loaded
+        clean = [str(t).strip() for t in tags if str(t).strip()]
+        meta["user_tags"] = clean
+        self.conn.execute(
+            "UPDATE files SET meta=? WHERE id=?",
+            (json.dumps(meta, ensure_ascii=False), file_id),
+        )
+        self.conn.commit()
+        return {"rel_path": rel_path, "user_tags": clean}
 
     def list_files(self, case_id: int, prefix: str = "") -> list[dict[str, Any]]:
         if prefix:
@@ -1102,34 +1152,19 @@ class Database:
         return cur.rowcount > 0
 
     def ensure_notebook_home(self, case_id: int, case_name: str) -> dict[str, Any]:
-        """Ensure Home + Meta skill page. Home is created once; skill page stays fresh."""
-        from .notebook import load_notebook_skill_text
+        """Ensure Home + git-mirrored Meta/Skills pages. Home refreshes when stock copy is stale."""
+        from .notebook import home_notebook_body, sync_skill_wiki_pages
 
-        skill_body = load_notebook_skill_text(strip_frontmatter=True)
-        self.upsert_notebook_page(
-            case_id,
-            "Meta/Notebook skill",
-            "Notebook skill",
-            skill_body,
-        )
-        body = (
-            f"# {case_name}\n\n"
-            "This is a **dynamic case wiki** — not a fixed layout. "
-            "Humans and AI (Cowork / Computer via MCP) invent pages as needed: "
-            "witnesses, timeline, defense theory, motions, whatever the case needs.\n\n"
-            "## Start here\n\n"
-            "- Read [[page:Meta/Notebook skill|Notebook skill]] before scaffolding "
-            "(same playbook Cursor/Cowork should follow).\n"
-            "- Ask the AI: e.g. *“Create witness folders with cross outlines”* or "
-            "*“Build a defense-theory section with linked discovery.”*\n"
-            "- Edit any page in Preview/Edit; link production files with "
-            "`[[doc:path|label]]`.\n"
-        )
+        sync_skill_wiki_pages(self, case_id)
+        # Drop obsolete single-skill page from earlier notebook chrome
+        if self.get_notebook_page(case_id, "Meta/Notebook skill"):
+            self.delete_notebook_page(case_id, "Meta/Notebook skill")
+        body = home_notebook_body(case_name)
         existing = self.get_notebook_page(case_id, "Home")
-        # Refresh stock Home if still the old witness-centric stub
         if existing:
             old = existing.get("body") or ""
-            if "Build witness pack" in old or "Quick links" in old and "Witnesses" in old and "dynamic case wiki" not in old:
+            # Refresh stock Home when it still points at the old Meta skill / witness chrome
+            if "skills/" not in old:
                 return self.upsert_notebook_page(case_id, "Home", "Home", body)
             return existing
         return self.upsert_notebook_page(case_id, "Home", "Home", body)

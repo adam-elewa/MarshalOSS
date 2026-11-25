@@ -44,6 +44,8 @@ It is not designed to rebuild Relativity. It wires together existing open-source
 | MarshalOSS | Ingest, search, file links, MCP, native review UI | Mostly local compute; small API spend (see below) |
 | Cowork / Computer | Questions, analysis, drafting, connectors | Subscription usage |
 
+**Cost vs quality before you spend:** edit [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml) (or copy to `~/.marshaloss/knobs.toml`), then run `marshaloss estimate "/path/to/case"` for a **full ingest** ballpark (ASR + OCR escalate + visual frames + entities + Voyage embeddings). Use `marshaloss knobs` to see what is active. ASR-only redos are `estimate --mode retranscribe`.
+
 MarshalOSS never answers questions itself. `search` / `ask` return text chunks and file links; Cowork or Computer writes the response.
 
 ---
@@ -118,15 +120,7 @@ It merges name variants, so "Smith", "J. Smith", and "Jane Smith" become one ent
 | Entities | OpenAI mini or Anthropic Haiku | Each file with text | Cheap |
 | Index + search | Voyage | Every chunk, every search query | Cents to low dollars per case |
 
-**HQ ASR ballparks** (OpenAI list-price estimate ~$0.006/min per pass; run `marshaloss estimate` for your tree):
-
-| Scope (example: mid-size Axon dump) | Audio | Typical HQ redo | Dense-speech ceiling |
-|---|---|---|---|
-| Bodycam only | ~2–3 hr | **~$1–2** | ~$2 |
-| Bodycam + Fleet (skip IR duplicates) | ~4–5 hr | **~$2–3.50** | ~$4 |
-| All Axon video (incl. IR) | ~8–9 hr | **~$4–5** | **~$7** |
-
-Bodycam-only is cheap; the higher “~$7” figure is the full set when speech is denser than the default ~20% assumption. Always prefer `marshaloss estimate --mode retranscribe` before a bulk redo.
+**ASR is usually the largest API line** and scales with audio/video duration (OpenAI’s public estimate is on the order of ~$0.006/min per model pass; HQ is roughly 1.2–2.5× a single diarize pass depending on how much speech is present). Do not guess from another matter — run `marshaloss estimate` on **this** tree. Default `--mode ingest` covers the whole case (docs + images + A/V: ASR, OCR escalate, visual, entities, embeddings). Add `--mode retranscribe` for an ASR-only redo estimate.
 
 ### Ingest confidence
 
@@ -195,12 +189,13 @@ uv run marshaloss prepare "/path/to/case" --slug my-case --name "My Case"
 # Full ingest
 uv run marshaloss ingest "/path/to/case" --slug my-case --name "My Case" --workers 8
 
-# Estimate API spend before running (uses knobs.toml pricing + assumptions)
+# Cost/quality: knobs, then estimate full ingest (docs + images + A/V)
+uv run marshaloss knobs
 uv run marshaloss estimate "/path/to/case"
-uv run marshaloss estimate --slug my-case --mode retranscribe --path-contains Axon_Body
 
-# Re-run HQ ASR on bodycam/dashcam (preserves visual captions)
-uv run marshaloss retranscribe --slug my-case --path-contains Axon_Body
+# Re-run HQ ASR on selected media (preserves visual captions)
+uv run marshaloss estimate --slug my-case --mode retranscribe --path-contains Body
+uv run marshaloss retranscribe --slug my-case --path-contains Body
 
 # Serve (local default http://127.0.0.1:7340), or ./tools/networking/serve.sh
 uv run marshaloss serve
@@ -225,13 +220,18 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 | MCP tool | Purpose |
 |---|---|
 | `list_cases` / `get_active_case` / `set_active_case` | Case selection |
-| `browse_case_files` | Directory listing with Bates and links |
-| `search` | Keyword / semantic / hybrid hits with snippets and links |
-| `ask` | Top chunks as context; the host model answers |
-| `get_file_link` / `open_file_browser` | File links |
-| `notebook_list` / `notebook_get` / `notebook_upsert` / `notebook_delete` | Dynamic case notebook (wiki) pages |
-| `notebook_skill` | Playbook for AI wiki scaffolding (also page `Meta/Notebook skill`) |
-| `notebook_build_witness_pack` | Optional witness-folder recipe (not the only IA) |
+| `get_instructions` | Short Cowork playbook pointer (`skills/cowork.md`); `full=true` for the whole skill. Also `GET /api/mcp/instructions` |
+| `browse_case_files` | Read-only directory listing with Bates and links |
+| `search` | Read-only hybrid/keyword/semantic hits (structured chunks to cite) |
+| `ask` | Same hybrid retrieval as `search`, plus a packed `context` string for the host LLM to answer |
+| `get_file` | Read-only: metadata + extracted text window (page with `offset_chars` / `has_more`, or `max_chars=0` for remainder; optional chunk paging) |
+| `get_file_link` / `open_file_browser` | Read-only file / UI links |
+| `set_file_note` / `set_file_tags` | **Writable annotations only** (SQLite meta — not the dump on disk) |
+| `notebook_list` / `notebook_get` / `notebook_upsert` / `notebook_delete` | **Writable** case wiki pages |
+| `notebook_skill` | **Lists** all skills in `skills/`; pass `name` to load one (mirrored at `Meta/Skills/*`) |
+| `notebook_build_witness_pack` | Optional helper to seed wiki `Witnesses/*` pages (not discovery files) |
+
+**Discovery is source of truth and read-only over MCP.** Tools cannot add, delete, or modify production files under the case root. Ingest remains a separate ops/CLI path. Editable surfaces: notebook, per-file `user_note`, per-file `user_tags`.
 
 ---
 
@@ -242,7 +242,7 @@ Case management and document review run in MarshalOSS on `:7340` (`web/app.html`
 - **Cases** — pick a matter
 - **Case Overview** — stats, production manifest (processed / OCR confidence / not processed), entities, tags
 - **Document Explorer** — auto categories (criminal history, police reports, bodycam, …) or **Native Folders**; search; document viewer (preview, text, metadata, entities, tags)
-- **Notebook** — dynamic case wiki (Markdown). Structure is invented by humans/AI (witnesses, timeline, theory, …) using the **marshal-notebook** skill / MCP `notebook_skill`; optional stock **witness recipe** only when you want that shortcut
+- **Notebook** — raw Markdown wiki (tree + page). Home explains the wiki and links git-backed skills under `skills/` (`cowork`, `cross-examination`, `timeline`, …), mirrored at `Meta/Skills/*`. MCP `notebook_skill` **lists** those skills (pass `name` to load one). `[[doc:]]` cites open a **side viewer** beside the page.
 
 Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 
@@ -267,22 +267,25 @@ Ingest stores timed speech/visual segments plus camera type, device, serial, and
 
 ### Cost / quality knobs (annotated)
 
-The central knob file is [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml). It is written for humans and LLMs: each section says what the control does, how it moves **cost vs quality**, and which provider it hits. Shipped defaults are unchanged (`active_profile = "balanced"`).
+**Start here to trade quality for spend.** The central knob file is [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml) — written for humans and LLMs: each section says what the control does, how it moves **cost vs quality**, and which provider it hits. Shipped defaults are unchanged (`active_profile = "balanced"`).
 
 ```bash
-# See effective knobs
+# What knobs are active right now
 uv run marshaloss knobs
 
-# Estimate spend before ingest / retranscribe
+# Full ingest estimate: ASR + OCR escalate + visual + entities + Voyage embeddings
 uv run marshaloss estimate "/path/to/case"
-uv run marshaloss estimate --slug david-jones --mode retranscribe --path-contains Axon_Body
+uv run marshaloss estimate --slug my-case
+
+# ASR-only (retranscribe) estimate — not the default
+uv run marshaloss estimate --slug my-case --mode retranscribe --path-contains Body
 ```
 
 To tweak: copy the file to `~/.marshaloss/knobs.toml` (or set `MARSHALOSS_KNOBS_FILE`), edit, then re-check with `knobs` / `estimate`. Profiles `economy` and `max_quality` are optional overlays. Environment variables still win.
 
 **Default API providers:** OpenAI for ASR (required for HQ / diarize) and, when `provider = "auto"`, for OCR escalate / visual / entities. **Voyage** (`voyage-law-2`) for embeddings — not OpenAI. Anthropic is optional for non-ASR stages only.
 
-`estimate --mode retranscribe` bills ASR only (visual captions are kept). Narrow with `--path-contains` (case-insensitive), e.g. `Axon_Body` vs full `Axon`, so a ~$1 bodycam redo is not confused with a ~$4–7 all-Axon redo.
+Default `estimate` scans the **entire case tree** (or DB case): documents, images, audio, and video. `--mode retranscribe` narrows the bill to ASR only (visual captions are kept). Optional `--path-contains` (case-insensitive) limits which files are counted.
 
 ### Environment variables
 

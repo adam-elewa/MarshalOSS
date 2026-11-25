@@ -351,7 +351,7 @@ def estimate_cmd(
     slug: Optional[str] = typer.Option(None, help="Use ingested case from DB instead of walking disk"),
     mode: str = typer.Option(
         "ingest",
-        help="ingest = full pipeline; retranscribe = ASR-only redo",
+        help="ingest = full case (docs/images/A/V: ASR+OCR+visual+entities+embed); retranscribe = ASR-only",
     ),
     path_contains: Optional[str] = typer.Option(
         None, "--path-contains", help="Only paths/names containing this string"

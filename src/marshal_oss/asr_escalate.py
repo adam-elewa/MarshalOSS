@@ -122,14 +122,27 @@ def ai_transcribe_file(
     bates: str | None = None,
     duration_sec: float | None = None,
     log: LogFn | None = None,
+    artifact_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Transcribe A/V with ``settings.asr_model``; returns timed transcript chunks."""
+    """Transcribe A/V with ``settings.asr_model``; returns timed transcript chunks.
+
+    When ``settings.asr_hq`` is true, runs the legacy HQ stack
+    (diarize → gpt-4o-transcribe + logprobs → whisper verify).
+    """
     _log = log or (lambda _m: None)
     key = _openai_key(settings)
     if not key:
         raise RuntimeError("OPENAI_API_KEY required for OpenAI transcription")
     if path.suffix.lower() not in AUDIO_VIDEO_EXTS:
         raise ValueError(f"not a media file: {path}")
+
+    if getattr(settings, "asr_hq", False):
+        from .hq_transcribe import ai_transcribe_file_hq
+
+        _log(f"[cyan]asr-hq[/cyan] {path.name}")
+        return ai_transcribe_file_hq(
+            path, settings, bates=bates, artifact_dir=artifact_dir, log=_log
+        )
 
     from openai import OpenAI
 

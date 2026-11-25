@@ -496,7 +496,17 @@ def _ingest_one_file(
                 try:
                     chunks = ai_transcribe_file(path, settings, bates=bates, log=log)
                     confidence = {}
-                    meta.update({"source": settings.asr_model, "modality": "audio_video"})
+                    meta.update(
+                        {
+                            "source": (
+                                "hq:gpt-4o-transcribe"
+                                if getattr(settings, "asr_hq", False)
+                                else settings.asr_model
+                            ),
+                            "modality": "audio_video",
+                            "asr_hq": bool(getattr(settings, "asr_hq", False)),
+                        }
+                    )
                     ai_asr_done = True
                 except Exception as asr_err:
                     log(f"[yellow]openai transcription failed → local[/yellow] {rel}: {asr_err}")

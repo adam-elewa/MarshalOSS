@@ -121,7 +121,7 @@ def ingest_cmd(
     )
     console.print(
         f"Transcription: provider={settings.asr_provider} model={settings.asr_model} "
-        f"(local escalate={settings.asr_escalate})"
+        f"hq={settings.asr_hq} (local escalate={settings.asr_escalate})"
     )
     console.print(
         f"ZIP expand: {settings.expand_zips} "
@@ -223,6 +223,52 @@ def serve_cmd(
     console.print(f"Listening on http://{settings.host}:{settings.port}")
     console.print(f"Public base: {settings.public_base}")
     uvicorn.run(api, host=settings.host, port=settings.port, log_level="info")
+
+
+@app.command("retranscribe")
+def retranscribe_cmd(
+    slug: Optional[str] = typer.Option(None, help="Case slug (default: active case)"),
+    path_contains: Optional[str] = typer.Option(
+        None, "--path-contains", help="Only files whose path/name contain this string"
+    ),
+    bodycam: bool = typer.Option(True, help="Include bodycam/dashcam (default)"),
+    limit: Optional[int] = typer.Option(None, help="Max files (smoke test)"),
+    no_hq: bool = typer.Option(False, "--no-hq", help="Use single-pass asr_model instead of HQ stack"),
+    artifacts: Optional[Path] = typer.Option(
+        None, help="Write HQ accepted/rejected JSON under this directory"
+    ),
+) -> None:
+    """Re-run OpenAI ASR on ready media (preserves visual frame captions)."""
+    _load_api_keys()
+    from .retranscribe import retranscribe_case_media
+
+    settings = get_settings()
+    if no_hq:
+        settings.asr_hq = False
+    else:
+        settings.asr_hq = True
+    db = Database(settings.database_path)
+    embedder = Embedder(settings)
+    case = db.get_case_by_slug(slug) if slug else db.get_active_case()
+    if not case:
+        raise typer.Exit("No case found")
+    kinds = {"bodycam", "dashcam"} if bodycam else {"bodycam", "dashcam", "video", "audio"}
+    console.print(
+        f"Retranscribe {case.slug}: hq={settings.asr_hq} "
+        f"path_contains={path_contains!r} limit={limit}"
+    )
+    stats = retranscribe_case_media(
+        db,
+        settings,
+        embedder,
+        case,
+        path_contains=path_contains,
+        kinds=kinds,
+        limit=limit,
+        artifact_root=artifacts,
+        log=lambda m: console.print(m),
+    )
+    console.print(stats)
 
 
 @app.command("search")

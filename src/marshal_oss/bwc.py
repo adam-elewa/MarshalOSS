@@ -151,19 +151,23 @@ def build_bwc_index(db: Database, case: Case) -> dict[str, Any]:
             # e.g. AXON_…mp4_Error.txt matching a filename prefix
             continue
 
-        if kind == "video":
-            # Unclassified video — include only if it has timed segments
-            segs_probe = db.list_media_segments(int(f["id"]))
-            if not segs_probe:
-                continue
-
         if kind == "audio":
             # Keep 911/radio out of multi-cam timeline (viewer filters audio);
             # still useful if we later add an audio rail — skip for now.
             audio_count += 1
             continue
 
+        # Bodycam view is for classified cameras only — never dump generic
+        # surveillance/other video in here just because it has ASR/frames.
+        if kind not in ("bodycam", "dashcam"):
+            continue
+
         recorded = normalize_recorded_start(media.get("recorded_start"))
+        # Wall-clock start is required so clips can sit on the multi-cam timeline.
+        # Axon filenames and ffprobe creation_time supply this at ingest.
+        if not recorded:
+            continue
+
         duration = media.get("duration_sec")
         try:
             duration_sec = float(duration) if duration is not None else 0.0

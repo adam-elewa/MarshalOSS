@@ -92,7 +92,7 @@ Zips are expanded automatically. If Docling or ffmpeg cannot open a file, conver
 
 **1. Prepare.** Expands zips, hashes every file (SHA-256), guesses Bates numbers from paths, and writes a **production manifest** — a list of everything produced. This is your "did we get everything?" check before any OCR runs.
 
-**2. Extract.** [Docling](https://github.com/docling-project/docling) runs on your machine and turns documents, email, and images into text. Audio and video are transcribed by OpenAI `gpt-4o-transcribe-diarize`: **ffmpeg** (installed on the host, not part of this repo) pulls the audio track, and the model returns each spoken line with its start/end time and a speaker label (Speaker A, Speaker B). It is far more accurate than the small local Whisper model on bodycam, radio, and 911 audio. Without an OpenAI key, or with `ASR_PROVIDER=local`, Docling's local Whisper is used instead (still with line times, no speaker labels). Videos are also classified as bodycam, dashcam, or other, with device, serial, and recording start where the filename or video metadata provides them. Document extraction costs compute time, not API money, and is most of the runtime on a large case.
+**2. Extract.** [Docling](https://github.com/docling-project/docling) runs on your machine and turns documents, email, and images into text. Audio and video use the **HQ transcription stack** (ported from legacy Marshal): OpenAI diarize finds speech windows, each window is re-transcribed with `gpt-4o-transcribe` + logprobs and a BWC prompt, and borderline windows are verified with `whisper-1`. **ffmpeg** pulls the audio track. Set `MARSHALOSS_ASR_HQ=false` to fall back to a single `gpt-4o-transcribe-diarize` pass. Without an OpenAI key, or with `ASR_PROVIDER=local`, Docling's local Whisper is used instead. Videos are also classified as bodycam, dashcam, or other, with device, serial, and recording start where the filename or video metadata provides them. Re-run media ASR with `marshaloss retranscribe` (keeps visual frame captions).
 
 **3. Quality gate.** Local checks score the output. Bad document OCR (empty, gibberish, mojibake) goes to an OpenAI or Anthropic vision model, capped at 25 pages per file by default. In local transcription mode, a bad transcript (empty, looping, junk like "thanks for watching") is re-run on OpenAI. If local extraction did fine, no API call is made.
 
@@ -112,7 +112,7 @@ It merges name variants, so "Smith", "J. Smith", and "Jane Smith" become one ent
 | Stage | Service | When | Rough cost |
 |---|---|---|---|
 | Prepare, Extract (documents) | none (local) | Always | $0 API; dominates runtime |
-| Extract (audio/video) | OpenAI `gpt-4o-transcribe-diarize` | Every audio/video file | Billed per audio minute; roughly a few dollars per 10 hours of audio |
+| Extract (audio/video) | HQ stack (diarize + `gpt-4o-transcribe` + whisper verify) | Every audio/video file | Higher than a single pass (roughly 2–3× diarize-only); still usually a few dollars per several hours of BWC |
 | Quality — documents | OpenAI or Anthropic vision | OCR looks bad | Only failures |
 | Visual | OpenAI or Anthropic vision | Photos, video frames | Cheap |
 | Entities | OpenAI mini or Anthropic Haiku | Each file with text | Cheap |
@@ -131,7 +131,7 @@ Each manifest row records `ingest_status` (`ready` / `error` / `skipped` / …),
 | Service | Key | What it is | Why MarshalOSS needs it | Required? |
 |---|---|---|---|---|
 | [Voyage AI](https://www.voyageai.com/) ([docs](https://docs.voyageai.com/)) | `VOYAGE_API_KEY` | Embedding service. Turns text into vectors that represent meaning. `voyage-law-2` is tuned for legal text. | Semantic search: finding passages by meaning, not just exact words. Called for every text chunk at ingest and for every search query. | Strongly recommended. Without it, search falls back to a weak local method. |
-| [OpenAI API](https://platform.openai.com/) ([keys](https://platform.openai.com/api-keys)) | `OPENAI_API_KEY` | API access to OpenAI models (billed separately from a ChatGPT subscription). | `gpt-4o-transcribe-diarize` transcribes audio/video with speakers and line times. `gpt-4o-mini` re-OCRs bad pages, describes photos and video frames, and extracts entities/tags. | Recommended. Without it, audio/video uses the weaker local Whisper model. |
+| [OpenAI API](https://platform.openai.com/) ([keys](https://platform.openai.com/api-keys)) | `OPENAI_API_KEY` | API access to OpenAI models (billed separately from a ChatGPT subscription). | HQ ASR for bodycam (diarize → accurate re-transcribe → verify). `gpt-4o-mini` re-OCRs bad pages, describes photos and video frames, and extracts entities/tags. | Recommended. Without it, audio/video uses the weaker local Whisper model. |
 | [Anthropic API](https://www.anthropic.com/api) ([console](https://console.anthropic.com/)) | `ANTHROPIC_API_KEY` | API access to Claude models (billed separately from a Claude subscription). | Claude Haiku can do OCR re-runs, photo/frame descriptions, and entities/tags instead of OpenAI. | Optional. An alternative to OpenAI for everything except transcription. |
 
 If neither OpenAI nor Anthropic is configured, ingest still works. Audio/video is transcribed locally, poor OCR and transcripts are kept as-is, and photo descriptions and entities are skipped.
@@ -184,6 +184,9 @@ uv run marshaloss prepare "/path/to/case" --slug my-case --name "My Case"
 
 # Full ingest
 uv run marshaloss ingest "/path/to/case" --slug my-case --name "My Case" --workers 8
+
+# Re-run HQ ASR on bodycam/dashcam (preserves visual captions)
+uv run marshaloss retranscribe --slug my-case --path-contains Axon_Body
 
 # Serve (local default http://127.0.0.1:7340), or ./tools/networking/serve.sh
 uv run marshaloss serve
@@ -262,7 +265,8 @@ Environment variables, prefix `MARSHALOSS_`:
 | `OCR_ESCALATE_PROVIDER` | `auto` | `auto` / `openai` / `anthropic` |
 | `OCR_ESCALATE_MAX_PAGES` | `25` | Max AI OCR pages per file |
 | `OCR_ESCALATE_MIN_SCORE` | `0.72` | Quality threshold |
-| `ASR_PROVIDER` / `ASR_MODEL` | `openai` / `gpt-4o-transcribe-diarize` | Audio/video transcription; `local` = Docling Whisper |
+| `ASR_PROVIDER` / `ASR_MODEL` | `openai` / `gpt-4o-transcribe-diarize` | Audio/video; `local` = Docling Whisper |
+| `ASR_HQ` / `ASR_HQ_PROMPT` | `true` / BWC prompt | Legacy HQ stack on by default; set `false` for single-pass diarize |
 | `ASR_ESCALATE` | `true` | In local mode, re-run poor transcripts on `ASR_MODEL` |
 | `VISUAL_ANALYZE` | `true` | Photo / video frame descriptions |
 | `VISUAL_FRAME_INTERVAL_SEC` / `VISUAL_MAX_FRAMES` | `5` / `48` | Video sampling; frames spread across long videos (`0` = no cap) |

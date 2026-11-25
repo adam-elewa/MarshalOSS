@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # "local": Docling Whisper first; asr_escalate re-runs poor transcripts on asr_model.
     asr_provider: str = "openai"  # openai | local
     asr_model: str = "gpt-4o-transcribe-diarize"
+    # Legacy HQ stack: diarize → gpt-4o-transcribe+logprobs → whisper verify (recommended for BWC)
+    asr_hq: bool = True
+    asr_language: str = "en"
     asr_escalate: bool = True
     asr_escalate_min_score: float = 0.72
     asr_max_windows: int = 60  # 10-minute upload windows → 10 h per file
@@ -47,6 +50,13 @@ class Settings(BaseSettings):
         "Body-worn camera, surveillance, or emergency radio audio. "
         "Prefer verbatim speech; do not invent dialogue over silence or noise. "
         "Keep names and radio codes when clear."
+    )
+    # Prompt for HQ second-pass (gpt-4o-transcribe). Override per matter via env.
+    asr_hq_prompt: str = (
+        "Body-worn camera and emergency radio audio from a police incident. "
+        "Speakers may include officers, civilians, witnesses, and dispatch. "
+        "Prefer verbatim speech; do not invent dialogue over silence or noise. "
+        "Keep names, badge numbers, and radio codes when clear."
     )
 
     # Late-pass visual index: AI captions for stills + sampled video frames

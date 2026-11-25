@@ -79,6 +79,55 @@ def test_build_bwc_index_maps_segments(tmp_path):
     assert types == {"transcript", "scene"}
 
 
+def test_generic_video_without_time_cue_excluded(tmp_path):
+    db = Database(tmp_path / "t.db")
+    case = db.upsert_case("jones", "David Jones", str(tmp_path / "files"))
+    # Unclassified video with timed segments but no recorded_start → excluded
+    fid = db.upsert_file(
+        case.id,
+        "hallway_cam.mp4",
+        "hallway_cam.mp4",
+        None,
+        "video/mp4",
+        10,
+        None,
+        "g1",
+        status="ready",
+        meta={"media": {"kind": "video", "duration_sec": 60.0}},
+    )
+    db.conn.execute(
+        """
+        INSERT INTO media_segments(file_id, case_id, seg_index, kind, start_sec, end_sec, text, speaker)
+        VALUES (?, ?, 0, 'speech', 1.0, 2.0, 'hello', 'A')
+        """,
+        (fid, case.id),
+    )
+    # Bodycam missing recorded_start → excluded
+    db.upsert_file(
+        case.id,
+        "Axon_Body_3_Video_no_time_X60AE180D.mp4",
+        "Axon_Body_3_Video_no_time_X60AE180D.mp4",
+        None,
+        "video/mp4",
+        10,
+        None,
+        "g2",
+        status="ready",
+        meta={
+            "media": {
+                "kind": "bodycam",
+                "device": "Axon Body 3",
+                "device_serial": "X60AE180D",
+                "duration_sec": 60.0,
+            }
+        },
+    )
+    db.conn.commit()
+    idx = build_bwc_index(db, case)
+    assert idx["video_count"] == 0
+    assert idx["videos"] == []
+
+
 def test_apply_camera_label_by_serial(tmp_path):
     db = Database(tmp_path / "t.db")
     case = db.upsert_case("jones", "David Jones", str(tmp_path / "files"))

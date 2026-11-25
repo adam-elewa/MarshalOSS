@@ -240,9 +240,9 @@ Some defense work needs a purpose-built view — for example, watching several o
 
 | Tool | What it does | Status |
 |---|---|---|
-| **Bodycam viewer** | Video with a synced, clickable transcript and frame descriptions; videos grouped by officer; a multi-camera timeline aligned by recording time, with per-camera clock offsets; transcript search | Planned (porting from legacy Marshal) |
+| **Bodycam viewer** | Video with a synced, clickable transcript and frame descriptions; cameras grouped by device/serial (or renamed officer filenames); multi-camera timeline aligned by recording time, with per-camera clock offsets; transcript search | Live — case nav **Bodycam** (`/api/bwc/index`) |
 
-Ingest already stores what the bodycam viewer needs: start/end times for every transcript line and frame description, and each video's camera type, device, serial, and recording start. Remaining work: serve the viewer from MarshalOSS and wire it into the native review UI.
+Ingest stores timed speech/visual segments plus camera type, device, serial, and recording start. Axon exports usually have **serials, not officer names** in the filename; set `meta.media.officer` to override a lane label, or rename files like `Det Egan (1).mp4` when that convention is used.
 
 ---
 

@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from .bwc import apply_camera_label, build_bwc_index, label_suggestions
 from .categories import CATEGORY_DEFS, CATEGORY_LABELS, categorize_file_row
 from .config import Settings, get_settings
 from .db import Database
@@ -38,6 +39,9 @@ def create_app(
 
     if WEB_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
+        bwc_dir = WEB_DIR / "bwc"
+        if bwc_dir.is_dir():
+            app.mount("/bwc", StaticFiles(directory=str(bwc_dir)), name="bwc")
 
     def resolve_case(case_id: int | None = None, slug: str | None = None):
         if case_id is not None:
@@ -326,6 +330,43 @@ def create_app(
             raise HTTPException(400, "mode must be hybrid|keyword|semantic")
         hits = search_case(db, settings, embedder, c, q, mode=mode, top_k=top_k)  # type: ignore
         return {"case": c.__dict__, "query": q, "mode": mode, "hits": hits}
+
+    @app.get("/api/bwc/index")
+    def api_bwc_index(case_id: int | None = None) -> dict[str, Any]:
+        """Multi-cam bodycam/dashcam index (timed speech + visual segments)."""
+        c = resolve_case(case_id=case_id)
+        return build_bwc_index(db, c)
+
+    @app.get("/api/bwc/label-suggestions")
+    def api_bwc_label_suggestions(case_id: int | None = None) -> dict[str, Any]:
+        """Person/officer entities for camera labeling."""
+        c = resolve_case(case_id=case_id)
+        return label_suggestions(db, c)
+
+    @app.post("/api/bwc/label")
+    async def api_bwc_label(request: Request) -> dict[str, Any]:
+        """Rename a camera lane (meta.media.officer) for one clip or all from that camera."""
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        file_id = payload.get("file_id")
+        label = payload.get("label")
+        scope = payload.get("scope") or "camera"
+        if file_id is None:
+            raise HTTPException(400, "file_id required")
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            result = apply_camera_label(
+                db,
+                c,
+                file_id=int(file_id),
+                label=None if label is None else str(label),
+                scope=str(scope),
+            )
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        # Return fresh index so the client can refresh lanes without a second round-trip.
+        result["index"] = build_bwc_index(db, c)
+        return result
 
     @app.get("/api/files/detail")
     def api_file_detail(

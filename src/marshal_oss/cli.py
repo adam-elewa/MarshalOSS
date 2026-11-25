@@ -295,6 +295,126 @@ def search_cmd(
         )
 
 
+@app.command("knobs")
+def knobs_cmd(
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable dump"),
+) -> None:
+    """Show cost/quality knobs (sources, profile, effective Settings values)."""
+    from .knobs import knobs_summary, packaged_knobs_path, user_knobs_path
+
+    settings = get_settings()
+    summary = knobs_summary()
+    effective = {
+        "asr_provider": settings.asr_provider,
+        "asr_model": settings.asr_model,
+        "asr_hq": settings.asr_hq,
+        "ocr_escalate": settings.ocr_escalate,
+        "ocr_escalate_provider": settings.ocr_escalate_provider,
+        "ocr_escalate_max_pages": settings.ocr_escalate_max_pages,
+        "ocr_escalate_min_score": settings.ocr_escalate_min_score,
+        "visual_analyze": settings.visual_analyze,
+        "visual_frame_interval_sec": settings.visual_frame_interval_sec,
+        "visual_max_frames": settings.visual_max_frames,
+        "entity_extract": settings.entity_extract,
+        "entity_extract_provider": settings.entity_extract_provider,
+        "embed_backend": settings.embed_backend,
+        "embed_model": settings.embed_model,
+        "ingest_workers": settings.ingest_workers,
+    }
+    payload = {
+        **summary,
+        "effective": effective,
+        "hint": (
+            f"Edit {user_knobs_path() or (Path.home() / '.marshaloss' / 'knobs.toml')} "
+            f"(copy from {packaged_knobs_path()}) or set MARSHALOSS_* env vars. "
+            "Then run: marshaloss estimate /path/to/case"
+        ),
+    }
+    if json_out:
+        import json
+
+        console.print_json(json.dumps(payload, default=str))
+        return
+    console.print(f"Profile: {summary.get('active_profile')}")
+    console.print(f"Sources: {summary.get('sources')}")
+    console.print("Effective cost/quality settings:")
+    for k, v in effective.items():
+        console.print(f"  {k} = {v!r}")
+    console.print(f"\n{payload['hint']}")
+
+
+@app.command("estimate")
+def estimate_cmd(
+    files_root: Optional[Path] = typer.Argument(
+        None, exists=True, file_okay=False, dir_okay=True, help="Case folder to scan"
+    ),
+    slug: Optional[str] = typer.Option(None, help="Use ingested case from DB instead of walking disk"),
+    mode: str = typer.Option(
+        "ingest",
+        help="ingest = full pipeline; retranscribe = ASR-only redo",
+    ),
+    path_contains: Optional[str] = typer.Option(
+        None, "--path-contains", help="Only paths/names containing this string"
+    ),
+    media_only: bool = typer.Option(False, help="Only audio/video files"),
+    limit: Optional[int] = typer.Option(None, help="Max files (smoke)"),
+    no_probe: bool = typer.Option(
+        False, "--no-probe", help="Skip ffprobe (durations=0 unless from DB)"
+    ),
+    json_out: bool = typer.Option(False, "--json", help="JSON instead of table"),
+) -> None:
+    """Estimate OpenAI / Voyage / vision API spend before ingest or retranscribe."""
+    _load_api_keys()
+    from .estimate import (
+        collect_tallies,
+        collect_tallies_from_db,
+        estimate_costs,
+        format_estimate,
+    )
+
+    settings = get_settings()
+    mode_norm = mode.strip().lower()
+    if mode_norm not in ("ingest", "retranscribe"):
+        raise typer.Exit("mode must be ingest or retranscribe")
+
+    if slug:
+        db = Database(settings.database_path)
+        case = db.get_case_by_slug(slug) or (
+            db.get_active_case() if slug == "active" else None
+        )
+        if not case:
+            raise typer.Exit(f"Case not found: {slug}")
+        tallies = collect_tallies_from_db(
+            db,
+            case,
+            path_contains=path_contains,
+            media_only=media_only or mode_norm == "retranscribe",
+            limit=limit,
+        )
+        root_label = f"db:{case.slug}"
+    else:
+        if files_root is None:
+            raise typer.Exit("Pass a case folder or --slug")
+        tallies = collect_tallies(
+            files_root,
+            settings,
+            path_contains=path_contains,
+            media_only=media_only or mode_norm == "retranscribe",
+            limit=limit,
+            probe_duration=not no_probe,
+            log=lambda m: console.print(m),
+        )
+        root_label = str(files_root)
+
+    est = estimate_costs(tallies, settings, mode=mode_norm, root_label=root_label)
+    if json_out:
+        import json
+
+        console.print_json(json.dumps(est.to_dict(), default=str))
+    else:
+        console.print(format_estimate(est))
+
+
 def main() -> None:
     app()
 

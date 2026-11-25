@@ -112,11 +112,21 @@ It merges name variants, so "Smith", "J. Smith", and "Jane Smith" become one ent
 | Stage | Service | When | Rough cost |
 |---|---|---|---|
 | Prepare, Extract (documents) | none (local) | Always | $0 API; dominates runtime |
-| Extract (audio/video) | HQ stack (diarize + `gpt-4o-transcribe` + whisper verify) | Every audio/video file | Higher than a single pass (roughly 2–3× diarize-only); still usually a few dollars per several hours of BWC |
+| Extract (audio/video) | HQ stack (diarize + `gpt-4o-transcribe` + whisper verify) | Every audio/video file | See ballparks below; HQ is ~1.2–2.5× a single diarize pass |
 | Quality — documents | OpenAI or Anthropic vision | OCR looks bad | Only failures |
 | Visual | OpenAI or Anthropic vision | Photos, video frames | Cheap |
 | Entities | OpenAI mini or Anthropic Haiku | Each file with text | Cheap |
 | Index + search | Voyage | Every chunk, every search query | Cents to low dollars per case |
+
+**HQ ASR ballparks** (OpenAI list-price estimate ~$0.006/min per pass; run `marshaloss estimate` for your tree):
+
+| Scope (example: mid-size Axon dump) | Audio | Typical HQ redo | Dense-speech ceiling |
+|---|---|---|---|
+| Bodycam only | ~2–3 hr | **~$1–2** | ~$2 |
+| Bodycam + Fleet (skip IR duplicates) | ~4–5 hr | **~$2–3.50** | ~$4 |
+| All Axon video (incl. IR) | ~8–9 hr | **~$4–5** | **~$7** |
+
+Bodycam-only is cheap; the higher “~$7” figure is the full set when speech is denser than the default ~20% assumption. Always prefer `marshaloss estimate --mode retranscribe` before a bulk redo.
 
 ### Ingest confidence
 
@@ -185,6 +195,10 @@ uv run marshaloss prepare "/path/to/case" --slug my-case --name "My Case"
 # Full ingest
 uv run marshaloss ingest "/path/to/case" --slug my-case --name "My Case" --workers 8
 
+# Estimate API spend before running (uses knobs.toml pricing + assumptions)
+uv run marshaloss estimate "/path/to/case"
+uv run marshaloss estimate --slug my-case --mode retranscribe --path-contains Axon_Body
+
 # Re-run HQ ASR on bodycam/dashcam (preserves visual captions)
 uv run marshaloss retranscribe --slug my-case --path-contains Axon_Body
 
@@ -251,12 +265,34 @@ Ingest stores timed speech/visual segments plus camera type, device, serial, and
 
 ## Configuration
 
-Environment variables, prefix `MARSHALOSS_`:
+### Cost / quality knobs (annotated)
+
+The central knob file is [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml). It is written for humans and LLMs: each section says what the control does, how it moves **cost vs quality**, and which provider it hits. Shipped defaults are unchanged (`active_profile = "balanced"`).
+
+```bash
+# See effective knobs
+uv run marshaloss knobs
+
+# Estimate spend before ingest / retranscribe
+uv run marshaloss estimate "/path/to/case"
+uv run marshaloss estimate --slug david-jones --mode retranscribe --path-contains Axon_Body
+```
+
+To tweak: copy the file to `~/.marshaloss/knobs.toml` (or set `MARSHALOSS_KNOBS_FILE`), edit, then re-check with `knobs` / `estimate`. Profiles `economy` and `max_quality` are optional overlays. Environment variables still win.
+
+**Default API providers:** OpenAI for ASR (required for HQ / diarize) and, when `provider = "auto"`, for OCR escalate / visual / entities. **Voyage** (`voyage-law-2`) for embeddings — not OpenAI. Anthropic is optional for non-ASR stages only.
+
+`estimate --mode retranscribe` bills ASR only (visual captions are kept). Narrow with `--path-contains` (case-insensitive), e.g. `Axon_Body` vs full `Axon`, so a ~$1 bodycam redo is not confused with a ~$4–7 all-Axon redo.
+
+### Environment variables
+
+Prefix `MARSHALOSS_`:
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `DATA_DIR` | `~/.marshaloss` | SQLite + local data |
 | `DB_PATH` | `$DATA_DIR/marshal_oss.db` | Override DB path |
+| `KNOBS_FILE` | `~/.marshaloss/knobs.toml` if present | Override path to knobs TOML |
 | `HOST` / `PORT` | `0.0.0.0` / `7340` | Bind address |
 | `PUBLIC_BASE` | `http://127.0.0.1:7340` | Base URL for links (local, Tailscale, tunnel, …) |
 | `INGEST_WORKERS` | `4` | Parallel files (`--workers` / `-j`) |

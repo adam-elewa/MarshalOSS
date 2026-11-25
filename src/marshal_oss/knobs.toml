@@ -1,0 +1,159 @@
+# =============================================================================
+# MarshalOSS — cost / quality knobs
+# =============================================================================
+#
+# PURPOSE
+#   Central, annotated place for humans and LLMs to trade cost vs quality
+#   before ingest / retranscribe. Defaults match production-balanced settings.
+#
+# HOW TO USE
+#   1. Leave this packaged file alone (defaults).
+#   2. Copy to ~/.marshaloss/knobs.toml and edit, OR set MARSHALOSS_KNOBS_FILE.
+#   3. Environment variables still win: MARSHALOSS_<FIELD> (e.g. MARSHALOSS_ASR_HQ=false).
+#   4. Preview spend first:  marshaloss estimate /path/to/case
+#   5. See effective values: marshaloss knobs
+#
+# DEFAULT API PROVIDERS (with keys present)
+#   • ASR (audio/video): OpenAI only (Anthropic cannot replace transcription).
+#   • OCR escalate / visual / entities: OpenAI first when provider="auto".
+#   • Embeddings / semantic search: Voyage (voyage-law-2) — not OpenAI.
+#   Anthropic is an optional alternate for OCR/visual/entities, never for ASR.
+#
+# QUICK RECIPES
+#   Save money on BWC:     asr.hq = false   (single-pass diarize; worse names)
+#   Save money on video:   visual.max_frames = 12  or  visual.analyze_video = false
+#   Local-only ingest:     asr.provider = "local", ocr.escalate = false,
+#                          visual.analyze = false, entities.extract = false,
+#                          embed.backend = "hash"
+#   Max BWC quality:       asr.hq = true (default), keep prompts case-specific
+#
+# Profiles below are optional presets. active_profile = "balanced" uses the
+# section values in this file (shipped defaults). "economy" / "max_quality"
+# overlay those sections.
+# =============================================================================
+
+active_profile = "balanced"   # balanced | economy | max_quality | custom
+
+# -----------------------------------------------------------------------------
+# [asr]  Audio / video transcription  — usually the largest API bill
+# QUALITY↑ when hq=true; COST↑ roughly 1.2–2.5× vs single-pass diarize
+# -----------------------------------------------------------------------------
+[asr]
+# openai = every A/V file → OpenAI (recommended). local = Docling Whisper first.
+provider = "openai"                         # openai | local
+model = "gpt-4o-transcribe-diarize"         # used for diarize / non-HQ path
+# HQ stack: diarize → gpt-4o-transcribe+logprobs → whisper-1 verify on borderline
+hq = true                                   # KNOB: quality vs ASR cost (default on)
+language = "en"
+escalate = true                             # in local mode, re-run poor transcripts
+escalate_min_score = 0.72                   # lower = fewer escalate calls (cheaper, riskier)
+max_windows = 60                            # 10-min windows → up to ~10 h/file
+escalate_prompt = "Body-worn camera, surveillance, or emergency radio audio. Prefer verbatim speech; do not invent dialogue over silence or noise. Keep names and radio codes when clear."
+hq_prompt = "Body-worn camera and emergency radio audio from a police incident. Speakers may include officers, civilians, witnesses, and dispatch. Prefer verbatim speech; do not invent dialogue over silence or noise. Keep names, badge numbers, and radio codes when clear."
+
+# -----------------------------------------------------------------------------
+# [ocr]  AI re-OCR when Docling text looks bad  — cost only on failures
+# QUALITY↑ escalate=true; COST↑ with lower min_score / higher max_pages
+# -----------------------------------------------------------------------------
+[ocr]
+escalate = true
+escalate_provider = "auto"                  # auto | openai | anthropic  (auto → OpenAI if keyed)
+escalate_openai_model = "gpt-4o-mini"
+escalate_anthropic_model = "claude-haiku-4-5-20251001"
+escalate_max_pages = 25                     # KNOB: cap AI OCR pages per file
+escalate_min_score = 0.72                   # KNOB: lower → fewer vision calls
+
+# -----------------------------------------------------------------------------
+# [visual]  Photo + video-frame captions  — scales with frame count
+# QUALITY↑ denser frames; COST↑ ~linear with frames described
+# -----------------------------------------------------------------------------
+[visual]
+analyze = true
+analyze_images = true
+analyze_video = true
+frame_interval_sec = 5.0                    # KNOB: seconds between sampled frames
+max_frames = 48                             # KNOB: hard cap per video (0 = no cap)
+skip_if_ocr_chars = 400                     # skip stills that already OCR'd well
+
+# -----------------------------------------------------------------------------
+# [entities]  Per-file people/orgs/tags  — cheap chat model, once per file
+# -----------------------------------------------------------------------------
+[entities]
+extract = true
+extract_provider = "auto"                   # auto | openai | anthropic
+extract_openai_model = "gpt-4o-mini"
+extract_anthropic_model = "claude-haiku-4-5-20251001"
+extract_max_chars = 0                       # 0 = all extracted text
+extract_segment_chars = 14000               # map-window size for long files
+
+# -----------------------------------------------------------------------------
+# [embed]  Semantic search vectors  — Voyage by default (not OpenAI)
+# QUALITY↑ voyage-law-2; COST↓ hash (local, weak — testing only)
+# -----------------------------------------------------------------------------
+[embed]
+backend = "voyage"                          # voyage | hash
+model = "voyage-law-2"
+
+# -----------------------------------------------------------------------------
+# [ingest]  Throughput / packaging (little direct API cost)
+# -----------------------------------------------------------------------------
+[ingest]
+workers = 4                                 # parallel files; raise on big boxes / watch rate limits
+expand_zips = true
+expand_zip_max_depth = 2
+
+# -----------------------------------------------------------------------------
+# [pricing]  Rough USD rates for `marshaloss estimate` only (not billed by us).
+# Update when providers change list prices. Checked against public pages ~2026-11.
+# -----------------------------------------------------------------------------
+[pricing]
+openai_transcribe_usd_per_min = 0.006       # gpt-4o-transcribe / diarize / whisper-1 est.
+openai_gpt4o_mini_input_usd_per_mTok = 0.15
+openai_gpt4o_mini_output_usd_per_mTok = 0.60
+# Vision page/frame ballpark (mini); actual is token-based
+openai_vision_usd_per_image = 0.002
+voyage_law2_usd_per_mTok = 0.12
+# Anthropic Haiku ballpark if provider forced to anthropic
+anthropic_haiku_vision_usd_per_image = 0.002
+anthropic_haiku_input_usd_per_mTok = 1.0
+anthropic_haiku_output_usd_per_mTok = 5.0
+
+# -----------------------------------------------------------------------------
+# [estimate]  Assumptions used when scanning a tree before ingest
+# -----------------------------------------------------------------------------
+[estimate]
+# Fraction of A/V duration expected to contain speech (BWC often 0.05–0.35)
+speech_fraction = 0.20
+# Fraction of speech windows that also hit whisper verify under HQ
+hq_verify_fraction = 0.15
+# Fraction of document pages that fail Docling and escalate to vision OCR
+ocr_escalate_page_fraction = 0.12
+# Assumed pages for PDFs when page count is unknown (size heuristic elsewhere)
+default_pdf_pages_per_mb = 25
+# Chars → embed tokens (rough)
+chars_per_embed_token = 4
+# Assumed extractable chars per MB for non-media (for embed + entity estimates)
+text_chars_per_mb = 50000
+# Entity extract: rough output tokens per file
+entity_output_tokens_per_file = 400
+
+# -----------------------------------------------------------------------------
+# Optional presets (overlay on top of section values above)
+# -----------------------------------------------------------------------------
+[profiles.economy]
+# Cheaper ingest: single-pass ASR, fewer frames, still keeps OCR escalate + entities
+asr_hq = false
+visual_max_frames = 12
+visual_frame_interval_sec = 10.0
+ocr_escalate_max_pages = 10
+
+[profiles.max_quality]
+# Spend more for denser vision + HQ ASR (HQ already default)
+asr_hq = true
+visual_frame_interval_sec = 3.0
+visual_max_frames = 96
+ocr_escalate_min_score = 0.80
+ocr_escalate_max_pages = 40
+
+[profiles.balanced]
+# Explicit no-op marker — section values above are the balanced defaults

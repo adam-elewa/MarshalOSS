@@ -1,11 +1,39 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Tuple, Type
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic.fields import FieldInfo
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+
+
+class _KnobsTomlSource(PydanticBaseSettingsSource):
+    """Apply packaged/user knobs.toml below env / dotenv."""
+
+    def get_field_value(
+        self, field: FieldInfo, field_name: str
+    ) -> Tuple[Any, str, bool]:
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        from .knobs import load_settings_overrides
+
+        return load_settings_overrides()
 
 
 class Settings(BaseSettings):
+    """
+    Runtime settings for MarshalOSS.
+
+    Cost/quality knobs are documented in ``marshal_oss/knobs.toml``.
+    Copy that file to ``~/.marshaloss/knobs.toml`` to tweak; ``MARSHALOSS_*``
+    env vars still override. Run ``marshaloss knobs`` / ``marshaloss estimate``.
+    """
+
     model_config = SettingsConfigDict(
         env_prefix="MARSHALOSS_",
         env_file=".env",
@@ -98,6 +126,24 @@ class Settings(BaseSettings):
         ".mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.avi,.mkv,.webm,"
         ".wma,.wmv,.flv,.asf,.ts,.m4v,.mpeg,.mpg,.3gp,.caf,.dav,.vob,.h264,.m2ts,.mts,.mxf"
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        # Highest → lowest: init kwargs, env, dotenv, knobs.toml, secrets
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            _KnobsTomlSource(settings_cls),
+            file_secret_settings,
+        )
 
     @property
     def database_path(self) -> Path:

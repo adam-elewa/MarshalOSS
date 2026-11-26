@@ -10,12 +10,14 @@ License: AGPL-3.0 (see [License](#license)). Private: [github.com/adam-elewa/Mar
 
 ## What you get
 
-In plain terms, MarshalOSS does four jobs:
+In plain terms, MarshalOSS does six jobs:
 
 1. **Ingest the dump** — Turn a messy production folder into searchable text (OCR, ASR, captions, entities/tags) with a confidence manifest so you know what worked.
 2. **Ask over MCP** — Connect Claude Cowork or Perplexity Computer; search and cite real files without building a custom chat product.
-3. **Review in the browser** — Case Overview, Document Explorer (categories / folders, hybrid search, side preview), Notebook wiki, and a synced Bodycam viewer.
-4. **Write lasting notes** — A blank Markdown notebook for timelines, people, cross outlines, and theory, with links that open discovery beside the page.
+3. **Review in the browser** — Case Overview and Document Explorer (categories / folders, hybrid search, side preview).
+4. **Build defense viewers** — Purpose-built screens for discovery problems generic review tools ignore. The first is a multi-camera bodycam viewer (synced video, transcript, and timeline); more custom viewers can follow the same pattern.
+5. **Write lasting notes** — Keep timelines, people, cross outlines, and theory in a blank Markdown notebook (not chat). Link pages to each other and to discovery files that open beside the note.
+6. **Reuse defense skills** — Short playbooks in [`skills/`](skills/) (timeline, cross-examination, and the like) tell the AI how to build those notes the same way each time. The idea is repeatable structure, ideally improved over time by practicing defense attorneys — not one-off chat prompts.
 
 ---
 
@@ -41,7 +43,7 @@ The project does those jobs at low cost, while still using paid models when loca
                 ▼                                                  ▼
      MCP  /mcp :7340                                    Web UI + REST :7340
      Cowork / Computer                                  overview, explorer, notebook,
-     (questions, drafting,                              bodycam, search / facet APIs
+     (questions, drafting,                              custom viewers, search / facets
       Outlook, Word, …)
 ```
 
@@ -244,22 +246,22 @@ Case management and document review run in MarshalOSS on `:7340` (`web/app.html`
 - **Case Overview** — production health (manifest / OCR confidence), plus drillable **entities** and **tags** (letter jumplist, counts, matching docs, in-place preview)
 - **Document Explorer** — **Categories** or **Native folders**; large hybrid search (matching files only, side preview, yellow hit highlights); Back + breadcrumbs when drilling; open a file’s entities/tags to jump to every doc that shares them
 - **Notebook** — blank Markdown wiki with sidebar tree, Back + breadcrumbs, and stock top-level areas AI should prefer (`Home`, `Timeline`, `Witnesses`, `People`, `Cross`, `Theory`, `Motions`, `Discovery`, `Meta`). Git-backed recipes live in [`skills/`](skills/) (`cowork`, `cross-examination`, `timeline`, …), mirrored at `Meta/Skills/*`. MCP `notebook_skill` lists or loads them. `[[doc:]]` cites open a **side viewer** beside the page
-- **Bodycam** — multi-camera synced viewer (see below)
+- **Custom viewers** — defense-attuned tools in the case nav (bodycam first; see below)
 
 Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 
 ---
 
-## Defense tools (specialized viewers)
+## Defense tools (custom viewers)
 
-Some defense work needs a purpose-built view — for example, watching several officers' bodycam footage on one synced timeline. These tools follow one pattern:
+Generic document review is not enough for every discovery problem. MarshalOSS is meant to grow **custom viewers** tuned to defense needs — purpose-built screens that sit on the same ingest data. Bodycam is the first; others can follow the same pattern:
 
 - **Built and served by MarshalOSS.** The tool reads MarshalOSS's own data (transcripts, frame descriptions, timestamps, file metadata), so it needs no separate processing and also works on its own in a browser.
 - **Fed by ingest.** Where a tool needs special inputs (like knowing which videos are bodycam), ingest detects and stores them automatically.
 
-| Tool | What it does | Status |
+| Viewer | What it does | Status |
 |---|---|---|
-| **Bodycam viewer** | Video with a synced, clickable transcript and frame descriptions; cameras grouped by device/serial (or renamed officer filenames); multi-camera timeline aligned by recording time, with per-camera clock offsets; transcript search | Live — case nav **Bodycam** (`/api/bwc/index`) |
+| **Bodycam** | Multi-camera video with synced, clickable transcript and frame descriptions; cameras grouped by device/serial (or renamed officer filenames); timeline aligned by recording time, with per-camera clock offsets; transcript search | Live — case nav **Bodycam** (`/api/bwc/index`) |
 
 Ingest stores timed speech/visual segments plus camera type, device, serial, and recording start. Axon exports usually have **serials, not officer names** in the filename; set `meta.media.officer` to override a lane label, or rename files like `Det Egan (1).mp4` when that convention is used.
 

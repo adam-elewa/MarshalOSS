@@ -186,6 +186,24 @@ def sync_skill_wiki_pages(db: Database, case_id: int) -> list[str]:
     """
     written: list[str] = []
     skills = list_notebook_skills()
+
+    meta_body = (
+        "# Meta\n\n"
+        "**Meta** holds how-to guides for using Marshal — not your case notes.\n\n"
+        "Think of it as the instruction binder for the software. These pages show "
+        "Claude (and you) how to build timelines, witness folders, and similar "
+        "sections. They are copies of the built-in guides that ship with Marshal; "
+        "when you reopen the Notebook, Marshal refreshes them from those guides.\n\n"
+        "Put your actual case work — theory, chronology, cross outlines — in other "
+        "folders such as `Timeline`, `Witnesses`, or `Theory`. Don’t keep lasting "
+        "case notes under Meta; they may get overwritten when the guides refresh.\n\n"
+        "## What’s here\n\n"
+        f"- {page_wiki_link('Meta/Skills', 'Skills')} — the built-in playbooks "
+        "(Cowork workflow, cross-examination, timeline, and others)\n"
+    )
+    db.upsert_notebook_page(case_id, "Meta", "Meta", meta_body)
+    written.append("Meta")
+
     index = [
         "# Skills",
         "",

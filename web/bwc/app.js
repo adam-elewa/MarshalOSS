@@ -29,7 +29,11 @@
   let pinnedSegIndex = null;
   let pinUntilSec = null;
   let labelSuggestionsLoaded = false;
+  let labelSuggestions = []; // { label, type }
   let labelBusy = false;
+  let labelMenuActive = -1;
+  let labelMenuQuery = "";
+  let labelMenuIgnoreDocClick = false;
   const TIMELINE_COLORS = [
     "#2563eb", "#dc2626", "#059669", "#9333ea", "#ea580c",
     "#0891b2", "#c026d3", "#4f46e5", "#65a30d", "#b45309",
@@ -1578,7 +1582,19 @@
     );
   }
 
+  function closeLabelMenu() {
+    const combo = $("#labelCombo");
+    const menu = $("#labelMenu");
+    const input = $("#labelInput");
+    if (combo) combo.classList.remove("open");
+    if (menu) menu.hidden = true;
+    if (input) input.setAttribute("aria-expanded", "false");
+    labelMenuActive = -1;
+    labelMenuQuery = "";
+  }
+
   function closeRenameModal() {
+    closeLabelMenu();
     const modal = $("#renameModal");
     if (modal) modal.hidden = true;
     const status = $("#labelStatus");
@@ -1588,23 +1604,96 @@
     }
   }
 
+  function allLabelChoices() {
+    const seen = new Set();
+    const out = [];
+    const add = (label, type) => {
+      const name = String(label || "").trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ label: name, type: type || "" });
+    };
+    for (const s of labelSuggestions) add(s.label, s.type);
+    for (const o of officers()) add(o.name, "current");
+    out.sort((a, b) => a.label.localeCompare(b.label));
+    return out;
+  }
+
+  function filteredLabelChoices(query) {
+    const q = String(query || "").trim().toLowerCase();
+    const all = allLabelChoices();
+    if (!q) return all;
+    return all.filter((s) => s.label.toLowerCase().includes(q));
+  }
+
+  function renderLabelMenu(query) {
+    const menu = $("#labelMenu");
+    if (!menu) return;
+    const items = filteredLabelChoices(query);
+    if (!items.length) {
+      menu.innerHTML = `<div class="label-combo-empty">No matches — keep typing a custom name.</div>`;
+      labelMenuActive = -1;
+      return;
+    }
+    if (labelMenuActive >= items.length) labelMenuActive = items.length - 1;
+    menu.innerHTML = items
+      .map((s, i) => {
+        const active = i === labelMenuActive ? "is-active" : "";
+        const meta = s.type && s.type !== "current"
+          ? escapeHtml(s.type)
+          : (s.type === "current" ? "in case" : "");
+        return `<button type="button" class="label-combo-option ${active}" role="option" data-label="${escapeHtml(s.label)}" aria-selected="${i === labelMenuActive}">
+          <span class="label-combo-option-title">${escapeHtml(s.label)}</span>
+          ${meta ? `<span class="label-combo-option-meta">${meta}</span>` : ""}
+        </button>`;
+      })
+      .join("");
+    $$(".label-combo-option", menu).forEach((btn) => {
+      btn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        pickLabelSuggestion(btn.dataset.label);
+      });
+    });
+  }
+
+  function openLabelMenu({ selectText = false, filter = false } = {}) {
+    const combo = $("#labelCombo");
+    const menu = $("#labelMenu");
+    const input = $("#labelInput");
+    if (!combo || !menu || !input) return;
+    // Click/chevron on a filled name should show the full entity list; filter only while typing.
+    labelMenuQuery = filter ? input.value : "";
+    renderLabelMenu(labelMenuQuery);
+    combo.classList.add("open");
+    menu.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    // Prevent the same click that opened the menu from immediately closing it.
+    labelMenuIgnoreDocClick = true;
+    setTimeout(() => { labelMenuIgnoreDocClick = false; }, 0);
+    if (selectText) input.select();
+  }
+
+  function pickLabelSuggestion(label) {
+    const input = $("#labelInput");
+    if (!input) return;
+    input.value = label || "";
+    closeLabelMenu();
+    input.focus();
+  }
+
   async function ensureLabelSuggestions() {
     if (labelSuggestionsLoaded) return;
-    const list = $("#labelSuggestions");
-    if (!list) return;
     const id = caseId();
     const url = "/api/bwc/label-suggestions" + (id != null ? `?case_id=${encodeURIComponent(id)}` : "");
     try {
       const res = await fetch(url, { credentials: "same-origin", cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
-      list.innerHTML = "";
-      for (const s of data.suggestions || []) {
-        const opt = document.createElement("option");
-        opt.value = s.label;
-        opt.label = s.type ? `${s.label} (${s.type})` : s.label;
-        list.appendChild(opt);
-      }
+      labelSuggestions = (data.suggestions || [])
+        .map((s) => ({ label: String(s.label || "").trim(), type: String(s.type || "").trim() }))
+        .filter((s) => s.label);
       labelSuggestionsLoaded = true;
     } catch {
       /* suggestions are optional */
@@ -1637,7 +1726,7 @@
     modal.hidden = false;
     requestAnimationFrame(() => {
       input.focus();
-      input.select();
+      openLabelMenu({ selectText: true });
     });
   }
 
@@ -1729,9 +1818,16 @@
     document.addEventListener("click", (e) => {
       if (!e.target.closest(".cselect")) closeAllSelects();
       if (!e.target.closest(".timeline-filter")) closeTimelineFilter();
+      if (labelMenuIgnoreDocClick) return;
+      if (!e.target.closest(".label-combo")) closeLabelMenu();
     });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
+        const combo = $("#labelCombo");
+        if (combo && combo.classList.contains("open")) {
+          closeLabelMenu();
+          return;
+        }
         closeAllSelects();
         closeTimelineFilter();
         closeRenameModal();
@@ -1761,11 +1857,76 @@
     if (labelClear) labelClear.addEventListener("click", () => saveLabel({ clear: true }));
     const labelInput = $("#labelInput");
     if (labelInput) {
+      labelInput.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openLabelMenu();
+      });
+      labelInput.addEventListener("input", () => {
+        labelMenuActive = -1;
+        openLabelMenu({ filter: true });
+      });
       labelInput.addEventListener("keydown", (e) => {
+        const menu = $("#labelMenu");
+        const open = menu && !menu.hidden;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          if (!open) openLabelMenu();
+          const opts = $$(".label-combo-option", $("#labelMenu"));
+          if (!opts.length) return;
+          labelMenuActive = Math.min(opts.length - 1, labelMenuActive + 1);
+          if (labelMenuActive < 0) labelMenuActive = 0;
+          renderLabelMenu(labelMenuQuery);
+          const active = $$(".label-combo-option", $("#labelMenu"))[labelMenuActive];
+          if (active) active.scrollIntoView({ block: "nearest" });
+          return;
+        }
+        if (e.key === "ArrowUp" && open) {
+          e.preventDefault();
+          const opts = $$(".label-combo-option", menu);
+          if (!opts.length) return;
+          labelMenuActive = Math.max(0, labelMenuActive - 1);
+          renderLabelMenu(labelMenuQuery);
+          const active = $$(".label-combo-option", $("#labelMenu"))[labelMenuActive];
+          if (active) active.scrollIntoView({ block: "nearest" });
+          return;
+        }
         if (e.key === "Enter") {
           e.preventDefault();
+          const items = open ? $$(".label-combo-option", menu) : [];
+          if (open && labelMenuActive >= 0 && items[labelMenuActive]) {
+            pickLabelSuggestion(items[labelMenuActive].dataset.label);
+            return;
+          }
+          closeLabelMenu();
           saveLabel();
+          return;
         }
+        if (e.key === "Escape" && open) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeLabelMenu();
+        }
+      });
+    }
+    const labelToggle = $("#labelComboToggle");
+    if (labelToggle) {
+      // mousedown so we win over input blur/focus races and always show the entity list.
+      labelToggle.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      labelToggle.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const combo = $("#labelCombo");
+        const wasOpen = combo && combo.classList.contains("open") && $("#labelMenu") && !$("#labelMenu").hidden;
+        if (wasOpen) {
+          closeLabelMenu();
+          return;
+        }
+        openLabelMenu();
+        const input = $("#labelInput");
+        if (input) input.focus();
       });
     }
     $("#dlTranscript").addEventListener("click", (e) => {

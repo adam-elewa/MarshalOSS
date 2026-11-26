@@ -78,6 +78,9 @@ def test_notebook_crud(tmp_path):
     home = db.ensure_notebook_home(case.id, "Demo")
     assert home["path"] == "Home"
     assert "skills/" in home["body"]
+    meta = db.get_notebook_page(case.id, "Meta")
+    assert meta and "how-to" in meta["body"].lower()
+    assert "Meta/Skills" in meta["body"]
     skills_index = db.get_notebook_page(case.id, "Meta/Skills")
     assert skills_index
     assert {"cowork", "cross-examination", "timeline"} <= {s["name"] for s in list_notebook_skills()}
@@ -91,6 +94,6 @@ def test_notebook_crud(tmp_path):
     assert page["path"] == "Theory/Opening"
     assert db.get_notebook_page(case.id, "Theory/Opening")["body"] == "# hi\n"
     paths = {p["path"] for p in db.list_notebook_pages(case.id)}
-    assert "Home" in paths and "Meta/Skills" in paths and "Theory/Opening" in paths
+    assert "Home" in paths and "Meta" in paths and "Meta/Skills" in paths and "Theory/Opening" in paths
     assert db.delete_notebook_page(case.id, "Theory/Opening")
     assert db.get_notebook_page(case.id, "Theory/Opening") is None

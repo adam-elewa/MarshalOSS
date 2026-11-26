@@ -302,6 +302,24 @@ class Database:
         self.set_setting("active_case_id", str(case_id))
         return c
 
+    def update_case_display_name(self, case_id: int, display_name: str) -> Case:
+        name = (display_name or "").strip()
+        if not name:
+            raise ValueError("display_name is required")
+        c = self.get_case_by_id(case_id)
+        if not c:
+            raise ValueError("case not found")
+        now = utc_now()
+        self.conn.execute(
+            "UPDATE cases SET display_name=?, updated_at=? WHERE id=?",
+            (name, now, case_id),
+        )
+        self.conn.commit()
+        updated = self.get_case_by_id(case_id)
+        if not updated:
+            raise ValueError("case not found")
+        return updated
+
     def get_active_case(self) -> Case | None:
         raw = self.get_setting("active_case_id")
         if not raw:
@@ -679,9 +697,16 @@ class Database:
         """Return ingested files matching a tag and/or entity (case-insensitive)."""
         if not tag and not entity and not entity_type:
             return []
+        from .entities import person_match_key, person_names_compatible
+
         tag_l = (tag or "").strip().lower()
-        ent_l = (entity or "").strip().lower()
+        ent_raw = (entity or "").strip()
+        ent_l = ent_raw.lower()
         type_l = (entity_type or "").strip().lower()
+        # Fuzzy person matching when browsing people/officers (middle-initial variants).
+        use_person_fuzzy = type_l in ("person", "officer") or (
+            not type_l and len(person_match_key(ent_raw) or ()) >= 2
+        )
         out: list[dict[str, Any]] = []
         rows = self.conn.execute(
             """
@@ -733,11 +758,19 @@ class Database:
                         aliases = e.get("aliases") or []
                     else:
                         et, label, aliases = "other", str(e).strip(), []
-                    if type_l and et != type_l:
-                        continue
+                    if type_l:
+                        if type_l in ("person", "officer"):
+                            if et not in ("person", "officer"):
+                                continue
+                        elif et != type_l:
+                            continue
                     names = [label] + [str(a) for a in aliases if a]
                     if ent_l:
-                        if any(n.strip().lower() == ent_l for n in names if n):
+                        exact = any(n.strip().lower() == ent_l for n in names if n)
+                        fuzzy = use_person_fuzzy and any(
+                            person_names_compatible(ent_raw, n) for n in names if n
+                        )
+                        if exact or fuzzy:
                             ent_hit = True
                             break
                     else:
@@ -768,6 +801,13 @@ class Database:
         """Aggregate entities/tags across ingested files for case overview."""
         from collections import Counter
 
+        from .entities import (
+            collapse_person_counts,
+            filter_tags,
+            is_noise_entity,
+            normalize_tag,
+        )
+
         type_counts: Counter[str] = Counter()
         entity_counts: Counter[tuple[str, str]] = Counter()
         tag_counts: Counter[str] = Counter()
@@ -791,12 +831,8 @@ class Database:
                 continue
             ents = meta.get("entities") or []
             tags = meta.get("tags") or []
-            if ents:
-                files_with_entities += 1
-            if tags:
-                files_with_tags += 1
+            kept_ents = False
             for e in ents:
-                entity_mentions += 1
                 if isinstance(e, dict):
                     et = str(e.get("type") or "other").strip().lower() or "other"
                     label = str(
@@ -804,21 +840,42 @@ class Database:
                     ).strip()
                 else:
                     et, label = "other", str(e).strip()
+                # Substantive people/orgs/places only — drop date/time/bates/other noise.
+                if is_noise_entity(et, label):
+                    continue
+                kept_ents = True
+                entity_mentions += 1
                 type_counts[et] += 1
                 if label:
                     entity_counts[(et, label)] += 1
-            for t in tags:
-                if isinstance(t, str):
-                    label = t.strip()
-                elif isinstance(t, dict):
-                    label = str(t.get("name") or t.get("label") or t.get("tag") or "").strip()
-                else:
-                    label = str(t).strip()
-                if label:
-                    tag_counts[label] += 1
+            if kept_ents:
+                files_with_entities += 1
+            cleaned_tags = filter_tags(tags, limit=50)  # normalize/deny; case-level cap via sort
+            if cleaned_tags:
+                files_with_tags += 1
+            for label in cleaned_tags:
+                tag_counts[normalize_tag(label)] += 1
+
+        # Collapse David Jones / David E. Jones / David Eli Jones etc.
+        entity_counts = Counter(collapse_person_counts(entity_counts))
+        # Drop one-off locations (incidental places) and one-off tags from overview.
+        entity_counts = Counter(
+            {
+                k: n
+                for k, n in entity_counts.items()
+                if not (k[0] == "location" and n < 2)
+            }
+        )
+        tag_counts = Counter({k: n for k, n in tag_counts.items() if n >= 2})
+        # Rebuild type unique counts from collapsed map (person rows may have moved).
+        type_counts = Counter()
+        for (et, _label), n in entity_counts.items():
+            type_counts[et] += n
 
         entities_by_type: dict[str, list[dict[str, Any]]] = {}
+        unique_by_type: Counter[str] = Counter()
         for (et, label), n in entity_counts.most_common():
+            unique_by_type[et] += 1
             bucket = entities_by_type.setdefault(et, [])
             # keep a generous per-type list for the overview drill-down
             if len(bucket) < max(top_n, 200):
@@ -831,7 +888,12 @@ class Database:
             "unique_entities": len(entity_counts),
             "unique_tags": len(tag_counts),
             "by_type": [
-                {"type": t, "count": n} for t, n in type_counts.most_common()
+                {
+                    "type": t,
+                    "count": unique_by_type[t],
+                    "mentions": type_counts[t],
+                }
+                for t, _ in unique_by_type.most_common()
             ],
             "entities_by_type": entities_by_type,
             "top_entities": [
@@ -839,7 +901,11 @@ class Database:
                 for (t, label), n in entity_counts.most_common(top_n)
             ],
             "top_tags": [
-                {"tag": tag, "count": n} for tag, n in tag_counts.most_common(max(top_n, 100))
+                {"tag": tag, "count": n}
+                for tag, n in sorted(
+                    tag_counts.most_common(max(top_n, 100)),
+                    key=lambda x: str(x[0]).lower(),
+                )
             ],
         }
 

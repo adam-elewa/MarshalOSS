@@ -80,12 +80,25 @@ def create_app(
         c = db.set_active_case(case_id)
         return {"ok": True, "active": c.__dict__}
 
+    @app.put("/api/cases/{case_id}")
+    async def api_update_case(case_id: int, request: Request) -> dict[str, Any]:
+        """Rename a case (display_name only; slug and files_root stay put)."""
+        payload = await request.json()
+        name = payload.get("display_name")
+        if name is None:
+            raise HTTPException(400, "display_name required")
+        try:
+            c = db.update_case_display_name(case_id, str(name))
+        except ValueError as e:
+            raise HTTPException(404 if "not found" in str(e) else 400, str(e)) from e
+        return {"ok": True, "case": c.__dict__}
+
     @app.get("/api/cases/{case_id}/overview")
     def api_case_overview(case_id: int) -> dict[str, Any]:
         """Case-level stats + full production manifest for the review UI overview pane."""
         c = resolve_case(case_id=case_id)
         summary = db.production_manifest_summary(c.id)
-        entities = db.case_entity_tag_stats(c.id)
+        entities = db.case_entity_tag_stats(c.id, top_n=500)
         records = db.list_production_manifest(c.id, limit=10000, offset=0)
         # Compact rows for the overview table
         manifest = []
@@ -569,14 +582,17 @@ def create_app(
         is_image = mime.startswith("image/")
         is_text = mime.startswith("text/") or lower.endswith((".txt", ".md", ".csv", ".log", ".json", ".xml", ".kml", ".st3"))
         if is_pdf or is_image:
+            pdf_src = f"{raw_url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+            media = (
+                f"<iframe src='{pdf_src}' title='{safe}'></iframe>"
+                if is_pdf
+                else f"<img src='{raw_url}' alt='{safe}'/>"
+            )
             body = f"""<!doctype html><html><head><meta charset=utf-8><title>{safe}</title>
-            <style>html,body{{margin:0;height:100%;background:#111;color:#eee;font:14px system-ui}}
-            header{{padding:8px 12px;background:#1b1b1b;display:flex;justify-content:space-between}}
-            a{{color:#9fdfc2}}iframe,img{{width:100%;height:calc(100vh - 42px);border:0}}
-            img{{object-fit:contain;height:auto;max-height:calc(100vh - 42px);display:block;margin:0 auto}}</style></head>
-            <body><header><strong>{safe}</strong><a href="{download_url}">Download</a></header>
-            {"<iframe src='" + raw_url + "'></iframe>" if is_pdf else "<img src='" + raw_url + "'/>"}
-            </body></html>"""
+            <style>html,body{{margin:0;height:100%;background:#111;overflow:hidden}}
+            iframe,img{{width:100%;height:100%;border:0;display:block}}
+            img{{object-fit:contain}}</style></head>
+            <body>{media}</body></html>"""
             return HTMLResponse(body)
         if is_text and target.stat().st_size < 2_000_000:
             text = target.read_text(encoding="utf-8", errors="replace")

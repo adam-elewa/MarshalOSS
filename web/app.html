@@ -73,9 +73,52 @@
   }
   .case-tile:hover { box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1) }
   .case-tile .body { flex: 1; display: flex; flex-direction: column; padding: 20px 24px }
-  .case-tile h2 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--fg) }
-  .case-tile .desc { margin: 8px 0 0; min-height: 1.25rem; font-size: 14px; line-height: 1.25rem; color: var(--muted) }
+  .case-tile .title-row {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  }
+  .case-tile h2 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--fg); min-width: 0 }
   .case-tile .grow { flex: 1 }
+  .case-rename-pen {
+    flex: 0 0 auto; border: 0; background: transparent; color: var(--muted-strong);
+    cursor: pointer; padding: 2px; border-radius: 4px; line-height: 0;
+  }
+  .case-rename-pen:hover { color: var(--fg); background: var(--hover) }
+  .case-rename-pen svg { width: 14px; height: 14px; display: block }
+  .case-rename-modal[hidden] { display: none !important }
+  .case-rename-modal {
+    position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+    padding: 1.25rem;
+  }
+  .case-rename-backdrop {
+    position: absolute; inset: 0; background: rgba(15, 23, 42, 0.42);
+  }
+  .case-rename-card {
+    position: relative; z-index: 1; width: min(24rem, 100%);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18); padding: 1rem 1.1rem 1.05rem;
+  }
+  .case-rename-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+  .case-rename-head h2 {
+    margin: 0; font-size: 15px; font-weight: 650; color: var(--fg);
+  }
+  .case-rename-close {
+    border: 0; background: transparent; color: var(--muted-strong);
+    font-size: 1.35rem; line-height: 1; cursor: pointer; padding: 0.1rem 0.35rem;
+  }
+  .case-rename-close:hover { color: var(--fg) }
+  .case-rename-body { display: grid; gap: 0.35rem }
+  .case-rename-body input {
+    width: 100%; padding: 0.55rem 0.7rem; border-radius: 8px;
+  }
+  .case-rename-status {
+    margin: 0.55rem 0 0; font-size: 12px; color: var(--danger); min-height: 1.1em;
+  }
+  .case-rename-actions {
+    display: flex; justify-content: flex-end; gap: 0.45rem; margin-top: 1rem;
+  }
   .case-tile .view-bar {
     display: flex; align-items: center; justify-content: center;
     background: #020617; color: #fff; padding: 16px; font-size: 14px; font-weight: 500;
@@ -103,7 +146,6 @@
   }
   .case-nav-head .all:hover { color: var(--muted-strong) }
   .case-nav-head h1 { margin: 8px 0 0; font-size: 14px; font-weight: 600; line-height: 1.35 }
-  .case-nav-head .sub { margin: 4px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted) }
   .case-nav-list { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px }
   .case-nav-list button {
     display: flex; align-items: center; gap: 10px; width: 100%;
@@ -117,19 +159,178 @@
   .bwc-host { flex: 1; min-height: 0; display: flex; flex-direction: column }
   .bwc-host iframe { flex: 1; width: 100%; border: 0; background: #f3f5f7 }
 
-  .overview { flex: 1; overflow: auto; padding: 24px }
+  .overview { flex: 1; overflow: auto; padding: 28px 32px 40px }
   .overview-intro {
-    max-width: 1100px; margin-bottom: 8px;
+    max-width: 56rem; margin-bottom: 4px;
   }
   .overview-intro h1 {
-    margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -0.02em;
+    margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.03em;
   }
-  .overview-intro p { margin: 6px 0 0; color: var(--muted-strong); font-size: 13px }
-  .overview-grid {
-    display: grid; gap: 12px;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    max-width: 1100px;
-    margin-top: 16px;
+  .overview-tiles {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-width: 56rem;
+    margin-top: 20px;
+  }
+  .overview-tile {
+    aspect-ratio: 1.15 / 1;
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
+    text-align: left; gap: 8px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 18px 12px; cursor: pointer; color: var(--fg);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .overview-tile:hover {
+    border-color: #94a3b8; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08); transform: translateY(-1px);
+  }
+  .overview-tile.active {
+    border-color: var(--ink); border-width: 2px;
+    box-shadow: 0 0 0 3px rgba(2, 6, 23, 0.16), 0 8px 22px rgba(15, 23, 42, 0.14);
+  }
+  .overview-tile.warn.active {
+    border-color: #d97706; border-width: 2px;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.22), 0 8px 22px rgba(15, 23, 42, 0.12);
+  }
+  .overview-tile .tile-top { min-width: 0; width: 100% }
+  .overview-tile .tile-label {
+    font-size: 14px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2;
+    color: var(--fg);
+  }
+  .overview-tile.warn .tile-label { color: #b45309 }
+  .overview-tile .tile-stat { margin-top: 8px }
+  .overview-tile .tile-value {
+    font-size: 32px; font-weight: 700; letter-spacing: -0.045em; line-height: 1;
+    color: var(--fg);
+  }
+  .overview-tile .tile-blurb {
+    margin: 0; font-size: 13.5px; font-weight: 500; line-height: 1.35; color: var(--fg);
+  }
+  .overview-detail {
+    max-width: 72rem; margin-top: 18px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+    padding: 16px 16px 14px;
+  }
+  .overview-detail .panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .overview-detail .panel-head h2 {
+    margin: 0; font-size: 15px; font-weight: 650;
+  }
+  .overview-detail .panel-blurb {
+    margin: 0 0 12px; font-size: 13px; line-height: 1.45; color: var(--muted-strong);
+  }
+  .files-detail {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0; min-height: 140px; overflow: hidden; border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  .files-detail-cta {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; padding: 28px 20px; border: 0; border-radius: 0;
+    background: var(--ink); color: #fff; cursor: pointer; text-align: center;
+    font: inherit; width: 100%; height: 100%;
+    transition: background 0.15s ease;
+  }
+  .files-detail-cta:hover { background: #000 }
+  .files-detail-cta .cta-label {
+    font-size: 15px; font-weight: 650; letter-spacing: -0.01em;
+  }
+  .files-detail-cta .cta-ico {
+    width: 22px; height: 22px; opacity: 0.9;
+  }
+  .files-detail-copy {
+    display: flex; align-items: center; padding: 24px 22px;
+    background: #f8fafc; color: var(--muted-strong);
+    font-size: 14px; line-height: 1.5;
+  }
+  .files-detail-copy p { margin: 0 }
+  @media (max-width: 700px) {
+    .files-detail { grid-template-columns: 1fr }
+  }
+  .attention-split {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 42%);
+    gap: 12px; align-items: stretch; min-height: 360px;
+  }
+  .attention-list { min-width: 0; min-height: 0; display: flex; flex-direction: column }
+  .attention-preview {
+    min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: 10px;
+    background: #f8fafc; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .attention-preview .ap-head {
+    flex-shrink: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    background: var(--panel); font-size: 13px; font-weight: 650;
+  }
+  .attention-preview .ap-head-text { min-width: 0 }
+  .attention-preview .ap-head .meta {
+    font-weight: 500; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ap-actions, .doc-actions {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  .dl-icon-btn,
+  .open-icon-btn,
+  .attention-preview .ap-dl,
+  .attention-preview .ap-open {
+    flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 8px; text-decoration: none;
+  }
+  .dl-icon-btn,
+  .attention-preview .ap-dl {
+    border: 1px solid #a7f3d0; background: #ecfdf5; color: #047857;
+  }
+  .dl-icon-btn:hover,
+  .attention-preview .ap-dl:hover { background: #d1fae5; color: #065f46; border-color: #6ee7b7 }
+  .open-icon-btn,
+  .attention-preview .ap-open {
+    border: 1px solid #93c5fd; background: #eff6ff; color: #2563eb;
+  }
+  .open-icon-btn:hover,
+  .attention-preview .ap-open:hover { background: #dbeafe; color: #1d4ed8; border-color: #60a5fa }
+  .dl-icon-btn svg,
+  .open-icon-btn svg,
+  .attention-preview .ap-dl svg,
+  .attention-preview .ap-open svg { width: 16px; height: 16px }
+  .attention-preview .ap-body { flex: 1; min-height: 0; overflow: auto }
+  .attention-preview .preview-frame { width: 100%; height: 100%; min-height: 320px; border: 0; background: #111 }
+  .attention-preview .preview-img { max-width: 100%; height: auto; display: block; margin: 0 auto }
+  .attention-preview .ap-empty {
+    padding: 24px 16px; color: var(--muted-strong); font-size: 13px; line-height: 1.45;
+  }
+  .manifest-table tr.active { background: #e8eef7 }
+  @media (max-width: 900px) {
+    .overview { padding: 20px 16px 32px }
+    .overview-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+    .attention-split, .entity-split { grid-template-columns: 1fr }
+    .entity-cols.has-docs { grid-template-columns: 1fr }
+  }
+  .warn-ico {
+    display: inline-flex; width: 16px; height: 16px; color: #d97706; flex-shrink: 0;
+    vertical-align: -2px; margin-right: 6px;
+  }
+  .manifest-table td.file-cell {
+    max-width: 420px;
+  }
+  .manifest-table td.file-cell .file-main {
+    display: flex; align-items: flex-start; gap: 6px;
+  }
+  .manifest-table td.file-cell .path-text {
+    min-width: 0; word-break: break-word;
+  }
+  .manifest-foot {
+    margin-top: 10px; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted-strong);
+  }
+  .manifest-pager {
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .manifest-pager button {
+    padding: 5px 10px; font-size: 12px;
+  }
+  .manifest-pager button:disabled {
+    opacity: 0.45; cursor: not-allowed;
   }
   .stat {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
@@ -179,6 +380,126 @@
   }
   .chip:hover { border-color: #94a3b8; background: #e2e8f0 }
   .chip .n { color: var(--muted-strong); font-weight: 600 }
+  .entity-stage {
+    view-transition-name: entity-stage;
+  }
+  .entity-split {
+    display: grid; grid-template-columns: minmax(220px, 34%) minmax(0, 1fr);
+    gap: 12px; align-items: stretch; min-height: 420px;
+  }
+  .entity-docs-pane {
+    min-width: 0; min-height: 0; display: flex; flex-direction: column;
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    background: var(--panel); max-height: 520px;
+  }
+  .entity-docs-pane .entity-toolbar {
+    flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-bottom: 1px solid var(--border); background: #f8fafc;
+  }
+  .entity-back-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--fg);
+    border-radius: 8px; padding: 5px 10px 5px 8px; cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 650; line-height: 1;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .entity-back-btn:hover { background: var(--hover); border-color: #94a3b8 }
+  .entity-back-btn svg { width: 14px; height: 14px; flex-shrink: 0 }
+  .entity-toolbar .entity-context {
+    min-width: 0; font-size: 12px; color: var(--muted-strong);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .entity-toolbar .entity-context strong { color: var(--fg); font-weight: 650 }
+  .entity-docs-pane .entity-col-list { flex: 1; min-height: 0; overflow: auto }
+  .entity-cols {
+    display: grid; grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
+    gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    min-height: 0; background: var(--panel);
+  }
+  .entity-cols.has-docs {
+    grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr) minmax(0, 1.15fr);
+  }
+  .entity-cols.has-docs-2 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  }
+  .entity-cols.tags-only {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tag-alpha {
+    display: flex; flex-wrap: wrap; gap: 2px; align-items: center;
+    padding: 8px 10px; border-bottom: 1px solid var(--border); background: #f8fafc;
+  }
+  .tag-alpha button {
+    min-width: 22px; height: 24px; padding: 0 4px; border: 0; border-radius: 5px;
+    background: transparent; color: var(--muted-strong); font: inherit; font-size: 11px;
+    font-weight: 650; cursor: pointer; line-height: 1;
+  }
+  .tag-alpha button:hover:not(:disabled) { background: var(--hover); color: var(--fg) }
+  .tag-alpha button.active { background: var(--ink); color: #fff }
+  .tag-alpha button:disabled { opacity: 0.28; cursor: default }
+  .tag-alpha .tag-alpha-all {
+    margin-right: 4px; padding: 0 7px; font-size: 10px; letter-spacing: 0.04em;
+  }
+  @supports (view-transition-name: none) {
+    ::view-transition-old(entity-stage),
+    ::view-transition-new(entity-stage) {
+      animation-duration: 0.32s;
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    ::view-transition-old(entity-stage) {
+      animation-name: entity-vt-out;
+    }
+    ::view-transition-new(entity-stage) {
+      animation-name: entity-vt-in;
+    }
+    @keyframes entity-vt-out {
+      to { opacity: 0; transform: scale(0.985); }
+    }
+    @keyframes entity-vt-in {
+      from { opacity: 0; transform: scale(1.015); }
+    }
+  }
+  .entity-col {
+    display: flex; flex-direction: column; min-height: 0; min-width: 0;
+  }
+  .entity-col + .entity-col { border-left: 1px solid var(--border) }
+  .entity-col-head {
+    flex-shrink: 0; padding: 8px 12px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-strong);
+    border-bottom: 1px solid var(--border); background: #f8fafc;
+  }
+  .entity-col-list {
+    list-style: none; margin: 0; padding: 4px; overflow: visible; flex: 0 0 auto;
+  }
+  .entity-col-foot {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-top: 1px solid var(--border);
+    background: #f8fafc; font-size: 11px; color: var(--muted-strong);
+    position: relative; z-index: 1;
+  }
+  .entity-col-foot .manifest-pager { gap: 4px }
+  .entity-col-foot .manifest-pager button { padding: 4px 8px; font-size: 11px }
+  .entity-col-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; border: 0; background: transparent; text-align: left;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--fg); font: inherit;
+  }
+  .entity-col-item:hover { background: var(--hover) }
+  .entity-col-item.active {
+    background: #e8eef7; font-weight: 650;
+  }
+  .entity-col-item .label {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .entity-col-item .n {
+    flex: 0 0 auto; font-size: 12px; font-weight: 600; color: var(--muted-strong);
+  }
+  .entity-col-item .chev {
+    flex: 0 0 auto; width: 12px; height: 12px; color: var(--muted);
+  }
+  .entity-col-empty {
+    padding: 16px 12px; color: var(--muted-strong); font-size: 13px;
+  }
   .entity-table, .manifest-table { width: 100%; border-collapse: collapse; font-size: 13px }
   .entity-table th, .entity-table td,
   .manifest-table th, .manifest-table td {
@@ -234,11 +555,6 @@
     border-right: 1px solid var(--border); background: var(--panel);
     display: flex; flex-direction: column; min-height: 0;
   }
-  .nb-side-head {
-    padding: 10px 12px; border-bottom: 1px solid var(--border);
-    font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
-    text-transform: uppercase; color: var(--muted);
-  }
   .nb-tree { list-style: none; margin: 0; padding: 8px 0; overflow: auto; flex: 1 }
   .nb-tree .nb-item {
     display: flex; align-items: center; gap: 4px;
@@ -286,11 +602,15 @@
   .nb-preview .md ul, .nb-preview .md ol { margin: 0 0 12px; padding-left: 1.4rem }
   .nb-preview .md code {
     font: 12px/1.4 ui-monospace, Menlo, monospace; background: var(--hover);
-    padding: 1px 5px; border-radius: 4px;
+    color: var(--fg); padding: 1px 5px; border-radius: 4px;
   }
   .nb-preview .md pre {
-    background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px;
+    background: #f1f5f9; color: var(--fg); padding: 12px; border-radius: 8px;
+    border: 1px solid var(--border);
     overflow: auto; font: 12px/1.45 ui-monospace, Menlo, monospace;
+  }
+  .nb-preview .md pre code {
+    background: transparent; color: inherit; padding: 0; border-radius: 0;
   }
   .nb-preview .md a.doc-link, .nb-preview .md a.page-link {
     color: #0f766e; font-weight: 600; text-decoration: underline;
@@ -358,17 +678,29 @@
   .doc-actions { display: flex; gap: 8px; flex-wrap: wrap }
   .tabs { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto }
   .doc-body { flex: 1; min-height: 0; overflow: auto; padding: 16px }
+  .doc-body.is-preview {
+    padding: 0; overflow: hidden; background: #111;
+  }
   .panel-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 16px; max-width: 960px;
   }
   .preview-frame {
-    width: 100%; height: calc(100vh - 180px); min-height: 360px;
-    border: 1px solid var(--border); border-radius: 8px; background: #111;
+    width: 100%; height: 100%; min-height: 360px;
+    border: 0; border-radius: 0; background: #111; display: block;
+  }
+  .doc-body.is-preview .preview-frame {
+    height: 100%; min-height: 0;
   }
   .preview-img {
-    max-width: 100%; max-height: calc(100vh - 200px); display: block; margin: 0 auto;
-    border-radius: 8px; background: #111;
+    width: 100%; height: 100%; object-fit: contain; display: block;
+    background: #111;
+  }
+  .doc-body:not(.is-preview) .preview-frame {
+    height: calc(100vh - 180px);
+  }
+  .doc-body:not(.is-preview) .preview-img {
+    max-height: calc(100vh - 200px); width: auto; margin: 0 auto;
   }
   .text-body {
     white-space: pre-wrap; word-break: break-word;
@@ -422,6 +754,24 @@
 </header>
 <main id="main"></main>
 
+<div class="case-rename-modal" id="caseRenameModal" hidden>
+  <div class="case-rename-backdrop" data-case-rename-dismiss="1"></div>
+  <div class="case-rename-card" role="dialog" aria-modal="true" aria-labelledby="caseRenameTitle">
+    <div class="case-rename-head">
+      <h2 id="caseRenameTitle">Rename case</h2>
+      <button type="button" class="case-rename-close" aria-label="Close" data-case-rename-dismiss="1">&times;</button>
+    </div>
+    <div class="case-rename-body">
+      <input id="caseRenameInput" type="text" autocomplete="off" aria-label="Case name" />
+      <p class="case-rename-status" id="caseRenameStatus" hidden></p>
+    </div>
+    <div class="case-rename-actions">
+      <button type="button" class="ghost" data-case-rename-dismiss="1">Cancel</button>
+      <button type="button" class="primary" id="caseRenameSave">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const state = {
   route: { name: "home" },
@@ -431,8 +781,24 @@ const state = {
   caseMeta: null,
   module: "overview",
   overview: null,
-  manifestFilter: "all", // all | processed | unprocessed
+  manifestFilter: "unprocessed", // unprocessed | low_confidence
+  manifestPage: 1,
   entityBrowseType: null, // null = type list; string = drill into that type
+  entityTypePage: 1,
+  entityNamePage: 1,
+  entityDocPage: 1,
+  overviewEntity: null, // { entity, entity_type } selected in overview
+  overviewEntityFiles: [],
+  overviewEntityLoading: false,
+  overviewTag: null, // tag string selected in overview
+  overviewTagFiles: [],
+  overviewTagLoading: false,
+  tagPage: 1,
+  tagDocPage: 1,
+  tagLetter: null, // null = all | "A".."Z" | "#"
+  overviewFocus: "files", // null | attention | entities | tags | files
+  overviewDocPath: null,
+  overviewDoc: null,
   overviewOpen: {}, // section id -> bool; default collapsed
   browseMode: "categories", // categories | folders
   category: null, // category id when drilling in
@@ -654,6 +1020,13 @@ async function loadForRoute() {
     state.err = e.message || String(e);
     render();
   }
+}
+
+/** Clean full-frame PDF embed (hide Chrome/Edge thumbnail sidebar + toolbar). */
+function pdfEmbedUrl(url) {
+  if (!url) return url;
+  const base = String(url).split("#")[0];
+  return `${base}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
 }
 
 function relativize(url) {
@@ -881,7 +1254,7 @@ function renderNotebookDocPane() {
   let body = "";
   if (tab === "preview") {
     if (doc.kind === "pdf" && doc.raw_url) {
-      body = `<iframe class="preview-frame" src="${esc(doc.raw_url)}" title="${esc(doc.name)}"></iframe>`;
+      body = `<iframe class="preview-frame" src="${esc(pdfEmbedUrl(doc.raw_url))}" title="${esc(doc.name)}"></iframe>`;
     } else if (doc.kind === "image" && doc.raw_url) {
       body = `<img class="preview-img" src="${esc(doc.raw_url)}" alt="${esc(doc.name)}"/>`;
     } else if ((doc.kind === "video" || doc.kind === "audio") && doc.raw_url) {
@@ -892,8 +1265,7 @@ function renderNotebookDocPane() {
     } else if (doc.open_url || doc.raw_url) {
       body = `<div class="panel-card">
         <p>${doc._not_ingested ? "File is on disk but not fully ingested yet." : "No inline preview for this type."}</p>
-        <p><a href="${esc(doc.open_url || doc.raw_url)}" target="_blank" rel="noopener">Open in viewer</a>
-        ${doc.download_url ? ` · <a href="${esc(doc.download_url)}" target="_blank" rel="noopener">Download</a>` : ""}</p>
+        <p>${doc.download_url ? `<a href="${esc(doc.download_url)}" download target="_blank" rel="noopener">Download</a>` : ""}</p>
         ${doc.error ? `<p class="err">${esc(doc.error)}</p>` : ""}
       </div>`;
     } else {
@@ -928,7 +1300,7 @@ function renderNotebookDocPane() {
             <div class="meta">${esc(doc.rel_path)}</div>
           </div>
           <div class="doc-actions">
-            ${doc.open_url ? `<a href="${esc(doc.open_url)}" target="_blank" rel="noopener"><button type="button" class="ghost">Open</button></a>` : ""}
+            ${fileActionIcons(doc)}
             <button type="button" class="ghost" id="btnNbDocClose">Close</button>
           </div>
         </div>
@@ -1085,18 +1457,143 @@ function renderHome() {
   }
   const tiles = state.cases.map(c => {
     const title = c.display_name || c.slug;
-    const desc = c.slug && c.slug !== title ? c.slug : "\u00A0";
     return `
-    <button type="button" class="case-tile" data-id="${c.id}">
+    <div class="case-tile" data-id="${c.id}" role="link" tabindex="0" aria-label="Open ${esc(title)}">
       <div class="body">
-        <h2>${esc(title)}</h2>
-        <p class="desc">${esc(desc)}</p>
+        <div class="title-row">
+          <h2>${esc(title)}</h2>
+          <button type="button" class="case-rename-pen" data-rename-case="${c.id}" title="Rename case" aria-label="Rename case">
+            ${icoRenamePen()}
+          </button>
+        </div>
         <div class="grow" aria-hidden="true"></div>
       </div>
       <div class="view-bar">View</div>
-    </button>`;
+    </div>`;
   }).join("");
   return `<div class="home-wrap"><div class="cases-grid">${tiles}</div></div>`;
+}
+
+function icoRenamePen() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+}
+
+let caseRenameId = null;
+let caseRenamePrev = "";
+let caseRenameBusy = false;
+
+function closeCaseRenameModal() {
+  const modal = document.getElementById("caseRenameModal");
+  if (modal) modal.hidden = true;
+  caseRenameId = null;
+  caseRenamePrev = "";
+  caseRenameBusy = false;
+  const status = document.getElementById("caseRenameStatus");
+  if (status) {
+    status.hidden = true;
+    status.textContent = "";
+  }
+}
+
+function openCaseRenameModal(caseId) {
+  const current = (state.cases || []).find(c => c.id === caseId)
+    || (state.caseMeta && state.caseMeta.id === caseId ? state.caseMeta : null);
+  const prev = (current && (current.display_name || current.slug)) || "";
+  const modal = document.getElementById("caseRenameModal");
+  const input = document.getElementById("caseRenameInput");
+  const status = document.getElementById("caseRenameStatus");
+  if (!modal || !input) return;
+  caseRenameId = caseId;
+  caseRenamePrev = prev;
+  input.value = prev;
+  if (status) {
+    status.hidden = true;
+    status.textContent = "";
+  }
+  modal.hidden = false;
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+}
+
+async function saveCaseRename() {
+  if (caseRenameBusy || caseRenameId == null) return;
+  const input = document.getElementById("caseRenameInput");
+  const status = document.getElementById("caseRenameStatus");
+  const name = String(input && input.value || "").trim();
+  if (!name) {
+    if (status) {
+      status.hidden = false;
+      status.textContent = "Enter a case name.";
+    }
+    return;
+  }
+  if (name === caseRenamePrev) {
+    closeCaseRenameModal();
+    return;
+  }
+  caseRenameBusy = true;
+  if (status) {
+    status.hidden = false;
+    status.style.color = "var(--muted-strong)";
+    status.textContent = "Saving…";
+  }
+  try {
+    const res = await fetch(`/api/cases/${caseRenameId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ display_name: name }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || data.error || res.statusText);
+    const updated = data.case;
+    if (updated) {
+      state.cases = (state.cases || []).map(c => (c.id === updated.id ? updated : c));
+      if (state.caseMeta && state.caseMeta.id === updated.id) state.caseMeta = updated;
+    }
+    closeCaseRenameModal();
+    render();
+  } catch (err) {
+    if (status) {
+      status.hidden = false;
+      status.style.color = "var(--danger)";
+      status.textContent = err.message || String(err);
+    }
+    caseRenameBusy = false;
+  }
+}
+
+function wireCaseRenameModal() {
+  const modal = document.getElementById("caseRenameModal");
+  if (!modal || modal.dataset.wired) return;
+  modal.dataset.wired = "1";
+  modal.addEventListener("click", (ev) => {
+    if (ev.target.closest && ev.target.closest("[data-case-rename-dismiss]")) {
+      closeCaseRenameModal();
+    }
+  });
+  const save = document.getElementById("caseRenameSave");
+  if (save) save.addEventListener("click", () => saveCaseRename());
+  const input = document.getElementById("caseRenameInput");
+  if (input) {
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        saveCaseRename();
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        closeCaseRenameModal();
+      }
+    });
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && modal && !modal.hidden) closeCaseRenameModal();
+  });
+}
+
+function renameCase(caseId) {
+  openCaseRenameModal(caseId);
 }
 
 function icoOverview() {
@@ -1112,14 +1609,31 @@ function icoBwc() {
   return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="14" height="12" rx="2"/><path d="M17 11l4-2v8l-4-2"/><circle cx="10" cy="13" r="2.5"/></svg>`;
 }
 
+function statusLabel(status) {
+  const raw = String(status || "unknown");
+  const key = raw.toLowerCase();
+  if (key === "skipped_not_covered" || key === "skipped-not-covered") {
+    return "File Type Not Supported";
+  }
+  if (key === "skipped") return "Skipped";
+  if (key === "ready") return "Ready";
+  if (key === "pending") return "Pending";
+  if (key === "error") return "Error";
+  return raw.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function statusPill(status) {
-  const s = status || "unknown";
-  const cls = s.replace(/[^a-z0-9_]/gi, "_");
-  return `<span class="status-pill ${esc(cls)}">${esc(s)}</span>`;
+  const raw = String(status || "unknown");
+  const cls = raw.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+  return `<span class="status-pill ${esc(cls)}">${esc(statusLabel(raw))}</span>`;
 }
 
 function isOverviewOpen(id) {
-  return !!state.overviewOpen[id];
+  // Expand all overview sections unless the user collapsed one.
+  if (Object.prototype.hasOwnProperty.call(state.overviewOpen, id)) {
+    return !!state.overviewOpen[id];
+  }
+  return true;
 }
 
 function toggleOverviewSection(id) {
@@ -1131,7 +1645,7 @@ function accChevron() {
   return `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>`;
 }
 
-function accordionItem(id, title, metaHtml, bodyHtml) {
+function accordionItem(id, title, metaHtml, bodyHtml, blurb) {
   const open = isOverviewOpen(id);
   return `
     <div class="acc-item ${open ? "open" : ""}" data-acc="${esc(id)}">
@@ -1140,148 +1654,729 @@ function accordionItem(id, title, metaHtml, bodyHtml) {
         <span class="acc-title">${esc(title)}</span>
         <span class="acc-meta">${metaHtml}</span>
       </button>
-      <div class="acc-body">${bodyHtml}</div>
+      <div class="acc-body">
+        ${blurb ? `<p class="acc-blurb" style="display:block">${esc(blurb)}</p>` : ""}
+        ${bodyHtml}
+      </div>
     </div>
   `;
 }
 
+function warnIcon() {
+  return `<svg class="warn-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3.2 1.8 20.5h20.4L12 3.2zm0 5.3c.6 0 1 .5 1 1.1v4.2c0 .6-.4 1.1-1 1.1s-1-.5-1-1.1V9.6c0-.6.4-1.1 1-1.1zm0 8.2a1.15 1.15 0 1 0 0 2.3 1.15 1.15 0 0 0 0-2.3z"/></svg>`;
+}
+
+function downloadIcon() {
+  // Heroicons outline arrow-down-tray
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 12 12 16.5m0 0 4.5-4.5M12 16.5V3"/></svg>`;
+}
+
+function openIcon() {
+  // Heroicons outline arrow-top-right-on-square
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>`;
+}
+
+function fileActionIcons(doc) {
+  const openHref = doc?.open_url || doc?.raw_url || null;
+  const dlHref = doc?.download_url || null;
+  let html = "";
+  if (openHref) {
+    html += `<a class="open-icon-btn ap-open" href="${esc(openHref)}" target="_blank" rel="noopener" title="Open" aria-label="Open">${openIcon()}</a>`;
+  }
+  if (dlHref) {
+    html += `<a class="dl-icon-btn ap-dl" href="${esc(dlHref)}" download target="_blank" rel="noopener" title="Download" aria-label="Download">${downloadIcon()}</a>`;
+  }
+  return html;
+}
+
+function isLowConfidence(r) {
+  return r && r.processed && r.quality_score != null && Number(r.quality_score) < 0.72;
+}
+
+function canInlinePreview(doc) {
+  if (!doc) return false;
+  if (doc.kind === "pdf" || doc.kind === "image" || doc.kind === "video" || doc.kind === "audio") {
+    return !!doc.raw_url;
+  }
+  return !!(doc.text && String(doc.text).trim());
+}
+
+function encodeRelPath(rel) {
+  return String(rel || "")
+    .split("/")
+    .filter(Boolean)
+    .map((p) => encodeURIComponent(p))
+    .join("/");
+}
+
+function overviewFileUrls(relPath) {
+  const slug = state.caseMeta?.slug;
+  if (!slug || !relPath) return { raw_url: null, open_url: null, download_url: null };
+  const enc = encodeRelPath(relPath);
+  const raw = `/files/${encodeURIComponent(slug)}/${enc}`;
+  return {
+    raw_url: raw,
+    open_url: `/view/${encodeURIComponent(slug)}/${enc}`,
+    download_url: `${raw}?dl=1`,
+  };
+}
+
+function withOverviewUrls(doc, relPath) {
+  const fallback = overviewFileUrls(relPath || doc.rel_path);
+  const out = { ...doc };
+  out.raw_url = relativize(out.raw_url) || fallback.raw_url;
+  out.open_url = relativize(out.open_url) || fallback.open_url;
+  out.download_url = relativize(out.download_url) || fallback.download_url;
+  return out;
+}
+
+async function loadOverviewDoc(relPath, { paint = true } = {}) {
+  state.overviewDocPath = relPath;
+  try {
+    const data = await api(
+      `/api/files/detail?case_id=${state.caseId}&path=${encodeURIComponent(relPath)}`
+    );
+    state.overviewDoc = withOverviewUrls(data.file || {}, relPath);
+  } catch (e) {
+    const row = (state.overview?.manifest || []).find(r => r.rel_path === relPath)
+      || (state.overviewEntityFiles || []).find(r => (r.rel_path || r.path) === relPath);
+    state.overviewDoc = withOverviewUrls({
+      name: row?.name || relPath.split("/").pop(),
+      rel_path: relPath,
+      size: row?.size,
+      kind: "other",
+      text: "",
+      _not_ingested: true,
+      error: e.message || String(e),
+    }, relPath);
+  }
+  if (paint) render();
+}
+
+function clearOverviewEntity() {
+  state.overviewEntity = null;
+  state.overviewEntityFiles = [];
+  state.overviewEntityLoading = false;
+  state.overviewDocPath = null;
+  state.overviewDoc = null;
+}
+
+function clearOverviewTag() {
+  state.overviewTag = null;
+  state.overviewTagFiles = [];
+  state.overviewTagLoading = false;
+  state.overviewDocPath = null;
+  state.overviewDoc = null;
+}
+
+function clearOverviewDrill() {
+  clearOverviewEntity();
+  clearOverviewTag();
+}
+
+async function loadOverviewTagMatches(tag) {
+  if (state.overviewTag && state.overviewTag === tag) {
+    await withViewTransition(() => {
+      clearOverviewTag();
+      render();
+    });
+    return;
+  }
+  clearOverviewEntity();
+  state.overviewTag = tag;
+  state.overviewTagFiles = [];
+  state.overviewTagLoading = true;
+  state.tagDocPage = 1;
+  state.overviewDocPath = null;
+  state.overviewDoc = null;
+  render();
+  try {
+    const params = new URLSearchParams({ case_id: String(state.caseId), tag });
+    const data = await api(`/api/files/by-facet?${params}`);
+    if (state.overviewTag !== tag) return;
+    state.overviewTagFiles = data.entries || [];
+  } catch (e) {
+    if (state.overviewTag === tag) {
+      state.overviewTagFiles = [];
+      alert(e.message || String(e));
+    }
+  } finally {
+    if (state.overviewTag === tag) {
+      state.overviewTagLoading = false;
+      await withViewTransition(() => render());
+    }
+  }
+}
+
+function withViewTransition(update) {
+  if (typeof document.startViewTransition === "function") {
+    return document.startViewTransition(() => { update(); }).finished.catch(() => {});
+  }
+  update();
+  return Promise.resolve();
+}
+
+async function loadOverviewEntityMatches(entity, entityType) {
+  if (
+    state.overviewEntity
+    && state.overviewEntity.entity === entity
+    && (state.overviewEntity.entity_type || null) === (entityType || null)
+  ) {
+    await withViewTransition(() => {
+      clearOverviewEntity();
+      render();
+    });
+    return;
+  }
+  clearOverviewTag();
+  state.overviewEntity = { entity, entity_type: entityType || null };
+  state.overviewEntityFiles = [];
+  state.overviewEntityLoading = true;
+  state.entityDocPage = 1;
+  state.overviewDocPath = null;
+  state.overviewDoc = null;
+  render();
+  try {
+    const params = new URLSearchParams({ case_id: String(state.caseId), entity });
+    if (entityType) params.set("entity_type", entityType);
+    const data = await api(`/api/files/by-facet?${params}`);
+    if (
+      state.overviewEntity?.entity !== entity
+      || (state.overviewEntity?.entity_type || null) !== (entityType || null)
+    ) return;
+    state.overviewEntityFiles = data.entries || [];
+  } catch (e) {
+    if (state.overviewEntity?.entity === entity) {
+      state.overviewEntityFiles = [];
+      alert(e.message || String(e));
+    }
+  } finally {
+    if (state.overviewEntity?.entity === entity) {
+      state.overviewEntityLoading = false;
+      await withViewTransition(() => render());
+    }
+  }
+}
+
+function renderOverviewPreview(doc) {
+  if (!doc) {
+    return `<div class="ap-empty">Select a file to preview it here.</div>`;
+  }
+  if (doc.kind === "pdf" && doc.raw_url) {
+    return `<iframe class="preview-frame" src="${esc(pdfEmbedUrl(doc.raw_url))}" title="${esc(doc.name)}"></iframe>`;
+  }
+  if (doc.kind === "image" && doc.raw_url) {
+    return `<img class="preview-img" src="${esc(doc.raw_url)}" alt="${esc(doc.name)}"/>`;
+  }
+  if ((doc.kind === "video" || doc.kind === "audio") && doc.raw_url) {
+    const tag = doc.kind === "video" ? "video" : "audio";
+    return `<${tag} class="preview-frame" controls src="${esc(doc.raw_url)}"></${tag}>`;
+  }
+  if (doc.text) {
+    return `<div class="panel-card" style="margin:12px;border:0;box-shadow:none"><pre class="text-body">${esc(doc.text.slice(0, 8000))}${doc.text.length > 8000 ? "\n…" : ""}</pre></div>`;
+  }
+  return `<div class="ap-empty">No on-screen preview for this file type.</div>`;
+}
+
 function renderOverview() {
-  const caseName = state.caseMeta?.display_name || state.caseMeta?.slug || "Case";
   const s = state.overview?.summary || {};
   const e = state.overview?.entities || {};
   const manifest = state.overview?.manifest || [];
   const unprocessed = manifest.filter(r => !r.processed);
-  const processed = manifest.filter(r => r.processed);
-  const lowConf = processed.filter(r => r.quality_score != null && Number(r.quality_score) < 0.72);
+  const lowConfidence = manifest.filter(isLowConfidence);
+  const filter = state.manifestFilter === "low_confidence" ? "low_confidence" : "unprocessed";
+  const fullRows = filter === "low_confidence" ? lowConfidence : unprocessed;
+  const pageSize = 20;
+  const totalPages = Math.max(1, Math.ceil(fullRows.length / pageSize) || 1);
+  const page = Math.min(Math.max(1, state.manifestPage || 1), totalPages);
+  state.manifestPage = page;
+  const start = (page - 1) * pageSize;
+  const shown = fullRows.slice(start, start + pageSize);
 
-  const stats = [
-    ["Files", fmtNum(s.file_count)],
-    ["Size", fmtSize(s.total_bytes)],
-    ["Processed", fmtNum(s.ready_count)],
-    ["OCR conf.", s.avg_quality != null ? fmtConf(s.avg_quality) : "—"],
-  ];
-
-  const byType = (e.by_type || []).map(t =>
-    `<button type="button" class="chip" data-browse-type="${esc(t.type)}">
-      <span class="type-pill">${esc(prettyType(t.type))}</span><span class="n">${fmtNum(t.count)}</span>
-    </button>`
-  ).join("") || `<span class="placeholder">No entities yet.</span>`;
-
-  const topTags = (e.top_tags || []).map(t =>
-    `<button type="button" class="chip" data-tag="${esc(t.tag)}" title="${esc(t.tag)}">${esc(prettyLabel(t.tag))} <span class="n">${fmtNum(t.count)}</span></button>`
-  ).join("") || `<span class="placeholder">No tags yet.</span>`;
-
-  const browseType = state.entityBrowseType;
+  const typeRows = e.by_type || [];
+  let browseType = state.entityBrowseType;
+  if ((!browseType || !typeRows.some(t => t.type === browseType)) && typeRows.length) {
+    browseType = typeRows[0].type;
+    state.entityBrowseType = browseType;
+  }
   const typedEntities = browseType
     ? ((e.entities_by_type && e.entities_by_type[browseType]) || (e.top_entities || []).filter(x => x.type === browseType))
     : [];
-  const entityDrill = browseType ? `
-    <div class="section-head">
-      <h2 style="text-transform:none;letter-spacing:0;font-size:14px;color:var(--fg)">
-        ${esc(prettyType(browseType))}
-        <span class="meta">· ${fmtNum(typedEntities.length)}</span>
-      </h2>
-      <button type="button" class="ghost" id="btnEntityBack">← All types</button>
-    </div>
-    ${typedEntities.length ? `<table class="entity-table">
-      <thead><tr><th>Entity</th><th>Count</th></tr></thead>
-      <tbody>
-        ${typedEntities.map(row => `
-          <tr>
-            <td><button type="button" class="linkish" data-entity="${esc(row.canonical)}" data-entity-type="${esc(row.type)}">${esc(row.canonical)}</button></td>
-            <td>${fmtNum(row.count)}</td>
-          </tr>`).join("")}
-      </tbody>
-    </table>` : `<div class="placeholder">No entities in this type.</div>`}
-  ` : `
-    <p class="meta" style="margin:0 0 12px">Choose a type, then pick an entity to open matching documents.</p>
-    <div class="chip-row">${byType}</div>
-  `;
+  const entityPageSize = 10;
+  const typeTotalPages = Math.max(1, Math.ceil(typeRows.length / entityPageSize) || 1);
+  const typePage = Math.min(Math.max(1, state.entityTypePage || 1), typeTotalPages);
+  state.entityTypePage = typePage;
+  const typeStart = (typePage - 1) * entityPageSize;
+  const shownTypes = typeRows.slice(typeStart, typeStart + entityPageSize);
+  const nameTotalPages = Math.max(1, Math.ceil(typedEntities.length / entityPageSize) || 1);
+  const namePage = Math.min(Math.max(1, state.entityNamePage || 1), nameTotalPages);
+  state.entityNamePage = namePage;
+  const nameStart = (namePage - 1) * entityPageSize;
+  const shownEntities = typedEntities.slice(nameStart, nameStart + entityPageSize);
 
-  let rows = manifest;
-  if (state.manifestFilter === "processed") rows = processed;
-  else if (state.manifestFilter === "unprocessed") rows = unprocessed;
+  const typeUniqueCount = (t) => {
+    // Prefer unique-name count; older APIs used mention totals as `count`.
+    if (t && t.mentions != null) return t.count;
+    const bucket = e.entities_by_type && e.entities_by_type[t.type];
+    return bucket ? bucket.length : (t.count || 0);
+  };
 
-  const manifestRows = rows.map(r => {
-    const flag = !r.processed ? "flag-unprocessed"
-      : (r.quality_score != null && Number(r.quality_score) < 0.72 ? "flag-low" : "");
-    const conf = r.processed
-      ? `<span class="conf ${confClass(r.quality_score)}">${esc(fmtConf(r.quality_score))}</span>`
-      : "—";
-    return `<tr class="${flag}" data-path="${esc(r.rel_path)}">
-      <td class="path" title="${esc(r.rel_path)}">${esc(r.name || r.rel_path)}</td>
-      <td>${esc(r.ext || "")}</td>
-      <td>${esc(r.kind || "")}</td>
-      <td>${statusPill(r.ingest_status)}</td>
-      <td>${conf}</td>
-      <td>${r.processed ? fmtNum(r.chunk_count) : "—"}</td>
-      <td>${fmtSize(r.size)}</td>
-      <td class="meta">${esc(r.quality_reasons || r.error || (r.processed ? "" : "Not ingested"))}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="8" class="placeholder">No manifest rows.</td></tr>`;
-
-  const detailsBody = `
-    <div class="overview-grid" style="margin-top:0">
-      <div class="stat"><div class="label">Not processed</div><div class="value">${esc(fmtNum(unprocessed.length))}</div></div>
-      <div class="stat"><div class="label">Chunks</div><div class="value">${esc(fmtNum(s.total_chunks))}</div></div>
-      <div class="stat"><div class="label">Entities</div><div class="value">${esc(fmtNum(e.unique_entities))}</div></div>
-      <div class="stat"><div class="label">Tags</div><div class="value">${esc(fmtNum(e.unique_tags))}</div></div>
-      <div class="stat"><div class="label">Escalated</div><div class="value">${esc(fmtNum(s.escalated_count))}</div></div>
-      <div class="stat"><div class="label">Low OCR conf.</div><div class="value">${esc(fmtNum(lowConf.length))}</div></div>
-    </div>
-  `;
-
-  const manifestBody = `
-    <div class="section-head">
-      <div class="filter-bar">
-        ${unprocessed.length ? `<span class="flag-note">${fmtNum(unprocessed.length)} not processed</span>` : ""}
-        ${lowConf.length ? `<span class="flag-note">${fmtNum(lowConf.length)} low OCR conf.</span>` : ""}
-        <div class="seg" id="manifestSeg">
-          <button type="button" data-mfilter="all" class="${state.manifestFilter === "all" ? "active" : ""}">All (${fmtNum(manifest.length)})</button>
-          <button type="button" data-mfilter="processed" class="${state.manifestFilter === "processed" ? "active" : ""}">Processed (${fmtNum(processed.length)})</button>
-          <button type="button" data-mfilter="unprocessed" class="${state.manifestFilter === "unprocessed" ? "active" : ""}">Not processed (${fmtNum(unprocessed.length)})</button>
+  const typeCol = typeRows.length
+    ? shownTypes.map(t => `
+        <li>
+          <button type="button" class="entity-col-item ${t.type === browseType ? "active" : ""}" data-browse-type="${esc(t.type)}">
+            <span class="label">${esc(prettyType(t.type))}</span>
+            <span class="n">${fmtNum(typeUniqueCount(t))}</span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </li>`).join("")
+    : `<li class="entity-col-empty">No categories yet.</li>`;
+  const typePager = typeRows.length > entityPageSize
+    ? `<div class="entity-col-foot">
+        <span>${fmtNum(typeStart + 1)}–${fmtNum(typeStart + shownTypes.length)} of ${fmtNum(typeRows.length)}</span>
+        <div class="manifest-pager">
+          <button type="button" class="ghost" data-entity-type-page="prev" ${typePage <= 1 ? "disabled" : ""}>Prev</button>
+          <span>${fmtNum(typePage)} / ${fmtNum(typeTotalPages)}</span>
+          <button type="button" class="ghost" data-entity-type-page="next" ${typePage >= typeTotalPages ? "disabled" : ""}>Next</button>
         </div>
-      </div>
-    </div>
-    <div class="manifest-wrap">
-      <table class="manifest-table">
-        <thead>
-          <tr>
-            <th>File</th><th>Ext</th><th>Kind</th><th>Status</th>
-            <th>OCR conf.</th><th>Chunks</th><th>Size</th><th>Notes</th>
-          </tr>
-        </thead>
-        <tbody>${manifestRows}</tbody>
-      </table>
-    </div>
-  `;
+      </div>`
+    : "";
 
-  const manifestMeta = unprocessed.length
-    ? `<span class="acc-warn">${fmtNum(unprocessed.length)} not processed</span> · ${fmtNum(manifest.length)} files`
-    : `${fmtNum(manifest.length)} files · ${fmtNum(processed.length)} processed`;
+  const selectedEntity = state.overviewEntity;
+  const nameCol = browseType
+    ? (typedEntities.length
+      ? shownEntities.map(row => {
+          const active = selectedEntity
+            && selectedEntity.entity === row.canonical
+            && (selectedEntity.entity_type || null) === (row.type || null);
+          return `
+          <li>
+            <button type="button" class="entity-col-item ${active ? "active" : ""}" data-entity="${esc(row.canonical)}" data-entity-type="${esc(row.type)}" title="${esc(row.canonical)}">
+              <span class="label">${esc(row.canonical)}</span>
+              <span class="n">${fmtNum(row.count)}</span>
+            </button>
+          </li>`;
+        }).join("")
+      : `<li class="entity-col-empty">No names in this category.</li>`)
+    : `<li class="entity-col-empty">Select a category.</li>`;
+  const namePager = typedEntities.length > entityPageSize
+    ? `<div class="entity-col-foot">
+        <span>${fmtNum(nameStart + 1)}–${fmtNum(nameStart + shownEntities.length)} of ${fmtNum(typedEntities.length)}</span>
+        <div class="manifest-pager">
+          <button type="button" class="ghost" data-entity-name-page="prev" ${namePage <= 1 ? "disabled" : ""}>Prev</button>
+          <span>${fmtNum(namePage)} / ${fmtNum(nameTotalPages)}</span>
+          <button type="button" class="ghost" data-entity-name-page="next" ${namePage >= nameTotalPages ? "disabled" : ""}>Next</button>
+        </div>
+      </div>`
+    : "";
 
-  const entityMeta = browseType
-    ? `${prettyType(browseType)} · ${fmtNum(typedEntities.length)}`
-    : `${fmtNum(e.unique_entities)} unique · ${(e.by_type || []).length} types`;
+  const entityFiles = state.overviewEntityFiles || [];
+  const entityDocPath = state.overviewFocus === "entities" ? state.overviewDocPath : null;
+  const docTotalPages = Math.max(1, Math.ceil(entityFiles.length / entityPageSize) || 1);
+  const docPage = Math.min(Math.max(1, state.entityDocPage || 1), docTotalPages);
+  state.entityDocPage = docPage;
+  const docStart = (docPage - 1) * entityPageSize;
+  const shownDocs = entityFiles.slice(docStart, docStart + entityPageSize);
+  const docsList = selectedEntity
+    ? (state.overviewEntityLoading
+      ? `<li class="entity-col-empty">Loading…</li>`
+      : (entityFiles.length
+        ? shownDocs.map(f => {
+            const path = f.rel_path || f.path || "";
+            const active = path === entityDocPath;
+            return `
+            <li>
+              <button type="button" class="entity-col-item ${active ? "active" : ""}" data-entity-doc="${esc(path)}" title="${esc(path)}">
+                <span class="label">${esc(f.name || path.split("/").pop() || path)}</span>
+                <span class="n">${fmtSize(f.size)}</span>
+              </button>
+            </li>`;
+          }).join("")
+        : `<li class="entity-col-empty">No matching documents.</li>`))
+    : "";
+  const docsPager = selectedEntity && !state.overviewEntityLoading && entityFiles.length > entityPageSize
+    ? `<div class="entity-col-foot">
+        <span>${fmtNum(docStart + 1)}–${fmtNum(docStart + shownDocs.length)} of ${fmtNum(entityFiles.length)}</span>
+        <div class="manifest-pager">
+          <button type="button" class="ghost" data-entity-doc-page="prev" ${docPage <= 1 ? "disabled" : ""}>Prev</button>
+          <span>${fmtNum(docPage)} / ${fmtNum(docTotalPages)}</span>
+          <button type="button" class="ghost" data-entity-doc-page="next" ${docPage >= docTotalPages ? "disabled" : ""}>Next</button>
+        </div>
+      </div>`
+    : "";
+
+  let entityDrill = "";
+  if (selectedEntity && entityDocPath) {
+    const previewDoc = state.overviewDoc
+      ? withOverviewUrls(state.overviewDoc, entityDocPath)
+      : withOverviewUrls({}, entityDocPath);
+    const catLabel = browseType ? prettyType(browseType) : "Category";
+    entityDrill = `
+      <div class="entity-stage">
+        <div class="entity-split">
+          <div class="entity-docs-pane">
+            <div class="entity-toolbar">
+              <button type="button" class="entity-back-btn" data-entity-back="docs" aria-label="Back to entity browser">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+                Back
+              </button>
+              <div class="entity-context">${esc(catLabel)} · <strong>${esc(selectedEntity.entity)}</strong></div>
+            </div>
+            <ul class="entity-col-list">${docsList}</ul>
+            ${docsPager}
+          </div>
+          <aside class="attention-preview">
+            <div class="ap-head">
+              <div class="ap-head-text">
+                ${esc(previewDoc?.name || entityDocPath.split("/").pop() || "Preview")}
+                <div class="meta">${esc(previewDoc?.rel_path || entityDocPath)}</div>
+              </div>
+              <div class="ap-actions">${fileActionIcons(previewDoc)}</div>
+            </div>
+            <div class="ap-body">${renderOverviewPreview(state.overviewDoc ? previewDoc : null)}</div>
+          </aside>
+        </div>
+      </div>`;
+  } else {
+    const docsCol = selectedEntity ? `
+      <div class="entity-col">
+        <div class="entity-col-head">Documents</div>
+        <ul class="entity-col-list">${docsList}</ul>
+        ${docsPager}
+      </div>` : "";
+    entityDrill = `
+      <div class="entity-stage">
+        <div class="entity-cols ${selectedEntity ? "has-docs" : ""}" role="group" aria-label="Entity browser">
+          <div class="entity-col">
+            <div class="entity-col-head">Category</div>
+            <ul class="entity-col-list">${typeCol}</ul>
+            ${typePager}
+          </div>
+          <div class="entity-col">
+            <div class="entity-col-head">${browseType ? esc(prettyType(browseType)) : "Names"}</div>
+            <ul class="entity-col-list">${nameCol}</ul>
+            ${namePager}
+          </div>
+          ${docsCol}
+        </div>
+      </div>`;
+  }
+
+  // Tags: alphabetical list + letter jumplist + docs column + preview
+  const tagPageSize = 10;
+  const tagInitial = (t) => {
+    const ch = String(prettyLabel(t.tag) || t.tag || "").trim().charAt(0).toUpperCase();
+    return ch >= "A" && ch <= "Z" ? ch : "#";
+  };
+  const allTags = [...(e.top_tags || [])].sort((a, b) =>
+    String(prettyLabel(a.tag) || a.tag).localeCompare(String(prettyLabel(b.tag) || b.tag), undefined, { sensitivity: "base" })
+  );
+  const tagLetterCounts = {};
+  allTags.forEach(t => {
+    const L = tagInitial(t);
+    tagLetterCounts[L] = (tagLetterCounts[L] || 0) + 1;
+  });
+  if (state.tagLetter && !tagLetterCounts[state.tagLetter]) state.tagLetter = null;
+  const filteredTags = state.tagLetter
+    ? allTags.filter(t => tagInitial(t) === state.tagLetter)
+    : allTags;
+  const tagTotalPages = Math.max(1, Math.ceil(filteredTags.length / tagPageSize) || 1);
+  const tagPage = Math.min(Math.max(1, state.tagPage || 1), tagTotalPages);
+  state.tagPage = tagPage;
+  const tagStart = (tagPage - 1) * tagPageSize;
+  const shownTags = filteredTags.slice(tagStart, tagStart + tagPageSize);
+  const selectedTag = state.overviewFocus === "tags" ? state.overviewTag : null;
+  const alphaLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const tagAlpha = `
+    <div class="tag-alpha" role="navigation" aria-label="Jump by letter">
+      <button type="button" class="tag-alpha-all ${!state.tagLetter ? "active" : ""}" data-tag-letter="">All</button>
+      ${alphaLetters.map(L => `
+        <button type="button" class="${state.tagLetter === L ? "active" : ""}" data-tag-letter="${L}"
+          ${tagLetterCounts[L] ? "" : "disabled"} title="${tagLetterCounts[L] ? `${tagLetterCounts[L]} tag(s)` : "No tags"}">${L}</button>
+      `).join("")}
+      <button type="button" class="${state.tagLetter === "#" ? "active" : ""}" data-tag-letter="#"
+        ${tagLetterCounts["#"] ? "" : "disabled"} title="${tagLetterCounts["#"] ? `${tagLetterCounts["#"]} tag(s)` : "No tags"}">#</button>
+    </div>`;
+  const tagCol = filteredTags.length
+    ? shownTags.map(t => `
+        <li>
+          <button type="button" class="entity-col-item ${selectedTag === t.tag ? "active" : ""}" data-overview-tag="${esc(t.tag)}" title="${esc(t.tag)}">
+            <span class="label">${esc(prettyLabel(t.tag))}</span>
+            <span class="n">${fmtNum(t.count)}</span>
+          </button>
+        </li>`).join("")
+    : `<li class="entity-col-empty">${allTags.length ? "No tags for this letter." : "No tags yet."}</li>`;
+  const tagPager = filteredTags.length > tagPageSize
+    ? `<div class="entity-col-foot">
+        <span>${state.tagLetter ? esc(state.tagLetter) + " · " : ""}${fmtNum(tagStart + 1)}–${fmtNum(tagStart + shownTags.length)} of ${fmtNum(filteredTags.length)}</span>
+        <div class="manifest-pager">
+          <button type="button" class="ghost" data-tag-page="prev" ${tagPage <= 1 ? "disabled" : ""}>Prev</button>
+          <span>${fmtNum(tagPage)} / ${fmtNum(tagTotalPages)}</span>
+          <button type="button" class="ghost" data-tag-page="next" ${tagPage >= tagTotalPages ? "disabled" : ""}>Next</button>
+        </div>
+      </div>`
+    : (filteredTags.length
+      ? `<div class="entity-col-foot"><span>${state.tagLetter ? esc(state.tagLetter) + " · " : ""}${fmtNum(filteredTags.length)} tag${filteredTags.length === 1 ? "" : "s"}</span></div>`
+      : "");
+
+  const tagFiles = state.overviewTagFiles || [];
+  const tagDocPath = state.overviewFocus === "tags" ? state.overviewDocPath : null;
+  const tagDocTotalPages = Math.max(1, Math.ceil(tagFiles.length / tagPageSize) || 1);
+  const tagDocPage = Math.min(Math.max(1, state.tagDocPage || 1), tagDocTotalPages);
+  state.tagDocPage = tagDocPage;
+  const tagDocStart = (tagDocPage - 1) * tagPageSize;
+  const shownTagDocs = tagFiles.slice(tagDocStart, tagDocStart + tagPageSize);
+  const tagDocsList = selectedTag
+    ? (state.overviewTagLoading
+      ? `<li class="entity-col-empty">Loading…</li>`
+      : (tagFiles.length
+        ? shownTagDocs.map(f => {
+            const path = f.rel_path || f.path || "";
+            const active = path === tagDocPath;
+            return `
+            <li>
+              <button type="button" class="entity-col-item ${active ? "active" : ""}" data-tag-doc="${esc(path)}" title="${esc(path)}">
+                <span class="label">${esc(f.name || path.split("/").pop() || path)}</span>
+                <span class="n">${fmtSize(f.size)}</span>
+              </button>
+            </li>`;
+          }).join("")
+        : `<li class="entity-col-empty">No matching documents.</li>`))
+    : "";
+  const tagDocsPager = selectedTag && !state.overviewTagLoading && tagFiles.length > tagPageSize
+    ? `<div class="entity-col-foot">
+        <span>${fmtNum(tagDocStart + 1)}–${fmtNum(tagDocStart + shownTagDocs.length)} of ${fmtNum(tagFiles.length)}</span>
+        <div class="manifest-pager">
+          <button type="button" class="ghost" data-tag-doc-page="prev" ${tagDocPage <= 1 ? "disabled" : ""}>Prev</button>
+          <span>${fmtNum(tagDocPage)} / ${fmtNum(tagDocTotalPages)}</span>
+          <button type="button" class="ghost" data-tag-doc-page="next" ${tagDocPage >= tagDocTotalPages ? "disabled" : ""}>Next</button>
+        </div>
+      </div>`
+    : "";
+
+  let tagDrill = "";
+  if (selectedTag && tagDocPath) {
+    const previewDoc = state.overviewDoc
+      ? withOverviewUrls(state.overviewDoc, tagDocPath)
+      : withOverviewUrls({}, tagDocPath);
+    tagDrill = `
+      <div class="entity-stage">
+        <div class="entity-split">
+          <div class="entity-docs-pane">
+            <div class="entity-toolbar">
+              <button type="button" class="entity-back-btn" data-tag-back="docs" aria-label="Back to tags">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+                Back
+              </button>
+              <div class="entity-context">Tag · <strong>${esc(prettyLabel(selectedTag))}</strong></div>
+            </div>
+            <ul class="entity-col-list">${tagDocsList}</ul>
+            ${tagDocsPager}
+          </div>
+          <aside class="attention-preview">
+            <div class="ap-head">
+              <div class="ap-head-text">
+                ${esc(previewDoc?.name || tagDocPath.split("/").pop() || "Preview")}
+                <div class="meta">${esc(previewDoc?.rel_path || tagDocPath)}</div>
+              </div>
+              <div class="ap-actions">${fileActionIcons(previewDoc)}</div>
+            </div>
+            <div class="ap-body">${renderOverviewPreview(state.overviewDoc ? previewDoc : null)}</div>
+          </aside>
+        </div>
+      </div>`;
+  } else {
+    const tagDocsCol = selectedTag ? `
+      <div class="entity-col">
+        <div class="entity-col-head">Documents</div>
+        <ul class="entity-col-list">${tagDocsList}</ul>
+        ${tagDocsPager}
+      </div>` : "";
+    tagDrill = `
+      <div class="entity-stage">
+        <div class="entity-cols ${selectedTag ? "has-docs-2" : "tags-only"}" role="group" aria-label="Tag browser">
+          <div class="entity-col">
+            <div class="entity-col-head">Tags A–Z</div>
+            ${tagAlpha}
+            <ul class="entity-col-list">${tagCol}</ul>
+            ${tagPager}
+          </div>
+          ${tagDocsCol}
+        </div>
+      </div>`;
+  }
+
+  const emptyMsg = filter === "low_confidence"
+    ? "No low confidence files."
+    : "All files in this production are processed.";
+
+  const showNotes = filter !== "low_confidence";
+  const showStatus = filter !== "low_confidence";
+  const colCount = 3 + (showStatus ? 1 : 0) + (showNotes ? 1 : 0);
+  const selectedPath = state.overviewDocPath;
+  const manifestRows = shown.map(r => {
+    const unmet = !r.processed;
+    const low = isLowConfidence(r);
+    const active = r.rel_path === selectedPath;
+    const flag = [unmet || low ? "flag-unprocessed" : "", active ? "active" : ""].filter(Boolean).join(" ");
+    let note = r.error || r.quality_reasons || "";
+    if (!note && unmet) note = "Not processed";
+    return `<tr class="${flag}" data-path="${esc(r.rel_path)}">
+      <td class="file-cell" title="${esc(r.rel_path)}">
+        <div class="file-main">
+          ${unmet || low ? warnIcon() : ""}
+          <span class="path-text">${esc(r.name || r.rel_path)}</span>
+        </div>
+      </td>
+      <td>${esc(r.ext || "")}</td>
+      ${showStatus ? `<td>${statusPill(r.ingest_status)}</td>` : ""}
+      <td>${fmtSize(r.size)}</td>
+      ${showNotes ? `<td class="meta">${esc(note)}</td>` : ""}
+    </tr>`;
+  }).join("") || `<tr><td colspan="${colCount}" class="placeholder">${emptyMsg}</td></tr>`;
+
+  const rangeLabel = fullRows.length
+    ? `Showing ${fmtNum(start + 1)}–${fmtNum(start + shown.length)} of ${fmtNum(fullRows.length)}`
+    : "Showing 0";
+
+  const pager = fullRows.length
+    ? `<div class="manifest-pager">
+        <button type="button" class="ghost" data-manifest-page="prev" ${page <= 1 ? "disabled" : ""}>Previous</button>
+        <span>Page ${fmtNum(page)} of ${fmtNum(totalPages)}</span>
+        <button type="button" class="ghost" data-manifest-page="next" ${page >= totalPages ? "disabled" : ""}>Next</button>
+      </div>`
+    : "";
+
+  const attentionCount = unprocessed.length + lowConfidence.length;
+  const focus = state.overviewFocus;
+  const fileCount = s.file_count ?? manifest.length;
+
+  const tiles = [
+    {
+      id: "files",
+      label: "Files",
+      value: fmtNum(fileCount),
+      blurb: "Everything in this discovery production.",
+      warn: false,
+    },
+    {
+      id: "attention",
+      label: "Needs attention",
+      value: fmtNum(attentionCount),
+      blurb: "Files Marshal could not fully read, or read poorly.",
+      warn: attentionCount > 0,
+    },
+    {
+      id: "entities",
+      label: "Entities",
+      value: fmtNum(e.unique_entities),
+      blurb: "People, places, and other names found in the documents.",
+      warn: false,
+    },
+    {
+      id: "tags",
+      label: "Tags",
+      value: fmtNum(e.unique_tags),
+      blurb: "Short labels on documents — click a tag to find matches.",
+      warn: false,
+    },
+  ];
+
+  let detail = "";
+  if (focus === "files") {
+    detail = `
+      <div class="overview-detail" style="padding:12px">
+        <div class="files-detail">
+          <button type="button" class="files-detail-cta" data-open-explorer="1">
+            <svg class="cta-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+            <span class="cta-label">Open Document Explorer</span>
+          </button>
+          <div class="files-detail-copy">
+            <p>Browse the production by folder or category, and open individual documents.</p>
+          </div>
+        </div>
+      </div>`;
+  } else if (focus === "attention") {
+    const previewDoc = state.overviewDoc;
+    const showPreview = !!selectedPath;
+    const listBlock = `
+      <div class="attention-list">
+        <div class="manifest-wrap" style="flex:1">
+          <table class="manifest-table">
+            <thead>
+              <tr>
+                <th>File</th><th>Ext</th>${showStatus ? "<th>Status</th>" : ""}<th>Size</th>${showNotes ? "<th>Notes</th>" : ""}
+              </tr>
+            </thead>
+            <tbody>${manifestRows}</tbody>
+          </table>
+        </div>
+        <div class="manifest-foot">
+          <span>${esc(rangeLabel)}</span>
+          ${pager}
+        </div>
+      </div>`;
+    const previewDocFull = previewDoc
+      ? withOverviewUrls(previewDoc, selectedPath || previewDoc.rel_path)
+      : (selectedPath ? withOverviewUrls({}, selectedPath) : null);
+    const previewBlock = showPreview ? `
+      <aside class="attention-preview">
+        <div class="ap-head">
+          <div class="ap-head-text">
+            ${esc(previewDocFull?.name || previewDocFull?.rel_path || selectedPath || "Preview")}
+            <div class="meta">${esc(previewDocFull?.rel_path || selectedPath || "")}</div>
+          </div>
+          <div class="ap-actions">${fileActionIcons(previewDocFull)}</div>
+        </div>
+        <div class="ap-body">${renderOverviewPreview(previewDoc ? previewDocFull : null)}</div>
+      </aside>` : "";
+    detail = `
+      <div class="overview-detail">
+        <div class="filter-bar" style="margin-bottom:10px">
+          <div class="seg" id="manifestSeg">
+            <button type="button" data-mfilter="unprocessed" class="${filter === "unprocessed" ? "active" : ""}">
+              Unprocessed (${fmtNum(unprocessed.length)})
+            </button>
+            <button type="button" data-mfilter="low_confidence" class="${filter === "low_confidence" ? "active" : ""}">
+              Low confidence files (${fmtNum(lowConfidence.length)})
+            </button>
+          </div>
+        </div>
+        ${showPreview
+          ? `<div class="attention-split">${listBlock}${previewBlock}</div>`
+          : listBlock}
+      </div>`;
+  } else if (focus === "entities") {
+    detail = `
+      <div class="overview-detail">
+        ${entityDrill}
+      </div>`;
+  } else if (focus === "tags") {
+    detail = `
+      <div class="overview-detail">
+        ${tagDrill}
+      </div>`;
+  }
 
   return `
     <div class="overview">
       <div class="overview-intro">
-        <h1>${esc(caseName)}</h1>
-        <p>Case snapshot — expand a section for details.</p>
+        <h1>Case Overview</h1>
       </div>
-      <div class="overview-grid">
-        ${stats.map(([label, value]) => `
-          <div class="stat"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>
+      <div class="overview-tiles">
+        ${tiles.map(t => `
+          <button type="button" class="overview-tile ${t.warn ? "warn" : ""} ${focus === t.id ? "active" : ""}" data-overview-focus="${t.id}">
+            <div class="tile-top">
+              <div class="tile-label">${esc(t.label)}</div>
+              <div class="tile-stat">
+                <div class="tile-value">${esc(t.value)}</div>
+              </div>
+            </div>
+            <p class="tile-blurb">${esc(t.blurb)}</p>
+          </button>
         `).join("")}
       </div>
-
-      <div class="accordion">
-        ${accordionItem("details", "More stats", `${fmtNum(e.unique_entities)} entities · ${fmtNum(e.unique_tags)} tags`, detailsBody)}
-        ${accordionItem("manifest", "Production manifest", manifestMeta, manifestBody)}
-        ${accordionItem("entities", "Entities", esc(entityMeta), entityDrill)}
-        ${accordionItem("tags", "Tags", `${fmtNum((e.top_tags || []).length)} shown · click to filter docs`, `<div class="chip-row">${topTags}</div>`)}
-      </div>
+      ${detail}
     </div>
   `;
 }
@@ -1340,9 +2435,12 @@ function renderDocTabs() {
   ).join("");
 
   let body = "";
+  const isMediaPreview = state.tab === "preview" && (
+    (doc.kind === "pdf" || doc.kind === "image" || doc.kind === "video" || doc.kind === "audio") && doc.raw_url
+  );
   if (state.tab === "preview") {
     if (doc.kind === "pdf" && doc.raw_url) {
-      body = `<iframe class="preview-frame" src="${esc(doc.raw_url)}" title="${esc(doc.name)}"></iframe>`;
+      body = `<iframe class="preview-frame" src="${esc(pdfEmbedUrl(doc.raw_url))}" title="${esc(doc.name)}"></iframe>`;
     } else if (doc.kind === "image" && doc.raw_url) {
       body = `<img class="preview-img" src="${esc(doc.raw_url)}" alt="${esc(doc.name)}"/>`;
     } else if ((doc.kind === "video" || doc.kind === "audio") && doc.raw_url) {
@@ -1353,8 +2451,7 @@ function renderDocTabs() {
     } else if (doc.open_url || doc.raw_url) {
       body = `<div class="panel-card">
         <p>${doc._not_ingested ? "File is on disk but not fully ingested yet." : "No inline preview for this type."}</p>
-        <p><a href="${esc(doc.open_url || doc.raw_url)}" target="_blank" rel="noopener">Open in viewer</a>
-        ${doc.download_url ? ` · <a href="${esc(doc.download_url)}" target="_blank" rel="noopener">Download</a>` : ""}</p>
+        <p>${doc.download_url ? `<a href="${esc(doc.download_url)}" download target="_blank" rel="noopener">Download</a>` : ""}</p>
         ${doc.error ? `<p class="err">${esc(doc.error)}</p>` : ""}
       </div>`;
     } else {
@@ -1432,13 +2529,12 @@ function renderDocTabs() {
           <div class="meta">${esc(doc.rel_path)}</div>
         </div>
         <div class="doc-actions">
-          ${doc.open_url ? `<a href="${esc(doc.open_url)}" target="_blank" rel="noopener"><button type="button" class="ghost">Open</button></a>` : ""}
-          ${doc.download_url ? `<a href="${esc(doc.download_url)}" target="_blank" rel="noopener"><button type="button" class="ghost">Download</button></a>` : ""}
+          ${fileActionIcons(doc)}
         </div>
       </div>
       <div class="tabs">${tabBtns}</div>
     </div>
-    <div class="doc-body">${body}</div>
+    <div class="doc-body ${isMediaPreview ? "is-preview" : ""}">${body}</div>
   `;
 }
 
@@ -1526,7 +2622,6 @@ function renderExplorer() {
 
 function renderCaseShell() {
   const name = state.caseMeta?.display_name || state.caseMeta?.slug || ("Case " + state.caseId);
-  const sub = state.caseMeta?.slug && state.caseMeta.slug !== name ? state.caseMeta.slug : "";
   const content = state.module === "explorer"
     ? renderExplorer()
     : state.module === "notebook"
@@ -1540,7 +2635,6 @@ function renderCaseShell() {
         <div class="case-nav-head">
           <button type="button" class="all" id="btnAllCases">All cases</button>
           <h1>${esc(name)}</h1>
-          ${sub ? `<p class="sub">${esc(sub)}</p>` : ""}
         </div>
         <nav class="case-nav-list" aria-label="Case views">
           <button type="button" class="${state.module === "overview" ? "active" : ""}" data-module="overview">
@@ -1642,7 +2736,6 @@ function renderNotebook() {
   return `
     <div class="notebook ${split ? "nb-split" : ""}">
       <aside class="nb-side">
-        <div class="nb-side-head">Wiki</div>
         <ul class="nb-tree">${tree}</ul>
       </aside>
       <section class="nb-main">
@@ -1750,50 +2843,171 @@ function bindCaseHandlers() {
   }
 
   if (state.module === "overview") {
-    document.querySelectorAll("[data-acc-toggle]").forEach(btn => {
-      btn.onclick = () => toggleOverviewSection(btn.dataset.accToggle);
+    document.querySelectorAll("[data-overview-focus]").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.overviewFocus;
+        const next = state.overviewFocus === id ? null : id;
+        state.overviewFocus = next;
+        if (next === "attention") {
+          state.manifestPage = 1;
+          clearOverviewDrill();
+        } else if (next === "entities") {
+          clearOverviewTag();
+          state.overviewDocPath = null;
+          state.overviewDoc = null;
+        } else if (next === "tags") {
+          clearOverviewEntity();
+          state.overviewDocPath = null;
+          state.overviewDoc = null;
+        } else {
+          clearOverviewDrill();
+        }
+        render();
+      };
+    });
+    document.querySelectorAll("[data-open-explorer]").forEach(btn => {
+      btn.onclick = () => setModule("explorer");
     });
     document.querySelectorAll("[data-mfilter]").forEach(btn => {
       btn.onclick = (ev) => {
         ev.stopPropagation();
-        state.manifestFilter = btn.dataset.mfilter;
-        state.overviewOpen = { ...state.overviewOpen, manifest: true };
+        state.manifestFilter = btn.dataset.mfilter === "low_confidence" ? "low_confidence" : "unprocessed";
+        state.manifestPage = 1;
+        state.overviewDocPath = null;
+        state.overviewDoc = null;
         render();
       };
     });
-    document.querySelectorAll("[data-tag]").forEach(btn => {
-      btn.onclick = () => openFacet({ tag: btn.dataset.tag });
+    document.querySelectorAll("[data-manifest-page]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (btn.disabled) return;
+        const dir = btn.dataset.manifestPage;
+        state.manifestPage = Math.max(1, (state.manifestPage || 1) + (dir === "next" ? 1 : -1));
+        state.overviewDocPath = null;
+        state.overviewDoc = null;
+        render();
+      };
+    });
+    document.querySelectorAll("[data-overview-tag]").forEach(btn => {
+      btn.onclick = () => {
+        loadOverviewTagMatches(btn.dataset.overviewTag)
+          .catch((e) => alert(e.message || String(e)));
+      };
+    });
+    document.querySelectorAll("[data-tag-letter]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (btn.disabled) return;
+        const letter = btn.dataset.tagLetter || null;
+        state.tagLetter = letter || null;
+        state.tagPage = 1;
+        render();
+      };
+    });
+    document.querySelectorAll("[data-tag-page]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (btn.disabled) return;
+        const dir = btn.dataset.tagPage;
+        state.tagPage = Math.max(1, (state.tagPage || 1) + (dir === "next" ? 1 : -1));
+        render();
+      };
+    });
+    document.querySelectorAll("[data-tag-doc-page]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (btn.disabled) return;
+        const dir = btn.dataset.tagDocPage;
+        state.tagDocPage = Math.max(1, (state.tagDocPage || 1) + (dir === "next" ? 1 : -1));
+        render();
+      };
+    });
+    document.querySelectorAll("[data-tag-doc]").forEach(btn => {
+      btn.onclick = async () => {
+        const path = btn.dataset.tagDoc;
+        try {
+          await loadOverviewDoc(path, { paint: false });
+          await withViewTransition(() => render());
+        } catch (e) {
+          alert(e.message || String(e));
+        }
+      };
+    });
+    document.querySelectorAll("[data-tag-back]").forEach(btn => {
+      btn.onclick = () => {
+        withViewTransition(() => {
+          state.overviewDocPath = null;
+          state.overviewDoc = null;
+          render();
+        });
+      };
     });
     document.querySelectorAll("[data-browse-type]").forEach(btn => {
       btn.onclick = () => {
         state.entityBrowseType = btn.dataset.browseType;
-        state.overviewOpen = { ...state.overviewOpen, entities: true };
+        state.entityNamePage = 1;
+        clearOverviewEntity();
         render();
       };
     });
-    const back = document.getElementById("btnEntityBack");
-    if (back) back.onclick = () => {
-      state.entityBrowseType = null;
-      state.overviewOpen = { ...state.overviewOpen, entities: true };
-      render();
-    };
+    document.querySelectorAll("[data-entity-type-page]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (btn.disabled) return;
+        const dir = btn.dataset.entityTypePage;
+        state.entityTypePage = Math.max(1, (state.entityTypePage || 1) + (dir === "next" ? 1 : -1));
+        render();
+      };
+    });
+    document.querySelectorAll("[data-entity-name-page]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (btn.disabled) return;
+        const dir = btn.dataset.entityNamePage;
+        state.entityNamePage = Math.max(1, (state.entityNamePage || 1) + (dir === "next" ? 1 : -1));
+        render();
+      };
+    });
+    document.querySelectorAll("[data-entity-doc-page]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        if (btn.disabled) return;
+        const dir = btn.dataset.entityDocPage;
+        state.entityDocPage = Math.max(1, (state.entityDocPage || 1) + (dir === "next" ? 1 : -1));
+        render();
+      };
+    });
     document.querySelectorAll("[data-entity]").forEach(btn => {
-      btn.onclick = () => openFacet({
-        entity: btn.dataset.entity,
-        entity_type: btn.dataset.entityType || null,
-      });
+      btn.onclick = () => {
+        loadOverviewEntityMatches(btn.dataset.entity, btn.dataset.entityType || null)
+          .catch((e) => alert(e.message || String(e)));
+      };
+    });
+    document.querySelectorAll("[data-entity-doc]").forEach(btn => {
+      btn.onclick = async () => {
+        const path = btn.dataset.entityDoc;
+        try {
+          await loadOverviewDoc(path, { paint: false });
+          await withViewTransition(() => render());
+        } catch (e) {
+          alert(e.message || String(e));
+        }
+      };
+    });
+    document.querySelectorAll("[data-entity-back]").forEach(btn => {
+      btn.onclick = () => {
+        withViewTransition(() => {
+          state.overviewDocPath = null;
+          state.overviewDoc = null;
+          render();
+        });
+      };
     });
     document.querySelectorAll(".manifest-table tr[data-path]").forEach(tr => {
-      tr.onclick = () => {
-        navigate({
-          name: "case",
-          caseId: state.caseId,
-          module: "explorer",
-          folder: "",
-          docPath: tr.dataset.path,
-          tab: "preview",
-          facet: null,
-        });
+      tr.onclick = (ev) => {
+        if (ev.target.closest && ev.target.closest("[data-dl]")) return;
+        loadOverviewDoc(tr.dataset.path).catch((e) => alert(e.message || String(e)));
       };
     });
     return;
@@ -1868,20 +3082,46 @@ function render() {
   }
   if (state.route.name === "home") {
     main.innerHTML = renderHome();
+    const openCase = (id) => {
+      state.overviewOpen = {};
+      state.entityBrowseType = null;
+      state.entityTypePage = 1;
+      state.entityNamePage = 1;
+      state.entityDocPage = 1;
+      state.tagPage = 1;
+      state.tagDocPage = 1;
+      state.tagLetter = null;
+      state.manifestFilter = "unprocessed";
+      state.manifestPage = 1;
+      state.overviewFocus = "files";
+      clearOverviewDrill();
+      navigate({
+        name: "case",
+        caseId: Number(id),
+        module: "overview",
+        folder: "",
+        docPath: null,
+        tab: "preview",
+        facet: null,
+      });
+    };
     main.querySelectorAll(".case-tile").forEach(el => {
-      el.onclick = () => {
-        state.overviewOpen = {};
-        state.entityBrowseType = null;
-        state.manifestFilter = "all";
-        navigate({
-          name: "case",
-          caseId: Number(el.dataset.id),
-          module: "overview",
-          folder: "",
-          docPath: null,
-          tab: "preview",
-          facet: null,
-        });
+      el.onclick = (ev) => {
+        if (ev.target.closest && ev.target.closest("[data-rename-case]")) return;
+        openCase(el.dataset.id);
+      };
+      el.onkeydown = (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          openCase(el.dataset.id);
+        }
+      };
+    });
+    main.querySelectorAll("[data-rename-case]").forEach(btn => {
+      btn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        renameCase(Number(btn.dataset.renameCase));
       };
     });
     return;
@@ -1903,6 +3143,7 @@ window.addEventListener("hashchange", () => {
 });
 
 (async function init() {
+  wireCaseRenameModal();
   state.route = parseHash();
   render();
   await loadForRoute();

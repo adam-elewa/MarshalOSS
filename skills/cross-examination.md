@@ -12,7 +12,9 @@ The Notebook is a **blank wiki**. This recipe only scaffolds when the user wants
 
 ## Goal
 
-One area of the wiki where each important **person** (or entity) has:
+Use the **stock top-level roots** (sidebar icons): prefer `People` for hubs, `Cross` for exam outlines, and/or `Witnesses` for witness packs. Exact names matter.
+
+Each important **person** (or entity) should have:
 
 1. A short hub page (who they are, role, mention weight)
 2. A **Cross outline** with questions
@@ -24,11 +26,14 @@ In the UI, clicking a `[[doc:]]` link opens that file in a **side viewer** next 
 
 1. `notebook_list` — see what already exists; do not duplicate trees.
 2. `search` / `ask` / `browse_case_files` / entity facets — gather **verified** `rel_path` values and Bates-like labels.
-3. Upsert an index, e.g. `Cross/` or `Witnesses/` (ask the user which name they prefer).
+3. Upsert stock indexes (exact paths):
+   - `People` — person/entity hubs
+   - `Cross` — cross-exam binder / outlines index
+   - `Witnesses` — optional witness-pack tree (or when using `notebook_build_witness_pack`)
 4. For each person/entity worth examining:
-   - `People/{Name}` or `Witnesses/{Name}` — hub + list of linked docs
-   - `People/{Name}/Cross outline` — checklist questions with `[[doc:]]` beside each item
-5. Append a short link from `Home` to the new index (do not wipe human notes).
+   - `People/{Name}` — hub + list of linked docs
+   - `People/{Name}/Cross outline` or `Cross/{Name}` — checklist questions with `[[doc:]]` beside each item
+5. Append a short link from `Home` to `People` / `Cross` / `Witnesses` (do not wipe human notes).
 6. Optional helper: `notebook_build_witness_pack` can seed a stock `Witnesses/*` tree from person entities; still verify paths and rewrite outlines to match the user’s theory.
 
 ## Page shape (example)

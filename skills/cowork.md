@@ -30,6 +30,30 @@ MarshalOSS indexes the production and exposes it over MCP. **You** (Cowork) answ
 
 Call `notebook_skill` with no name to list every skill in `skills/`, or with `name` = `cowork` / `cross-examination` / `timeline`. Same files are mirrored in the wiki at `Meta/Skills/*`.
 
+## Notebook IA (prefer this going forward)
+
+The web Notebook sidebar **bolds top-level sections** and shows small icons for stock roots. Structure new case wikis this way so the UI stays clear:
+
+| Top-level path | Use for | UI icon |
+|----------------|---------|---------|
+| `Home` | Case landing + links out | house |
+| `Timeline` | Chronology index + day pages | clock |
+| `Witnesses` | Witness hubs / packs | people |
+| `People` | Person/entity hubs (exam prep) | person |
+| `Cross` | Cross-exam outlines / binders | stand |
+| `Theory` | Defense theory / elements | (bookmark) |
+| `Motions` | Motion binders | (folder) |
+| `Discovery` | Discovery disputes / logs | (stack) |
+| `Meta` | Skills, playbooks, chrome | gear |
+
+**Rules for AI scaffolding**
+
+1. Prefer these **exact** top-level names (Title Case, single segment) so icons light up. Do not invent `timelines/`, `witness_folders/`, etc.
+2. Put detail under children: `Timeline/2024-08-09 …`, `People/{Name}/Cross outline`, `Motions/Suppress/…`.
+3. Always keep a short link from `Home` to each top-level area you create (append; don’t wipe human notes).
+4. New one-off areas are fine (`Experts`, `Investigators`, …) — still use a single Title Case root; unknown roots render bold without an icon until the app map is extended.
+5. Load `timeline` / `cross-examination` skills for recipes; both assume this IA.
+
 ## Anti-patterns
 
 - Dumping every full file into context by default

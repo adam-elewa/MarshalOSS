@@ -408,6 +408,37 @@ def create_app(
             or lower.endswith((".txt", ".md", ".csv", ".log", ".json", ".xml", ".kml", ".st3"))
         ):
             kind = "text"
+        entities = detail.get("entities") or []
+        tags = detail.get("tags") or []
+        ent_keys: list[tuple[str, str]] = []
+        for e in entities:
+            if isinstance(e, dict):
+                et = str(e.get("type") or e.get("label") or "other").strip().lower() or "other"
+                lab = str(
+                    e.get("canonical")
+                    or e.get("text")
+                    or e.get("value")
+                    or e.get("name")
+                    or e.get("mention")
+                    or ""
+                ).strip()
+            else:
+                et, lab = "other", str(e).strip()
+            if lab:
+                ent_keys.append((et, lab))
+        tag_labels: list[str] = []
+        for t in tags:
+            if isinstance(t, str):
+                lab = t.strip()
+            elif isinstance(t, dict):
+                lab = str(t.get("name") or t.get("label") or t.get("tag") or "").strip()
+            else:
+                lab = str(t).strip()
+            if lab:
+                tag_labels.append(lab)
+        facet_counts = db.facet_doc_counts_for_labels(
+            c.id, entities=ent_keys, tags=tag_labels
+        )
         return {
             "case": c.__dict__,
             "file": {
@@ -422,8 +453,9 @@ def create_app(
                 "kind": kind,
                 "meta": detail.get("meta") or {},
                 "manifest": detail.get("manifest"),
-                "entities": detail.get("entities") or [],
-                "tags": detail.get("tags") or [],
+                "entities": entities,
+                "tags": tags,
+                "facet_counts": facet_counts,
                 "text": detail.get("text") or "",
                 "chunk_count": len(detail.get("chunks") or []),
                 "chunks": detail.get("chunks") or [],

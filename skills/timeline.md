@@ -12,10 +12,12 @@ Build a **case chronology** in the wiki. Every timed fact should cite discovery.
 
 ## Goal
 
-- A top-level `Timeline` index (chronological)
+- A top-level **`Timeline`** index (exact name — sidebar clock icon)
 - Optional deep pages `Timeline/YYYY-MM-DD short title` for busy days
 - Each bullet: **when · who · what · `[[doc:…]]` cite**
 - Cross-links to person hubs when they exist (`[[page:People/Name|Name]]`)
+
+Do **not** use alternate roots like `Chronology` or `timelines/` — the UI expects `Timeline`.
 
 In the UI, `[[doc:]]` opens the production file beside the notebook.
 

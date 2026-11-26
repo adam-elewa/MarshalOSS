@@ -797,6 +797,113 @@ class Database:
                 break
         return out
 
+    def facet_doc_counts_for_labels(
+        self,
+        case_id: int,
+        *,
+        entities: list[tuple[str, str]] | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Count ingested docs matching each entity/tag label (one meta scan).
+
+        Entity keys are (type, label). Person/officer labels use the same fuzzy
+        name matching as find_files_by_facet so counts match the facet list.
+        """
+        from collections import Counter
+
+        from .entities import person_match_key, person_names_compatible
+
+        want_ents = [
+            (str(et or "other").strip().lower() or "other", str(lab or "").strip())
+            for et, lab in (entities or [])
+            if str(lab or "").strip()
+        ]
+        want_tags = [str(t or "").strip() for t in (tags or []) if str(t or "").strip()]
+        if not want_ents and not want_tags:
+            return {"entities": {}, "tags": {}}
+
+        ent_counts: Counter[tuple[str, str]] = Counter()
+        tag_counts: Counter[str] = Counter()
+        tag_l_map = {t.lower(): t for t in want_tags}
+
+        rows = self.conn.execute(
+            "SELECT meta FROM files WHERE case_id=?",
+            (case_id,),
+        ).fetchall()
+        for row in rows:
+            raw = row["meta"] if isinstance(row, sqlite3.Row) else row[0]
+            if not raw:
+                continue
+            try:
+                meta = json.loads(raw) if isinstance(raw, str) else raw
+            except Exception:
+                continue
+            if not isinstance(meta, dict):
+                continue
+            ents = meta.get("entities") or []
+            file_tags = meta.get("tags") or []
+
+            if want_tags and file_tags:
+                seen_tag: set[str] = set()
+                for t in file_tags:
+                    if isinstance(t, str):
+                        label = t
+                    elif isinstance(t, dict):
+                        label = str(t.get("name") or t.get("label") or t.get("tag") or "")
+                    else:
+                        label = str(t)
+                    key = label.strip().lower()
+                    orig = tag_l_map.get(key)
+                    if orig and orig not in seen_tag:
+                        seen_tag.add(orig)
+                        tag_counts[orig] += 1
+
+            if want_ents and ents:
+                file_ents: list[tuple[str, str, list[str]]] = []
+                for e in ents:
+                    if isinstance(e, dict):
+                        et = str(e.get("type") or "other").strip().lower() or "other"
+                        label = str(
+                            e.get("canonical")
+                            or e.get("text")
+                            or e.get("value")
+                            or e.get("name")
+                            or ""
+                        ).strip()
+                        aliases = [str(a) for a in (e.get("aliases") or []) if a]
+                    else:
+                        et, label, aliases = "other", str(e).strip(), []
+                    if label:
+                        file_ents.append((et, label, aliases))
+                hit: set[tuple[str, str]] = set()
+                for et, lab in want_ents:
+                    if (et, lab) in hit:
+                        continue
+                    use_fuzzy = et in ("person", "officer") or (
+                        len(person_match_key(lab) or ()) >= 2
+                    )
+                    lab_l = lab.lower()
+                    for fet, flabel, aliases in file_ents:
+                        if et in ("person", "officer"):
+                            if fet not in ("person", "officer"):
+                                continue
+                        elif fet != et:
+                            continue
+                        names = [flabel] + aliases
+                        exact = any(n.strip().lower() == lab_l for n in names if n)
+                        fuzzy = use_fuzzy and any(
+                            person_names_compatible(lab, n) for n in names if n
+                        )
+                        if exact or fuzzy:
+                            hit.add((et, lab))
+                            ent_counts[(et, lab)] += 1
+                            break
+
+        return {
+            "entities": {f"{et}::{lab}": n for (et, lab), n in ent_counts.items()},
+            "tags": dict(tag_counts),
+        }
+
     def case_entity_tag_stats(self, case_id: int, top_n: int = 25) -> dict[str, Any]:
         """Aggregate entities/tags across ingested files for case overview."""
         from collections import Counter

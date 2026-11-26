@@ -2,14 +2,24 @@
 name: marshal-notebook
 description: >-
   MarshalOSS notebook + Cowork skills. Use when working the case wiki, search,
-  or MCP tools. Call notebook_skill (no name) for the full skill list under
-  skills/; call with name to load one recipe.
+  or MCP tools. Prefer stock top-level roots (Home, Timeline, Witnesses,
+  People, Cross, Theory, Motions, Discovery, Meta) so sidebar icons show.
+  Call notebook_skill (no name) for the skill list under skills/; with name
+  to load one recipe.
 disable-model-invocation: false
 ---
 
 # MarshalOSS skills
 
 All playbooks live in the repo folder **`skills/`** (one place).
+
+## Notebook IA (do this)
+
+Scaffold with these **exact** top-level paths (sidebar bold + icons):  
+`Home`, `Timeline`, `Witnesses`, `People`, `Cross`, `Theory`, `Motions`, `Discovery`, `Meta`.
+
+Full table + rules: `skills/cowork.md` → **Notebook IA**.  
+Recipes assume that IA: `timeline`, `cross-examination`.
 
 ## MCP
 

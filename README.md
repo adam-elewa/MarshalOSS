@@ -8,16 +8,22 @@ MarshalOSS runs on your computer. It extracts text, builds a searchable index, a
 
 License: AGPL-3.0 (see [License](#license)). Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
 
+## What you get
+
+In plain terms, MarshalOSS does four jobs:
+
+1. **Ingest the dump** — Turn a messy production folder into searchable text (OCR, ASR, captions, entities/tags) with a confidence manifest so you know what worked.
+2. **Ask over MCP** — Connect Claude Cowork or Perplexity Computer; search and cite real files without building a custom chat product.
+3. **Review in the browser** — Case Overview, Document Explorer (categories / folders, hybrid search, side preview), Notebook wiki, and a synced Bodycam viewer.
+4. **Write lasting notes** — A blank Markdown notebook for timelines, people, cross outlines, and theory, with links that open discovery beside the page.
+
+---
+
 ## Objective and scope
 
 Commercial AI-over-discovery tools are priced for large civil matters. Criminal cases often have the same volume and odd file types without the budget — a routine case can include hundreds of gigabytes of audio, video, and forensic exports.
 
-The project does two things at low cost, while still using paid models when local extraction is wrong or empty:
-
-1. **AI search and analysis** over the production (MarshalOSS + Cowork / Computer)
-2. **Basic human review** — case overview, categorized document browse, and a document viewer (native web UI in this repo)
-
-It is not designed to rebuild Relativity. It wires together existing open-source tools (Docling, ffmpeg, SQLite, MCP) and adapts them for defense work. It is not a full enterprise review desk (privilege logs, redaction workflows, reviewer assignment).
+The project does those jobs at low cost, while still using paid models when local extraction is wrong or empty. It is not designed to rebuild Relativity. It wires together existing open-source tools (Docling, ffmpeg, SQLite, MCP) and adapts them for defense work. It is not a full enterprise review desk (privilege logs, redaction workflows, reviewer assignment).
 
 **Hosting:** the project is hosting-agnostic. Do not expose the port on the public internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Optional helpers are in [`tools/networking/`](tools/networking/README.md).
 
@@ -34,8 +40,8 @@ It is not designed to rebuild Relativity. It wires together existing open-source
                 ┌────────────────────────┴─────────────────────────┐
                 ▼                                                  ▼
      MCP  /mcp :7340                                    Web UI + REST :7340
-     Cowork / Computer                                  case overview, categories,
-     (questions, drafting,                              document viewer, search APIs
+     Cowork / Computer                                  overview, explorer, notebook,
+     (questions, drafting,                              bodycam, search / facet APIs
       Outlook, Word, …)
 ```
 
@@ -100,12 +106,7 @@ Zips are expanded automatically. If Docling or ffmpeg cannot open a file, conver
 
 **4. Visual index.** OCR doesn't tell you what's *in* a scene photo. A vision model writes a short factual description (clothing, vehicles, objects, who is where), which is indexed like any other text — so "red hoodie in the hallway" or "silver sedan" can match. Video gets the same treatment on sampled frames: every 5 seconds, up to 48 frames; longer videos get the 48 frames spread evenly across the whole recording. Each frame description keeps its time in the video. Images that are really document scans with plenty of OCR text are skipped.
 
-**5. Entities and tags.** Search finds passages; entities answer a different question: *what names and topics does this file involve?* A cheap chat model reads each file once and produces a cover sheet:
-
-- **Entities** — people, officers, organizations, places, dates, Bates-like IDs
-- **Tags** — short topic labels (`bodycam`, `dui`, `use_of_force`, `medical`, …)
-
-It merges name variants, so "Smith", "J. Smith", and "Jane Smith" become one entry. That helps when a production spells the same officer five ways, and lets you ask "which files mention Officer Rivera?" without crafting the perfect search query. Results are stored per file, not per chunk.
+**5. Entities and tags.** Search finds passages; entities answer a different question: *what names and topics does this file involve?* A cheap chat model reads each file once and produces a short cover sheet focused on **people, officers, organizations, and places** (noise like clock stamps and “Speaker A/B” is filtered). **Tags** are short topic labels (`bodycam`, `dui`, `use_of_force`, …), kept sparse. Person name variants are collapsed (e.g. “David Jones” / “David E. Jones”). In the UI, clicking an entity or tag in a document opens every other file that shares it.
 
 **6. Index.** Keyword search (SQLite FTS5) finds exact words but misses that "the booking" and "processed at central" mean the same thing. **Voyage** (`voyage-law-2`) converts each text chunk into a vector that represents its meaning. Searches run keyword, semantic, or hybrid (default, combines both). Voyage only powers search — it doesn't answer questions. Without a Voyage key, a weak local fallback is used; fine for testing, not real cases.
 
@@ -240,9 +241,10 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 Case management and document review run in MarshalOSS on `:7340` (`web/app.html`):
 
 - **Cases** — pick a matter
-- **Case Overview** — stats, production manifest (processed / OCR confidence / not processed), entities, tags
-- **Document Explorer** — auto categories (criminal history, police reports, bodycam, …) or **Native Folders**; search; document viewer (preview, text, metadata, entities, tags)
-- **Notebook** — raw Markdown wiki (tree + page). Home explains the wiki and links git-backed skills under `skills/` (`cowork`, `cross-examination`, `timeline`, …), mirrored at `Meta/Skills/*`. MCP `notebook_skill` **lists** those skills (pass `name` to load one). `[[doc:]]` cites open a **side viewer** beside the page.
+- **Case Overview** — production health (manifest / OCR confidence), plus drillable **entities** and **tags** (letter jumplist, counts, matching docs, in-place preview)
+- **Document Explorer** — **Categories** or **Native folders**; large hybrid search (matching files only, side preview, yellow hit highlights); Back + breadcrumbs when drilling; open a file’s entities/tags to jump to every doc that shares them
+- **Notebook** — blank Markdown wiki with sidebar tree, Back + breadcrumbs, and stock top-level areas AI should prefer (`Home`, `Timeline`, `Witnesses`, `People`, `Cross`, `Theory`, `Motions`, `Discovery`, `Meta`). Git-backed recipes live in [`skills/`](skills/) (`cowork`, `cross-examination`, `timeline`, …), mirrored at `Meta/Skills/*`. MCP `notebook_skill` lists or loads them. `[[doc:]]` cites open a **side viewer** beside the page
+- **Bodycam** — multi-camera synced viewer (see below)
 
 Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 

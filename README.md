@@ -23,11 +23,13 @@ In plain terms, MarshalOSS does six jobs:
 
 ## Objective and scope
 
-Commercial AI-over-discovery tools are priced for large civil matters. Criminal cases often have the same volume and odd file types without the budget — a routine case can include hundreds of gigabytes of audio, video, and forensic exports.
+Big e-discovery AI products are built and priced for large civil cases. Criminal defense often has the same mess — hundreds of gigabytes of PDFs, bodycam, calls, and phone dumps — without that budget.
 
-The project does those jobs at low cost, while still using paid models when local extraction is wrong or empty. It is not designed to rebuild Relativity. It wires together existing open-source tools (Docling, ffmpeg, SQLite, MCP) and adapts them for defense work. It is not a full enterprise review desk (privilege logs, redaction workflows, reviewer assignment).
+MarshalOSS is for that gap: search and review a production on your own machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. It uses free local tools first (Docling, ffmpeg, SQLite) and paid APIs only when they clearly help (bad OCR, audio/video, search embeddings).
 
-**Hosting:** the project is hosting-agnostic. Do not expose the port on the public internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Optional helpers are in [`tools/networking/`](tools/networking/README.md).
+What it is **not**: a Relativity clone. No privilege logs, redaction workflows, or reviewer assignment. It is a defense-oriented stack, not a full enterprise review platform.
+
+**Hosting:** run it where you like. Do not put the port on the open internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Helpers are in [`tools/networking/`](tools/networking/README.md).
 
 ---
 

@@ -237,38 +237,36 @@ def home_notebook_body(case_name: str) -> str:
     for s in skills:
         skill_lines.append(
             f"- {page_wiki_link(s['wiki_path'], s['title'])} — "
-            f"MCP: `notebook_skill` with name `{s['name']}`"
+            f"`notebook_skill` name `{s['name']}`"
         )
     if not skill_lines:
         skill_lines.append("- _(add `.md` files under `skills/` in the repo)_")
 
     return (
         f"# {case_name}\n\n"
-        "This **Notebook** is a Markdown wiki for the case. Prefer stock top-level "
-        "sections so the sidebar stays clear (bold + icons):\n\n"
-        "- [[page:Timeline|Timeline]] — chronology\n"
-        "- [[page:Witnesses|Witnesses]] / [[page:People|People]] — hubs\n"
-        "- [[page:Cross|Cross]] — exam outlines\n"
-        "- [[page:Theory|Theory]], [[page:Motions|Motions]], [[page:Discovery|Discovery]]\n"
-        "- [[page:Meta|Meta]] — skills and chrome\n\n"
-        "Put detail under children. AI skills (`skills/cowork.md` → Notebook IA) should "
-        "use these exact root names going forward.\n\n"
-        "## Discovery links\n\n"
-        "Cite production files inline with `[[doc:relative/path|Label]]`. In the web UI, "
-        "those links open a **side viewer** next to this page so you can read the wiki "
-        "and the exhibit together. Link other wiki pages with `[[page:Path|Label]]`.\n\n"
-        "## Skills (`skills/`)\n\n"
-        "Call MCP `notebook_skill` with **no name** for the skill list. "
-        "Repo folder `skills/` is mirrored here:\n\n"
+        "This Notebook is a **blank Markdown wiki** for the case — ordinary pages, "
+        "top to bottom. You and AI can add folders as you go (people, timeline, theory, "
+        "motions, and so on). There is no fixed layout and no wizard: make pages the "
+        "same way you would in any wiki.\n\n"
+        "Useful starting places (optional):\n\n"
+        "- [[page:Timeline|Timeline]]\n"
+        "- [[page:Witnesses|Witnesses]] / [[page:People|People]]\n"
+        "- [[page:Cross|Cross]]\n"
+        "- [[page:Theory|Theory]] · [[page:Motions|Motions]] · [[page:Discovery|Discovery]]\n"
+        "- [[page:Meta|Meta]]\n\n"
+        "## Linking discovery\n\n"
+        "Point at a production file with `[[doc:relative/path|Label]]`. In the app, that "
+        "opens the file beside this page. Link another wiki page with "
+        "`[[page:Path|Label]]`.\n\n"
+        "## Skills\n\n"
+        "Load recipes with MCP `notebook_skill` (no name = list). Copies live here:\n\n"
         + "\n".join(skill_lines)
         + "\n\n"
-        "Ask Cowork / Computer / Claude to load a skill (`notebook_skill` with a name), "
-        "then scaffold pages with `notebook_upsert` using real paths from `search` / "
-        "`browse_case_files`. Prefer the stock roots above, with direct cites on every "
-        "material claim.\n\n"
+        "Have Cowork / Computer load a skill, then add pages with `notebook_upsert` and "
+        "real paths from `search` or `browse_case_files`.\n\n"
         "## Editing\n\n"
-        "- Use Preview / Edit in the toolbar to change a page, then Save.\n"
-        "- Prefer AI or MCP to add new paths; keep the tree as ordinary wiki pages.\n"
+        "- Use **Preview** / **Edit** in the toolbar, then **Save**.\n"
+        "- Add new pages anytime; the sidebar is just the wiki tree.\n"
     )
 
 

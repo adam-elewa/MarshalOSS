@@ -1336,8 +1336,16 @@ class Database:
         existing = self.get_notebook_page(case_id, "Home")
         if existing:
             old = existing.get("body") or ""
-            # Refresh stock Home when it still points at the old Meta skill / witness chrome
-            if "skills/" not in old:
+            # Refresh stock Home when it still looks like an older generated copy.
+            already_new = "There is no fixed layout and no wizard" in old
+            stockish = (
+                "skills/" not in old
+                or "Prefer stock top-level" in old
+                or "blank Markdown wiki for the case" in old
+                or "no special “wizard” chrome" in old
+                or 'no special "wizard" chrome' in old
+            )
+            if stockish and not already_new:
                 return self.upsert_notebook_page(case_id, "Home", "Home", body)
             return existing
         return self.upsert_notebook_page(case_id, "Home", "Home", body)

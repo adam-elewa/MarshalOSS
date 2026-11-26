@@ -15,6 +15,13 @@ from .categories import CATEGORY_DEFS, CATEGORY_LABELS, categorize_file_row
 from .config import Settings, get_settings
 from .db import Database
 from .embed import Embedder
+from .forensics_ufdr import (
+    case_forensics_summary,
+    chat_summaries,
+    get_chat,
+    parse_ufdr_chats_for_case,
+    ufedlib_available,
+)
 from .fsbrowse import list_dir
 from .notebook import build_witness_pack, load_notebook_skill_text
 from .search import encode_rel_path, file_urls, search_case
@@ -343,6 +350,71 @@ def create_app(
             raise HTTPException(400, "mode must be hybrid|keyword|semantic")
         hits = search_case(db, settings, embedder, c, q, mode=mode, top_k=top_k)  # type: ignore
         return {"case": c.__dict__, "query": q, "mode": mode, "hits": hits}
+
+    @app.get("/api/forensics/summary")
+    def api_forensics_summary(case_id: int | None = None) -> dict[str, Any]:
+        """Which Forensics subsections exist for this case (UFDR / CSLI hints)."""
+        c = resolve_case(case_id=case_id)
+        summary = case_forensics_summary(c.files_root)
+        return {"case": c.__dict__, **summary}
+
+    @app.get("/api/forensics/cellebrite/chats")
+    def api_forensics_cellebrite_chats(
+        path: str = Query(..., min_length=1, description="UFDR path relative to case root"),
+        case_id: int | None = None,
+        refresh: bool = False,
+    ) -> dict[str, Any]:
+        """List chats from a Cellebrite UFDR (same decoded chats as Reader for this export)."""
+        c = resolve_case(case_id=case_id)
+        if not ufedlib_available():
+            raise HTTPException(
+                503,
+                "ufedlib-py not installed on server (uv add ufedlib-py && uv sync)",
+            )
+        try:
+            payload = parse_ufdr_chats_for_case(c.files_root, path, use_cache=not refresh)
+        except FileNotFoundError:
+            raise HTTPException(404, "UFDR not found") from None
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        except Exception as e:
+            raise HTTPException(500, f"UFDR parse failed: {e}") from e
+        return {
+            "case": c.__dict__,
+            "rel_path": payload.get("rel_path"),
+            "name": payload.get("name"),
+            "chat_count": payload.get("chat_count"),
+            "message_count": payload.get("message_count"),
+            "sources": payload.get("sources") or [],
+            "owners": payload.get("owners") or [],
+            "directory_size": payload.get("directory_size") or 0,
+            "note": payload.get("note"),
+            "parser": payload.get("parser"),
+            "chats": chat_summaries(payload),
+        }
+
+    @app.get("/api/forensics/cellebrite/chat")
+    def api_forensics_cellebrite_chat(
+        path: str = Query(..., min_length=1),
+        chat_id: str = Query(..., min_length=1),
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        """One chat thread with messages from a UFDR."""
+        c = resolve_case(case_id=case_id)
+        if not ufedlib_available():
+            raise HTTPException(503, "ufedlib-py not installed on server")
+        try:
+            payload = parse_ufdr_chats_for_case(c.files_root, path, use_cache=True)
+        except FileNotFoundError:
+            raise HTTPException(404, "UFDR not found") from None
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        except Exception as e:
+            raise HTTPException(500, f"UFDR parse failed: {e}") from e
+        chat = get_chat(payload, chat_id)
+        if not chat:
+            raise HTTPException(404, "chat not found")
+        return {"case": c.__dict__, "rel_path": path, "chat": chat}
 
     @app.get("/api/bwc/index")
     def api_bwc_index(case_id: int | None = None) -> dict[str, Any]:

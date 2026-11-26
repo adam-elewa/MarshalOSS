@@ -158,6 +158,91 @@
   .case-content { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg) }
   .bwc-host { flex: 1; min-height: 0; display: flex; flex-direction: column }
   .bwc-host iframe { flex: 1; width: 100%; border: 0; background: #f3f5f7 }
+  .forensics {
+    display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg);
+  }
+  .forensics-subnav {
+    flex-shrink: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 12px 16px; border-bottom: 1px solid #cbd5e1; background: #f8fafc;
+  }
+  .forensics-subnav button {
+    border: 1px solid var(--border); background: #fff; color: var(--fg);
+    border-radius: 8px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 650;
+    cursor: pointer;
+  }
+  .forensics-subnav button:hover { background: var(--hover) }
+  .forensics-subnav button.active { background: var(--ink); color: #fff; border-color: var(--ink) }
+  .forensics-body { flex: 1; min-height: 0; display: flex; flex-direction: column }
+  .forensics-toolbar {
+    flex-shrink: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  .forensics-toolbar input[type="search"] {
+    flex: 1; min-width: 10rem; max-width: 22rem; font: inherit; font-size: 13px;
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  }
+  .forensics-toolbar label.chk {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-strong);
+    cursor: pointer; user-select: none;
+  }
+  .forensics-split {
+    flex: 1; min-height: 0; display: grid;
+    grid-template-columns: minmax(140px, 168px) minmax(240px, 32%) minmax(0, 1fr);
+  }
+  .forensics-pane {
+    min-width: 0; min-height: 0; display: flex; flex-direction: column;
+    background: var(--panel); border-right: 1px solid var(--border);
+  }
+  .forensics-pane:last-child { border-right: 0 }
+  .forensics-pane-head {
+    flex-shrink: 0; padding: 10px 14px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--muted-strong);
+  }
+  .forensics-pane-head strong { color: var(--fg); font-weight: 700 }
+  .forensics-pane-head .sub { display: block; margin-top: 2px; font-weight: 500; color: var(--muted-strong) }
+  .forensics-list { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1 }
+  .forensics-list li {
+    padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .forensics-list li:hover { background: var(--hover) }
+  .forensics-list li.active { background: #e8eef7; box-shadow: inset 3px 0 0 var(--ink) }
+  .forensics-list .t { font-weight: 650; font-size: 13px; line-height: 1.3 }
+  .forensics-list .s { margin-top: 3px; font-size: 12px; color: var(--muted-strong); line-height: 1.35 }
+  .forensics-list .row-meta {
+    display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;
+    font-size: 11px; color: var(--muted);
+  }
+  .forensics-apps li { padding: 11px 12px }
+  .forensics-apps .t { font-size: 12.5px }
+  .forensics-apps .count {
+    float: right; font-size: 11px; font-weight: 650; color: var(--muted-strong);
+    background: #eef2f7; border-radius: 999px; padding: 1px 7px;
+  }
+  .forensics-apps li.active .count { background: #dbe6f5; color: var(--ink) }
+  .chat-thread {
+    flex: 1; min-height: 0; overflow: auto; padding: 16px 18px 28px;
+    background: #eef2f6; display: flex; flex-direction: column; gap: 8px;
+  }
+  .chat-day {
+    align-self: center; margin: 10px 0 4px; padding: 3px 10px;
+    font-size: 11px; font-weight: 650; color: var(--muted-strong);
+    background: rgba(255,255,255,0.85); border-radius: 999px; border: 1px solid var(--border);
+  }
+  .chat-bubble {
+    max-width: min(36rem, 88%); padding: 8px 12px; border-radius: 14px;
+    background: #fff; border: 1px solid var(--border); box-shadow: 0 1px 0 rgba(15,23,42,0.04);
+  }
+  .chat-bubble.sent {
+    align-self: flex-end; background: #dbeafe; border-color: #bfdbfe;
+  }
+  .chat-bubble.recv { align-self: flex-start }
+  .chat-bubble .meta { font-size: 11px; color: var(--muted-strong); margin-bottom: 3px }
+  .chat-bubble .body { font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word }
+  .chat-bubble .body:empty::after { content: "(no text)"; color: var(--muted); font-style: italic }
+  .forensics-empty {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 24px; color: var(--muted-strong); text-align: center;
+  }
 
   .overview { flex: 1; overflow: auto; padding: 28px 32px 40px }
   .overview-intro {
@@ -1033,6 +1118,18 @@ const state = {
   notebookDocPath: null, // discovery file open in side viewer
   notebookDoc: null,
   notebookDocTab: "preview",
+  forensicsSummary: null, // from /api/forensics/summary
+  forensicsSection: "cellebrite", // cellebrite | csli
+  forensicsUfdrPath: null,
+  forensicsChats: [],
+  forensicsOwners: [],
+  forensicsApp: null, // selected messaging app / source
+  forensicsQuery: "",
+  forensicsShowEmpty: false,
+  forensicsChatId: null,
+  forensicsChat: null,
+  forensicsLoading: false,
+  forensicsErr: null,
   err: null,
 };
 
@@ -1207,10 +1304,15 @@ function parseHash() {
     let module = "overview";
     if (view === "notebook") module = "notebook";
     else if (view === "bwc" || view === "bodycam") module = "bwc";
+    else if (view === "forensics") module = "forensics";
     else if (view === "explorer" || docPath || folder || category || hasFacet) module = "explorer";
     const facet = hasFacet ? { tag, entity, entity_type } : null;
+    const forensicsSection = qs.get("section") || "cellebrite";
+    const forensicsUfdr = qs.get("ufdr") || null;
+    const forensicsChat = qs.get("chat") || null;
     return {
       name: "case", caseId, module, docPath, tab, folder, facet, browseMode, category, notebookPath,
+      forensicsSection, forensicsUfdr, forensicsChat,
     };
   }
   return { name: "home" };
@@ -1237,6 +1339,11 @@ function setHash(route) {
   }
   if (route.module === "notebook") {
     qs.set("page", route.notebookPath || state.notebookPath || "Home");
+  }
+  if (route.module === "forensics") {
+    if (route.forensicsSection) qs.set("section", route.forensicsSection);
+    if (route.forensicsUfdr) qs.set("ufdr", route.forensicsUfdr);
+    if (route.forensicsChat) qs.set("chat", route.forensicsChat);
   }
   history.replaceState(null, "", `#/cases/${route.caseId}?${qs.toString()}`);
 }
@@ -1272,11 +1379,20 @@ async function loadForRoute() {
     state.browseMode = state.route.browseMode || "categories";
     state.category = state.route.category || null;
     state.notebookPath = state.route.notebookPath || state.notebookPath || "Home";
+    state.forensicsSection = state.route.forensicsSection || state.forensicsSection || "cellebrite";
+    state.forensicsUfdrPath = state.route.forensicsUfdr || state.forensicsUfdrPath || null;
+    state.forensicsChatId = state.route.forensicsChat || state.forensicsChatId || null;
 
     const casesData = await api("/api/cases");
     state.cases = casesData.cases || [];
     state.active = casesData.active || null;
     state.caseMeta = state.cases.find(c => c.id === state.caseId) || null;
+
+    try {
+      state.forensicsSummary = await api(`/api/forensics/summary?case_id=${state.caseId}`);
+    } catch {
+      state.forensicsSummary = null;
+    }
 
     if (state.module === "overview") {
       const ov = await api(`/api/cases/${state.caseId}/overview`);
@@ -1291,6 +1407,12 @@ async function loadForRoute() {
 
     if (state.module === "notebook") {
       await loadNotebook(state.notebookPath, false);
+      render();
+      return;
+    }
+
+    if (state.module === "forensics") {
+      await loadForensicsView(false);
       render();
       return;
     }
@@ -1451,6 +1573,12 @@ function setTab(tab) {
 }
 
 function setModule(module) {
+  const sections = state.forensicsSummary?.sections || {};
+  let forensicsSection = state.forensicsSection || "cellebrite";
+  if (module === "forensics") {
+    if (!sections.cellebrite?.available && sections.csli?.available) forensicsSection = "csli";
+    else if (sections.cellebrite?.available) forensicsSection = "cellebrite";
+  }
   navigate({
     name: "case",
     caseId: state.caseId,
@@ -1462,7 +1590,98 @@ function setModule(module) {
     tab: state.tab || "preview",
     facet: module === "explorer" ? state.facet : null,
     notebookPath: module === "notebook" ? (state.notebookPath || "Home") : null,
+    forensicsSection: module === "forensics" ? forensicsSection : null,
+    forensicsUfdr: module === "forensics" ? state.forensicsUfdrPath : null,
+    forensicsChat: module === "forensics" ? state.forensicsChatId : null,
   });
+}
+
+async function loadForensicsView(push) {
+  state.forensicsErr = null;
+  const section = state.forensicsSection || "cellebrite";
+  if (section !== "cellebrite") {
+    state.forensicsChats = [];
+    state.forensicsChat = null;
+    return;
+  }
+  const sources = state.forensicsSummary?.sections?.cellebrite?.sources || [];
+  if (!sources.length) {
+    state.forensicsChats = [];
+    state.forensicsChat = null;
+    return;
+  }
+  if (!state.forensicsUfdrPath) {
+    state.forensicsUfdrPath = sources[0].rel_path;
+  }
+  state.forensicsLoading = true;
+  render();
+  try {
+    const data = await api(
+      `/api/forensics/cellebrite/chats?case_id=${state.caseId}&path=${encodeURIComponent(state.forensicsUfdrPath)}`
+    );
+    state.forensicsChats = data.chats || [];
+    state.forensicsOwners = data.owners || [];
+    state.forensicsNote = data.note || null;
+    const apps = forensicsAppStats(state.forensicsChats, state.forensicsShowEmpty);
+    if (!state.forensicsApp || !apps.some((a) => a.name === state.forensicsApp)) {
+      state.forensicsApp = apps[0]?.name || null;
+    }
+    if (state.forensicsChatId) {
+      const selected = (state.forensicsChats || []).find((c) => String(c.id) === String(state.forensicsChatId));
+      if (selected?.source) state.forensicsApp = selected.source;
+      const chatData = await api(
+        `/api/forensics/cellebrite/chat?case_id=${state.caseId}&path=${encodeURIComponent(state.forensicsUfdrPath)}&chat_id=${encodeURIComponent(state.forensicsChatId)}`
+      );
+      state.forensicsChat = chatData.chat || null;
+    } else {
+      state.forensicsChat = null;
+    }
+  } catch (e) {
+    state.forensicsErr = e.message || String(e);
+    state.forensicsChats = [];
+    state.forensicsOwners = [];
+    state.forensicsChat = null;
+  } finally {
+    state.forensicsLoading = false;
+  }
+  if (push) {
+    state.route = {
+      ...state.route,
+      module: "forensics",
+      forensicsSection: state.forensicsSection,
+      forensicsUfdr: state.forensicsUfdrPath,
+      forensicsChat: state.forensicsChatId,
+    };
+    setHash(state.route);
+  }
+}
+
+async function openForensicsChat(chatId) {
+  state.forensicsChatId = chatId;
+  state.forensicsLoading = true;
+  render();
+  try {
+    const chatData = await api(
+      `/api/forensics/cellebrite/chat?case_id=${state.caseId}&path=${encodeURIComponent(state.forensicsUfdrPath)}&chat_id=${encodeURIComponent(chatId)}`
+    );
+    state.forensicsChat = chatData.chat || null;
+    state.forensicsErr = null;
+  } catch (e) {
+    state.forensicsErr = e.message || String(e);
+    state.forensicsChat = null;
+  } finally {
+    state.forensicsLoading = false;
+  }
+  state.route = {
+    name: "case",
+    caseId: state.caseId,
+    module: "forensics",
+    forensicsSection: state.forensicsSection,
+    forensicsUfdr: state.forensicsUfdrPath,
+    forensicsChat: state.forensicsChatId,
+  };
+  setHash(state.route);
+  render();
 }
 
 async function loadNotebook(path, push) {
@@ -2062,6 +2281,9 @@ function icoNotebook() {
 }
 function icoBwc() {
   return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="14" height="12" rx="2"/><path d="M17 11l4-2v8l-4-2"/><circle cx="10" cy="13" r="2.5"/></svg>`;
+}
+function icoForensics() {
+  return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v6l2 2"/><circle cx="12" cy="14" r="7"/><path d="M9 14h6"/></svg>`;
 }
 
 function statusLabel(status) {
@@ -3223,15 +3445,242 @@ function renderExplorer() {
   `;
 }
 
+function forensicsAppStats(chats, showEmpty) {
+  const map = new Map();
+  for (const c of chats || []) {
+    const name = c.source || "Unknown";
+    const msgs = Number(c.message_count || 0);
+    if (!showEmpty && msgs <= 0) continue;
+    const cur = map.get(name) || { name, threads: 0, messages: 0 };
+    cur.threads += 1;
+    cur.messages += msgs;
+    map.set(name, cur);
+  }
+  return [...map.values()].sort((a, b) => b.threads - a.threads || a.name.localeCompare(b.name));
+}
+
+function forensicsChatTitle(c) {
+  return (c && (c.title || (c.counterparties && c.counterparties[0]) || c.name)) || "Untitled chat";
+}
+
+function forensicsFmtWhen(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 16);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleDateString([], sameYear
+    ? { month: "short", day: "numeric" }
+    : { month: "short", day: "numeric", year: "numeric" });
+}
+
+function forensicsDayKey(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
+  return d.toDateString();
+}
+
+function forensicsIsSent(msg, owners) {
+  const st = String(msg?.status || "").toLowerCase();
+  if (st === "sent" || st === "outgoing") return true;
+  if (st === "read" || st === "unread" || st === "incoming" || st === "received") return false;
+  const from = String(msg?.from || "");
+  if (!from) return false;
+  if (from === "Me" || from.startsWith("Me (")) return true;
+  const own = owners || state.forensicsOwners || [];
+  return own.some((o) => o && (from === o || from.includes(o) || o.includes(from)));
+}
+
+function forensicsFilteredChats() {
+  const app = state.forensicsApp;
+  const q = String(state.forensicsQuery || "").trim().toLowerCase();
+  const showEmpty = !!state.forensicsShowEmpty;
+  let list = (state.forensicsChats || []).filter((c) => {
+    if (app && (c.source || "Unknown") !== app) return false;
+    if (!showEmpty && !(Number(c.message_count) > 0)) return false;
+    return true;
+  });
+  if (q) {
+    list = list.filter((c) => {
+      const hay = [
+        forensicsChatTitle(c),
+        c.name,
+        c.source,
+        ...(c.participants || []),
+        ...(c.counterparties || []),
+        c.preview || "",
+      ].join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  return list;
+}
+
+function renderForensics() {
+  const summary = state.forensicsSummary || {};
+  const sections = summary.sections || {};
+  const showCellebrite = !!sections.cellebrite?.available;
+  const showCsli = !!sections.csli?.available;
+  const section = state.forensicsSection || (showCellebrite ? "cellebrite" : "csli");
+
+  const subnav = `
+    <div class="forensics-subnav">
+      ${showCellebrite ? `<button type="button" class="${section === "cellebrite" ? "active" : ""}" data-forensics-section="cellebrite">Cellebrite</button>` : ""}
+      ${showCsli ? `<button type="button" class="${section === "csli" ? "active" : ""}" data-forensics-section="csli">Cell Site Location Information</button>` : ""}
+    </div>`;
+
+  if (section === "csli") {
+    const sources = sections.csli?.sources || [];
+    return `<div class="forensics">${subnav}
+      <div class="forensics-body">
+        <div class="forensics-empty">
+          <div>
+            <p><strong>Cell Site Location Information</strong> — coming next.</p>
+            <p class="meta">${sources.length ? fmtNum(sources.length) + " related file(s) detected in this case." : "No CSLI-like files detected yet."}</p>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const sources = sections.cellebrite?.sources || [];
+  if (!sources.length) {
+    return `<div class="forensics">${subnav}<div class="forensics-empty">No Cellebrite .ufdr packages found in this case.</div></div>`;
+  }
+
+  const sourceOpts = sources.map((s) =>
+    `<option value="${esc(s.rel_path)}" ${s.rel_path === state.forensicsUfdrPath ? "selected" : ""}>${esc(s.name)}</option>`
+  ).join("");
+
+  const apps = forensicsAppStats(state.forensicsChats, state.forensicsShowEmpty);
+  if (!state.forensicsApp && apps.length) state.forensicsApp = apps[0].name;
+  const appList = apps.map((a) => `
+    <li class="${a.name === state.forensicsApp ? "active" : ""}" data-forensics-app="${esc(a.name)}">
+      <span class="count">${fmtNum(a.threads)}</span>
+      <div class="t">${esc(a.name)}</div>
+      <div class="s">${fmtNum(a.messages)} msgs</div>
+    </li>`).join("") || `<li class="placeholder">No apps</li>`;
+
+  const filtered = forensicsFilteredChats();
+  const chatList = filtered.map((c) => {
+    const title = forensicsChatTitle(c);
+    const handle = c.handle ? String(c.handle) : "";
+    const when = forensicsFmtWhen(c.last_activity);
+    const preview = c.preview ? String(c.preview).replace(/\s+/g, " ").slice(0, 90) : "";
+    const secondary = handle
+      ? `${handle}${preview ? " · " + preview : ""}`
+      : (preview || (Number(c.message_count) ? fmtNum(c.message_count) + " messages" : "No messages"));
+    return `
+    <li class="${String(c.id) === String(state.forensicsChatId) ? "active" : ""}" data-forensics-chat="${esc(c.id)}">
+      <div class="t">${esc(title)}</div>
+      <div class="s">${esc(secondary)}</div>
+      <div class="row-meta"><span>${fmtNum(c.message_count || 0)} msgs</span><span>${esc(when)}</span></div>
+    </li>`;
+  }).join("") || `<li class="placeholder">${state.forensicsLoading ? "Parsing UFDR…" : "No conversations match."}</li>`;
+
+  const owners = state.forensicsOwners || [];
+  const activeTitle = state.forensicsChat
+    ? forensicsChatTitle(state.forensicsChat)
+    : "Conversation";
+  const activeSub = state.forensicsChat
+    ? [
+        state.forensicsChat.source,
+        state.forensicsChat.handle || null,
+        (!state.forensicsChat.handle && (state.forensicsChat.counterparties || []).length)
+          ? (state.forensicsChat.counterparties || []).slice(0, 4).join(", ")
+          : null,
+      ].filter(Boolean).join(" · ")
+    : "";
+
+  let thread = `<div class="forensics-empty">${state.forensicsLoading ? "Loading…" : "Select a conversation."}</div>`;
+  if (state.forensicsChat) {
+    const msgs = state.forensicsChat.messages || [];
+    if (!msgs.length) {
+      thread = `<div class="forensics-empty">No messages in this conversation.</div>`;
+    } else {
+      let lastDay = null;
+      const parts = [];
+      for (const m of msgs) {
+        const day = forensicsDayKey(m.timestamp);
+        if (day && day !== lastDay) {
+          lastDay = day;
+          const label = (() => {
+            const d = new Date(m.timestamp);
+            if (Number.isNaN(d.getTime())) return day;
+            return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+          })();
+          parts.push(`<div class="chat-day">${esc(label)}</div>`);
+        }
+        const sent = forensicsIsSent(m, owners);
+        const who = m.from || (sent ? "Me" : "Unknown");
+        const time = forensicsFmtWhen(m.timestamp);
+        parts.push(`
+          <div class="chat-bubble ${sent ? "sent" : "recv"}">
+            <div class="meta">${esc(who)}${time ? " · " + esc(time) : ""}${m.status ? " · " + esc(m.status) : ""}</div>
+            <div class="body">${esc(m.body || "")}</div>
+          </div>`);
+      }
+      thread = parts.join("");
+    }
+  }
+
+  const nonempty = (state.forensicsChats || []).filter((c) => Number(c.message_count) > 0).length;
+
+  return `
+    <div class="forensics">
+      ${subnav}
+      <div class="forensics-body">
+        <div class="forensics-toolbar">
+          <label class="meta">UFDR
+            <select id="forensicsUfdrSelect" style="margin-left:6px;font:inherit;max-width:18rem">
+              ${sourceOpts}
+            </select>
+          </label>
+          <input type="search" id="forensicsSearch" placeholder="Search name, number, preview…" value="${esc(state.forensicsQuery || "")}" />
+          <label class="chk"><input type="checkbox" id="forensicsShowEmpty" ${state.forensicsShowEmpty ? "checked" : ""} /> Show empty threads</label>
+          <span class="meta">${fmtNum(nonempty)} with messages · ${fmtNum((state.forensicsChats || []).length)} total</span>
+          ${summary.ufedlib === false ? `<span class="err">Install ufedlib-py on the server to parse UFDRs.</span>` : ""}
+          ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
+        </div>
+        <div class="forensics-split">
+          <div class="forensics-pane">
+            <div class="forensics-pane-head"><strong>Apps</strong></div>
+            <ul class="forensics-list forensics-apps">${state.forensicsLoading && !apps.length ? `<li class="placeholder">Parsing…</li>` : appList}</ul>
+          </div>
+          <div class="forensics-pane">
+            <div class="forensics-pane-head">
+              <strong>${esc(state.forensicsApp || "Conversations")}</strong>
+              <span class="sub">${fmtNum(filtered.length)} thread${filtered.length === 1 ? "" : "s"}</span>
+            </div>
+            <ul class="forensics-list">${chatList}</ul>
+          </div>
+          <div class="forensics-pane">
+            <div class="forensics-pane-head">
+              <strong>${esc(activeTitle)}</strong>
+              ${activeSub ? `<span class="sub">${esc(activeSub)}</span>` : ""}
+            </div>
+            <div class="chat-thread">${thread}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderCaseShell() {
   const name = state.caseMeta?.display_name || state.caseMeta?.slug || ("Case " + state.caseId);
+  const showForensics = !!(state.forensicsSummary && state.forensicsSummary.available);
   const content = state.module === "explorer"
     ? renderExplorer()
     : state.module === "notebook"
       ? renderNotebook()
       : state.module === "bwc"
         ? renderBwc()
-        : renderOverview();
+        : state.module === "forensics"
+          ? renderForensics()
+          : renderOverview();
   return `
     <div class="case-shell">
       <aside class="case-nav">
@@ -3249,6 +3698,9 @@ function renderCaseShell() {
           <button type="button" class="${state.module === "bwc" ? "active" : ""}" data-module="bwc">
             ${icoBwc()}<span>Bodycam</span>
           </button>
+          ${showForensics ? `<button type="button" class="${state.module === "forensics" ? "active" : ""}" data-module="forensics">
+            ${icoForensics()}<span>Forensics</span>
+          </button>` : ""}
           <button type="button" class="${state.module === "notebook" ? "active" : ""}" data-module="notebook">
             ${icoNotebook()}<span>Notebook</span>
           </button>
@@ -3490,6 +3942,74 @@ function bindCaseHandlers() {
       setModule(btn.dataset.module);
     };
   });
+
+  if (state.module === "forensics") {
+    document.querySelectorAll("[data-forensics-section]").forEach((btn) => {
+      btn.onclick = () => {
+        state.forensicsSection = btn.dataset.forensicsSection;
+        state.forensicsChatId = null;
+        state.forensicsChat = null;
+        navigate({
+          name: "case",
+          caseId: state.caseId,
+          module: "forensics",
+          forensicsSection: state.forensicsSection,
+          forensicsUfdr: state.forensicsUfdrPath,
+          forensicsChat: null,
+        });
+      };
+    });
+    const sel = document.getElementById("forensicsUfdrSelect");
+    if (sel) {
+      sel.onchange = () => {
+        state.forensicsUfdrPath = sel.value;
+        state.forensicsChatId = null;
+        state.forensicsChat = null;
+        state.forensicsApp = null;
+        navigate({
+          name: "case",
+          caseId: state.caseId,
+          module: "forensics",
+          forensicsSection: "cellebrite",
+          forensicsUfdr: state.forensicsUfdrPath,
+          forensicsChat: null,
+        });
+      };
+    }
+    const search = document.getElementById("forensicsSearch");
+    if (search) {
+      search.oninput = () => {
+        state.forensicsQuery = search.value;
+        render();
+      };
+    }
+    const showEmpty = document.getElementById("forensicsShowEmpty");
+    if (showEmpty) {
+      showEmpty.onchange = () => {
+        state.forensicsShowEmpty = !!showEmpty.checked;
+        const apps = forensicsAppStats(state.forensicsChats, state.forensicsShowEmpty);
+        if (!apps.some((a) => a.name === state.forensicsApp)) {
+          state.forensicsApp = apps[0]?.name || null;
+          state.forensicsChatId = null;
+          state.forensicsChat = null;
+        }
+        render();
+      };
+    }
+    document.querySelectorAll("[data-forensics-app]").forEach((li) => {
+      li.onclick = () => {
+        state.forensicsApp = li.dataset.forensicsApp;
+        state.forensicsChatId = null;
+        state.forensicsChat = null;
+        render();
+      };
+    });
+    document.querySelectorAll("[data-forensics-chat]").forEach((li) => {
+      li.onclick = () => {
+        openForensicsChat(li.dataset.forensicsChat).catch((e) => alert(e.message || String(e)));
+      };
+    });
+  }
 
   if (state.module === "notebook") {
     const nbBack = document.getElementById("btnNbBack");

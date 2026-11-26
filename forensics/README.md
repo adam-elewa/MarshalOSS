@@ -13,7 +13,9 @@ Marshal does **not** reimplement Physical Analyzer. It uses **[ufedlib-py](https
 | Same chats as Reader for this UFDR | `ufedlib-py` (this tab) |
 | Deeper recovery / full forensic suite | [IPED](https://github.com/sepinf-inc/IPED) outside Marshal |
 
-Parsed chat indexes are cached under the case `.marshaloss/forensics/ufdr/` folder.
+**Ingest:** `marshaloss ingest` discovers `.ufdr` packages under the case root, parses chats + a contact directory (for name resolution), and writes a warm cache under `.marshaloss/forensics/ufdr/`. The Forensics tab then opens without a cold parse. Re-ingest reuses the cache when the UFDR bytes are unchanged.
+
+Parsed chat indexes are also built on first open if ingest has not run yet.
 
 ## Cell Site Location Information (CSLI)
 

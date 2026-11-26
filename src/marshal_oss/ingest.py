@@ -26,6 +26,7 @@ from .quality import (
     score_transcript,
 )
 from .entities import extract_entities_for_chunks, resolve_entity_client
+from .forensics_ufdr import ingest_ufdr_forensics
 from .visual import is_image_path, visual_analyze_file
 
 console = Console()
@@ -767,6 +768,12 @@ def ingest_case(
         "visualized": 0,
         "entities": 0,
         "workers": n_workers,
+        "ufdr_found": 0,
+        "ufdr_parsed": 0,
+        "ufdr_cached": 0,
+        "ufdr_errors": 0,
+        "ufdr_chats": 0,
+        "ufdr_messages": 0,
     }
 
     db_lock = threading.Lock()
@@ -852,5 +859,20 @@ def ingest_case(
         stats["ingest_confidence"] = conf_path.as_posix()
     except Exception as e:
         log(f"[yellow]manifest summary refresh failed[/yellow]: {e}")
+
+    # Cellebrite UFDR → Forensics cache (chats + contact directory)
+    try:
+        forensic = ingest_ufdr_forensics(root, progress=log)
+        stats["ufdr_found"] = int(forensic.get("ufdr_found") or 0)
+        stats["ufdr_parsed"] = int(forensic.get("ufdr_parsed") or 0)
+        stats["ufdr_cached"] = int(forensic.get("ufdr_cached") or 0)
+        stats["ufdr_errors"] = int(forensic.get("ufdr_errors") or 0)
+        stats["ufdr_chats"] = int(forensic.get("chat_count") or 0)
+        stats["ufdr_messages"] = int(forensic.get("message_count") or 0)
+        if forensic.get("summary_path"):
+            stats["forensics_summary"] = forensic["summary_path"]
+    except Exception as e:
+        stats["ufdr_errors"] = int(stats.get("ufdr_errors") or 0) + 1
+        log(f"[yellow]forensics ingest failed[/yellow]: {e}")
 
     return {"case": case, **stats}

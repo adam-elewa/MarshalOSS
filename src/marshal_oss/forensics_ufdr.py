@@ -9,7 +9,7 @@ import re
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 log = logging.getLogger(__name__)
 
@@ -707,3 +707,111 @@ def case_forensics_summary(files_root: str | Path) -> dict[str, Any]:
             },
         },
     }
+
+
+def ingest_ufdr_forensics(
+    files_root: str | Path,
+    *,
+    force: bool = False,
+    limit: int = 50,
+    progress: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Discover UFDRs under a case root and warm the Forensics chat cache.
+
+    Runs during ``marshaloss ingest`` so Cellebrite chats + contact directory
+    resolution are ready before anyone opens the Forensics tab. Safe to re-run:
+    unchanged packages reuse the on-disk cache unless ``force`` is set.
+    """
+    root = Path(files_root).resolve()
+    log_fn = progress or (lambda _m: None)
+
+    summary: dict[str, Any] = {
+        "ufdr_found": 0,
+        "ufdr_parsed": 0,
+        "ufdr_cached": 0,
+        "ufdr_errors": 0,
+        "chat_count": 0,
+        "message_count": 0,
+        "directory_size": 0,
+        "sources": [],
+        "errors": [],
+    }
+
+    if not root.is_dir():
+        return summary
+
+    if not ufedlib_available():
+        log_fn(
+            "[yellow]forensics[/yellow] ufedlib-py not installed — skipping UFDR parse "
+            "(uv add ufedlib-py && uv sync)"
+        )
+        summary["skipped_reason"] = "ufedlib-py not installed"
+        return summary
+
+    ufdrs = find_ufdr_files(root, limit=limit)
+    summary["ufdr_found"] = len(ufdrs)
+    if not ufdrs:
+        log_fn("[cyan]forensics[/cyan] no .ufdr packages found")
+        return summary
+
+    log_fn(f"[cyan]forensics[/cyan] parsing {len(ufdrs)} UFDR package(s)")
+    for item in ufdrs:
+        rel = str(item["rel_path"])
+        ufdr_path = (root / rel).resolve()
+        cache_file = _cache_dir(root) / f"{_cache_key(ufdr_path)}.json"
+        had_cache = cache_file.is_file() and not force
+        try:
+            payload = parse_ufdr_chats_for_case(root, rel, use_cache=not force)
+            chats = int(payload.get("chat_count") or 0)
+            msgs = int(payload.get("message_count") or 0)
+            directory_size = int(payload.get("directory_size") or 0)
+            if had_cache:
+                summary["ufdr_cached"] += 1
+                verb = "cache"
+            else:
+                summary["ufdr_parsed"] += 1
+                verb = "parsed"
+            summary["chat_count"] += chats
+            summary["message_count"] += msgs
+            summary["directory_size"] = max(summary["directory_size"], directory_size)
+            summary["sources"].append(
+                {
+                    "rel_path": rel,
+                    "name": item.get("name"),
+                    "size": item.get("size"),
+                    "chat_count": chats,
+                    "message_count": msgs,
+                    "directory_size": directory_size,
+                    "apps": payload.get("sources") or [],
+                    "from_cache": had_cache,
+                }
+            )
+            log_fn(
+                f"[green]forensics[/green] {verb} {rel} — "
+                f"{chats} chats / {msgs} messages"
+                + (f" / {directory_size} contact keys" if directory_size else "")
+            )
+        except Exception as e:
+            summary["ufdr_errors"] += 1
+            summary["errors"].append({"rel_path": rel, "error": str(e)[:500]})
+            log_fn(f"[red]forensics[/red] {rel}: {e}")
+
+    try:
+        out = _cache_dir(root).parent / "ingest_summary.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(
+            json.dumps(
+                {
+                    "schema": "marshaloss.forensics_ingest.v1",
+                    "root": str(root),
+                    **summary,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        summary["summary_path"] = out.as_posix()
+    except Exception as e:
+        log.warning("forensics ingest summary write failed: %s", e)
+
+    return summary

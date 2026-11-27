@@ -8,11 +8,11 @@ License: AGPL-3.0 (see [License](#license)). Private: [github.com/adam-elewa/Mar
 
 ## Objective and scope
 
-Big e-discovery AI products are built and priced for large civil cases. Criminal defense often has the same mess — hundreds of gigabytes of PDFs, bodycam, calls, and phone dumps — without that budget.
+No commercial platform today offers serious search over a large, messy discovery corpus at a price that makes sense for most criminal matters. Enterprise tools are built for civil megacases; criminal productions are often just as complex — and the budget is not.
 
-MarshalOSS is for that gap: search and review a production on your own machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. It uses free local tools first (Docling, ffmpeg, SQLite) and paid APIs only when they clearly help (bad OCR, audio/video, search embeddings).
+Criminal defense discovery is rarely a clean PDF binder. It is PDFs and Office files with poor or missing OCR, email dumps, body-worn and surveillance video, radio and call audio, and forensic exports. Even a “minor” case can mean hundreds of gigabytes of media and file types that off-the-shelf tools ignore or bill by the gigabyte to touch.
 
-What it is **not**: a Relativity clone. No privilege logs, redaction workflows, or reviewer assignment. It is a defense-oriented stack, not a full enterprise review platform.
+MarshalOSS closes that gap: ingest and search on your machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. Local tools first (Docling, ffmpeg, SQLite); paid APIs only when local extraction is wrong or empty.
 
 **Hosting:** run it where you like. Do not put the port on the open internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Helpers are in [`tools/networking/`](tools/networking/README.md).
 
@@ -23,7 +23,7 @@ In plain terms, MarshalOSS does six jobs:
 1. **Ingest the dump** — Turn a messy production folder into searchable text (OCR, ASR, captions, entities/tags) with a confidence manifest so you know what worked.
 2. **Ask over MCP** — Connect Claude Cowork or Perplexity Computer; search and cite real files without building a custom chat product.
 3. **Review in the browser** — Case Overview and Document Explorer (categories / folders, hybrid search, side preview).
-4. **Build defense viewers** — Purpose-built screens for discovery problems generic review tools ignore. The first is a multi-camera bodycam viewer (synced video, transcript, and timeline); more custom viewers can follow the same pattern.
+4. **Build defense viewers** — Purpose-built screens for discovery problems generic review tools ignore. Live today: a multi-camera **bodycam** viewer (synced video, transcript, and timeline), plus **forensics** tools to view and understand phone/CSLI material — starting with **Cellebrite messages** and **CSLI** maps, with more forensic views planned.
 5. **Write lasting notes** — Keep timelines, people, cross outlines, and theory in a blank Markdown notebook (not chat). Link pages to each other and to discovery files that open beside the note.
 6. **Reuse defense skills** — Short playbooks in [`skills/`](skills/) (timeline, cross-examination, and the like) tell the AI how to build those notes the same way each time. The idea is repeatable structure, ideally improved over time by practicing defense attorneys — not one-off chat prompts.
 
@@ -135,7 +135,7 @@ Default allowlist (override with `MARSHALOSS_INGEST_EXTENSIONS`):
 | Video | `.mp4` `.mov` `.avi` `.mkv` `.webm` |
 | Other A/V (via ffmpeg) | `.wma` `.wmv` `.flv` `.asf` `.ts` `.m4v` `.mpeg` `.mpg` `.3gp` `.caf` `.dav` `.vob` `.h264` `.m2ts` `.mts` `.mxf` |
 
-Zips are expanded automatically. If Docling or ffmpeg cannot open a file, convert it with the tool that produced it and re-ingest. PST/OST and Cellebrite/UFDR are not in v1 — see [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
+Zips are expanded automatically. If Docling or ffmpeg cannot open a file, convert it with the tool that produced it and re-ingest. PST/OST mail stores are not fully ingested as searchable text in v1 — see [docs/EXTENSIONS.md](docs/EXTENSIONS.md). Cellebrite `.ufdr` packages and CSLI exports are handled for the **Forensics** viewers (messages / map), not as a full substitute for a lab-grade phone exam (see [Note on forensic review](#note-on-forensic-review)).
 
 ---
 
@@ -309,7 +309,7 @@ Case management and document review run in MarshalOSS on `:7340` (`web/app.html`
 - **Case Overview** — production health (manifest / OCR confidence), plus drillable **entities** and **tags** (letter jumplist, counts, matching docs, in-place preview)
 - **Document Explorer** — **Categories** or **Native folders**; large hybrid search (matching files only, side preview, yellow hit highlights); Back + breadcrumbs when drilling; open a file’s entities/tags to jump to every doc that shares them
 - **Notebook** — blank Markdown wiki with sidebar tree, Back + breadcrumbs, and stock top-level areas AI should prefer (`Home`, `Timeline`, `Witnesses`, `People`, `Cross`, `Theory`, `Motions`, `Discovery`, `Meta`). Git-backed recipes live in [`skills/`](skills/) (`cowork`, `cross-examination`, `timeline`, …), mirrored at `Meta/Skills/*`. MCP `notebook_skill` lists or loads them. `[[doc:]]` cites open a **side viewer** beside the page
-- **Custom viewers** — defense-attuned tools in the case nav (bodycam first; see below)
+- **Custom viewers** — defense-attuned tools in the case nav (**Bodycam**, **Forensics**; see below)
 
 Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 
@@ -317,16 +317,18 @@ Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 
 ## Defense tools (custom viewers)
 
-Generic document review is not enough for every discovery problem. MarshalOSS is meant to grow **custom viewers** tuned to defense needs — purpose-built screens that sit on the same ingest data. Bodycam is the first; others can follow the same pattern:
+Generic document review is not enough for every discovery problem. MarshalOSS is meant to grow **custom viewers** tuned to defense needs — purpose-built screens on the same case data.
 
-- **Built and served by MarshalOSS.** The tool reads MarshalOSS's own data (transcripts, frame descriptions, timestamps, file metadata), so it needs no separate processing and also works on its own in a browser.
-- **Fed by ingest.** Where a tool needs special inputs (like knowing which videos are bodycam), ingest detects and stores them automatically.
+- **Built and served by MarshalOSS.** The tool reads MarshalOSS's own data (transcripts, frame descriptions, timestamps, file metadata, forensic exports), so it needs no separate processing and also works on its own in a browser.
+- **Fed by ingest.** Where a tool needs special inputs (bodycam metadata, UFDR chat indexes, CSLI coordinates), ingest detects and stores them automatically.
 
 | Viewer | What it does | Status |
 |---|---|---|
 | **Bodycam** | Multi-camera video with synced, clickable transcript and frame descriptions; cameras grouped by device/serial (or renamed officer filenames); timeline aligned by recording time, with per-camera clock offsets; transcript search | Live — case nav **Bodycam** (`/api/bwc/index`) |
+| **Forensics · Cellebrite** | Browse chats from Cellebrite `.ufdr` phone extractions (pick a phone, app, thread) | Live — case nav **Forensics** |
+| **Forensics · CSLI** | Map of cell-site / CDR location events by phone and day (sectors, timeline, pins) | Live — case nav **Forensics** |
 
-Ingest stores timed speech/visual segments plus camera type, device, serial, and recording start. Axon exports usually have **serials, not officer names** in the filename; set `meta.media.officer` to override a lane label, or rename files like `Det Egan (1).mp4` when that convention is used.
+More forensic views are planned (same Forensics area). Ingest stores timed speech/visual segments plus camera type, device, serial, and recording start for bodycam. Axon exports usually have **serials, not officer names** in the filename; set `meta.media.officer` to override a lane label, or rename files like `Det Egan (1).mp4` when that convention is used.
 
 ---
 
@@ -384,6 +386,14 @@ Prefix `MARSHALOSS_`:
 | `BATES_PATTERN` | built-in | Bates regex |
 
 Bare `VOYAGE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` are also accepted.
+
+---
+
+## Note on forensic review
+
+MarshalOSS can **ingest and surface** some phone and location material for counsel review — today mainly **Cellebrite messages** (from `.ufdr`) and **CSLI / tower dumps** on a map. The goal is faster, clearer review of those slices of a production, not a full digital-forensics lab product.
+
+It will **never** substitute for nuanced forensic analysis of a device. A production UFED/UFDR export is not the whole phone; CSLI records are **serving-sector / tower events**, not GPS tracks of the handset. Hiring a qualified forensic analyst remains advisable when accuracy matters — for example to audit CSLI interpretation, recover artifacts the UFED file never captured, or challenge what the UI shows. Treat MarshalOSS forensics views as a **starting point for review**, not a final expert opinion.
 
 ---
 

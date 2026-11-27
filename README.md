@@ -1,12 +1,20 @@
 # MarshalOSS
 
-> **Goal:** Creatively deploy cutting-edge frontier AI models, at the lowest possible cost, to search and analyze the most complex and voluminous discovery on behalf of the poorest clients against the most well-resourced adversaries.
-
 Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal defense discovery: PDFs (including bad or missing OCR), emails, bodycam and surveillance video, radio and call audio, photos, forensic dumps, and similar production material.
 
 MarshalOSS runs on your computer. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions in Cowork or Computer, so query cost stays close to a normal subscription instead of enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
 
 License: AGPL-3.0 (see [License](#license)). Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
+
+## Objective and scope
+
+Big e-discovery AI products are built and priced for large civil cases. Criminal defense often has the same mess — hundreds of gigabytes of PDFs, bodycam, calls, and phone dumps — without that budget.
+
+MarshalOSS is for that gap: search and review a production on your own machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. It uses free local tools first (Docling, ffmpeg, SQLite) and paid APIs only when they clearly help (bad OCR, audio/video, search embeddings).
+
+What it is **not**: a Relativity clone. No privilege logs, redaction workflows, or reviewer assignment. It is a defense-oriented stack, not a full enterprise review platform.
+
+**Hosting:** run it where you like. Do not put the port on the open internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Helpers are in [`tools/networking/`](tools/networking/README.md).
 
 ## What you get
 
@@ -19,17 +27,70 @@ In plain terms, MarshalOSS does six jobs:
 5. **Write lasting notes** — Keep timelines, people, cross outlines, and theory in a blank Markdown notebook (not chat). Link pages to each other and to discovery files that open beside the note.
 6. **Reuse defense skills** — Short playbooks in [`skills/`](skills/) (timeline, cross-examination, and the like) tell the AI how to build those notes the same way each time. The idea is repeatable structure, ideally improved over time by practicing defense attorneys — not one-off chat prompts.
 
----
+## Benchmarks and projected cost
 
-## Objective and scope
+API spend and wall-clock time depend on **how much audio/video** is in the dump more than raw gigabytes. PDFs and images are mostly local CPU; bodycam, radio, and call audio drive the OpenAI bill and a large share of wait time.
 
-Big e-discovery AI products are built and priced for large civil cases. Criminal defense often has the same mess — hundreds of gigabytes of PDFs, bodycam, calls, and phone dumps — without that budget.
+Always run `marshaloss estimate "/path/to/case"` on the actual tree before you spend. Numbers below are **balanced-profile ballparks** (HQ ASR on, OCR escalate on, visual frames on, Voyage embeddings on) for mixed criminal discovery — PDFs, photos, bodycam/surveillance video, and call/radio audio.
 
-MarshalOSS is for that gap: search and review a production on your own machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. It uses free local tools first (Docling, ffmpeg, SQLite) and paid APIs only when they clearly help (bad OCR, audio/video, search embeddings).
+### Reference workstation
 
-What it is **not**: a Relativity clone. No privilege logs, redaction workflows, or reviewer assignment. It is a defense-oriented stack, not a full enterprise review platform.
+Ingest timing below assumes a dedicated private host roughly like this (not a laptop left idle overnight only):
 
-**Hosting:** run it where you like. Do not put the port on the open internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Helpers are in [`tools/networking/`](tools/networking/README.md).
+| Resource | Spec used for projections |
+|---|---|
+| CPU | Intel Core i7-14700 (20 cores / 28 threads) |
+| RAM | 32 GB |
+| Storage | Multi-terabyte local case volume (SSD/HDD array) |
+| Parallelism | `--workers 4`–`8` (I/O + API bound; more workers help until the network or OpenAI rate limits) |
+| GPU | Optional for local Whisper; default ASR is OpenAI API, so GPU is not required for the balanced profile |
+
+Local Docling OCR and ffmpeg dominate CPU. HQ transcription is **API-bound** (upload + model time), so wall-clock does not equal audio duration.
+
+### Mixed-discovery size bands
+
+| Band | Rough production shape | Projected API cost (full ingest) | Projected wall-clock |
+|---|---|---|---|
+| **Small** | ~2–10 GB · dozens of files · **&lt;2 hours** A/V · a few hundred PDF pages | **~$1–8** | **~30–90 minutes** |
+| **Medium** | ~15–50 GB · ~50–200 ingestible files · **~5–15 hours** A/V · mixed PDFs/photos | **~$5–30** | **~2–8 hours** |
+| **Large** | ~100 GB–1 TB+ · hundreds–thousands of files · **~40–200+ hours** A/V · heavy BWC | **~$40–250+** | **Overnight to ~2–4 days** |
+
+**Cost breakdown (typical share of the API bill):**
+
+| Stage | What drives it | Share of API $ |
+|---|---|---|
+| ASR (HQ stack) | Minutes of audio/video speech | **~60–85%** |
+| Visual captions | Photos + sampled video frames (default every 5s, cap 48/file) | **~10–25%** |
+| OCR escalate | Bad Docling pages only | **~1–5%** |
+| Entities / tags | Once per file with text | **~1–3%** |
+| Voyage embeddings | Chunk count / tokens | **~1–5%** |
+
+Cowork / Computer chat while reviewing is **subscription usage**, not in the ingest table.
+
+### Anchored example (measured estimate)
+
+One completed mixed case on this class of host (~18 GB on disk, **83** ingestible files: ~41 PDFs, 15 videos, 6 audio, plus images; **~9 hours** of media):
+
+| Stage | Ballpark API $ |
+|---|---|
+| ASR (HQ) | ~$3.90–$4.90 |
+| Visual frames | ~$1.00–$1.90 |
+| OCR escalate | ~$0.10–$0.35 |
+| Entities | ~$0.05–$0.15 |
+| Voyage embed | ~$0.05–$0.10 |
+| **Total API** | **~$5–$7.50** |
+
+Projected wall-clock for that shape with 4–8 workers: **about 2–5 hours** (Docling on documents in parallel; ASR waits on API). A PDF-heavy dump with little A/V finishes faster and cheaper; a bodycam-heavy dump scales almost linearly with media minutes.
+
+### How to tighten the numbers for your case
+
+```bash
+uv run marshaloss knobs          # active cost/quality profile
+uv run marshaloss estimate "/path/to/case"
+uv run marshaloss estimate "/path/to/case" --mode retranscribe   # ASR-only redo
+```
+
+Economy profile (`asr.hq = false`, fewer visual frames) cuts API spend and often wall-clock; max-quality raises both. Details live in [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml).
 
 ---
 

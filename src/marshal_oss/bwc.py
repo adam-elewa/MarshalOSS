@@ -112,6 +112,65 @@ def _seg_type(kind: str) -> str | None:
     return None
 
 
+def summarize_bwc_for_overview(db: Database, case: Case) -> dict[str, Any]:
+    """Light bodycam/dashcam counts for Case Overview tiles (no segments)."""
+    files = db.list_files_with_meta(case.id)
+    video_count = 0
+    bodycam_count = 0
+    dashcam_count = 0
+    cameras: set[str] = set()
+
+    for f in files:
+        if (f.get("status") or "") != "ready":
+            continue
+        meta = f.get("meta") or {}
+        media = meta.get("media") if isinstance(meta.get("media"), dict) else {}
+        kind = (media.get("kind") or "").lower()
+        mime = (f.get("mime") or "").lower()
+        name = f.get("name") or ""
+        lower_name = name.lower()
+        looks_like_av_file = lower_name.endswith(
+            (".mp4", ".mov", ".mkv", ".avi", ".m4v", ".wmv", ".wav", ".mp3", ".m4a", ".aac")
+        )
+        is_av = kind in ("bodycam", "dashcam", "audio", "video") or mime.startswith(
+            ("video/", "audio/")
+        )
+        if not is_av:
+            if not looks_like_av_file:
+                continue
+            if not (_AXON_BODY.match(name) or _AXON_FLEET.match(name)):
+                continue
+            kind = "bodycam" if _AXON_BODY.match(name) else "dashcam"
+            media = {**media, "kind": kind}
+        elif kind in ("bodycam", "dashcam", "video") and not (
+            looks_like_av_file or mime.startswith("video/")
+        ):
+            continue
+        if kind == "audio":
+            continue
+        if kind not in ("bodycam", "dashcam"):
+            continue
+        recorded = normalize_recorded_start(media.get("recorded_start"))
+        if not recorded:
+            continue
+        video_count += 1
+        if kind == "dashcam":
+            dashcam_count += 1
+        else:
+            bodycam_count += 1
+        serial = str(media.get("device_serial") or media.get("serial") or "").strip()
+        officer = camera_officer_label(name, media)
+        cameras.add(officer or serial or name)
+
+    return {
+        "available": video_count > 0,
+        "video_count": video_count,
+        "bodycam_count": bodycam_count,
+        "dashcam_count": dashcam_count,
+        "camera_count": len(cameras),
+    }
+
+
 def build_bwc_index(db: Database, case: Case) -> dict[str, Any]:
     """Build the multi-cam viewer index for a case from ingest tables."""
     files = db.list_files_with_meta(case.id)

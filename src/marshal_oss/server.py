@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .bwc import apply_camera_label, build_bwc_index, label_suggestions
+from .bwc import apply_camera_label, build_bwc_index, label_suggestions, summarize_bwc_for_overview
 from .categories import CATEGORY_DEFS, CATEGORY_LABELS, categorize_file_row
 from .config import Settings, get_settings
 from .db import Database
@@ -146,11 +146,22 @@ def create_app(
                     else 0,
                 }
             )
+        try:
+            bwc = summarize_bwc_for_overview(db, c)
+        except Exception:
+            bwc = {
+                "available": False,
+                "video_count": 0,
+                "bodycam_count": 0,
+                "dashcam_count": 0,
+                "camera_count": 0,
+            }
         return {
             "case": c.__dict__,
             "summary": summary,
             "entities": entities,
             "manifest": manifest,
+            "bwc": bwc,
         }
 
     @app.get("/api/files/by-facet")

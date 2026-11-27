@@ -16,6 +16,19 @@ A typical production is a mix of PDFs (often with bad or missing OCR), email, bo
 
 MarshalOSS closes that gap: ingest and search on your machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. Local tools first (Docling, ffmpeg, SQLite); paid APIs only when local extraction is wrong or empty.
 
+Cowork (and tools like it) can attach **connectors** beside MarshalOSS MCP so analysis, motions, and legal writing stay grounded in the production *and* in outside sources you already use. A practical defense stack:
+
+| Connector | Role |
+|---|---|
+| **MarshalOSS (MCP)** | Search the case dump; cite real files; update the notebook |
+| **Outlook / email** | Pull counsel and discovery email into the same thread |
+| **CourtListener** | Opinions, dockets, and citation check without leaving chat |
+| **PACER / RECAP** | Federal filings and docket pulls when you need the record |
+| **Westlaw / Lexis** (or similar) | Secondary authority and Shepardizing when your firm already has access |
+| **Legal data tools** (e.g. Legal Data Hunter–style research) | Statutes, rules, and targeted research beside the facts |
+
+**Why it matters:** one workspace can draft a motion or theory memo that cites Bates from the dump, quotes the email chain, and checks case law — instead of hopping between Relativity-class review, Word, PACER, and a research terminal. MarshalOSS supplies the discovery ground truth; the connectors supply court record and authority.
+
 **Hosting:** run it where you like. Do not put the port on the open internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Helpers are in [`tools/networking/`](tools/networking/README.md).
 
 ## What you get

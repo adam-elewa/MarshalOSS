@@ -679,6 +679,7 @@
   .forensics-overview-sub .fos-ico svg { width: 20px; height: 20px }
   .forensics-overview-sub.phones .fos-ico { background: #e8eef7; color: #1e3a8a }
   .forensics-overview-sub.csli .fos-ico { background: #eef6f0; color: #166534 }
+  .forensics-overview-sub.bodycam .fos-ico { background: #f1f5f9; color: #0f172a }
   .forensics-overview-sub .fos-title {
     font-size: 14px; font-weight: 700; letter-spacing: -0.02em;
   }
@@ -1521,7 +1522,7 @@ const state = {
   tagPage: 1,
   tagDocPage: 1,
   tagLetter: null, // null = all | "A".."Z" | "#"
-  overviewFocus: "files", // null | attention | entities | tags | files | forensics
+  overviewFocus: "files", // null | attention | entities | tags | files | forensics | bodycam
   overviewDocPath: null,
   overviewDoc: null,
   overviewOpen: {}, // section id -> bool; default collapsed
@@ -4879,6 +4880,11 @@ function renderOverview() {
   const forensicsSecs = state.forensicsSummary?.sections || {};
   const phoneDumpCount = (forensicsSecs.cellebrite?.sources || []).length;
   const csliCount = (forensicsSecs.csli?.sources || []).length;
+  const bwc = state.overview?.bwc || {};
+  const bwcClipCount = Number(bwc.video_count) || 0;
+  const bwcCameraCount = Number(bwc.camera_count) || 0;
+  const bwcBodyCount = Number(bwc.bodycam_count) || 0;
+  const bwcDashCount = Number(bwc.dashcam_count) || 0;
 
   const tiles = [
     {
@@ -4910,6 +4916,19 @@ function renderOverview() {
       warn: false,
     },
   ];
+  if (bwcClipCount > 0) {
+    const bits = [];
+    if (bwcBodyCount) bits.push(`${bwcBodyCount} bodycam`);
+    if (bwcDashCount) bits.push(`${bwcDashCount} dashcam`);
+    if (bwcCameraCount) bits.push(`${bwcCameraCount} camera${bwcCameraCount === 1 ? "" : "s"}`);
+    tiles.push({
+      id: "bodycam",
+      label: "Bodycam",
+      value: fmtNum(bwcClipCount),
+      blurb: bits.join(" · ") || "Body-worn and dashcam clips with timeline.",
+      warn: false,
+    });
+  }
   const forensicsTotal = phoneDumpCount + csliCount;
   if (forensicsTotal > 0) {
     const bits = [];
@@ -4935,6 +4954,19 @@ function renderOverview() {
           </button>
           <div class="files-detail-copy">
             <p>Browse the production by folder or category, and open individual documents.</p>
+          </div>
+        </div>
+      </div>`;
+  } else if (focus === "bodycam") {
+    detail = `
+      <div class="overview-detail" style="padding:12px">
+        <div class="files-detail">
+          <button type="button" class="files-detail-cta" data-open-bodycam="1">
+            <svg class="cta-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="14" height="12" rx="2"/><path d="M17 11l4-2v8l-4-2"/><circle cx="10" cy="13" r="2.5"/></svg>
+            <span class="cta-label">Open Bodycam</span>
+          </button>
+          <div class="files-detail-copy">
+            <p>Synced multi-camera video, transcript, and timeline for body-worn and dashcam clips.</p>
           </div>
         </div>
       </div>`;
@@ -6530,6 +6562,9 @@ function bindCaseHandlers() {
     });
     document.querySelectorAll("[data-open-forensics]").forEach(btn => {
       btn.onclick = () => openForensicsSection(btn.dataset.openForensics || null);
+    });
+    document.querySelectorAll("[data-open-bodycam]").forEach(btn => {
+      btn.onclick = () => setModule("bwc");
     });
     document.querySelectorAll("[data-mfilter]").forEach(btn => {
       btn.onclick = (ev) => {

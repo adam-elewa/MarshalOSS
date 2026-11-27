@@ -12,7 +12,7 @@ Marshal indexes the production and exposes it over MCP. **You** (Cowork) answer 
 ## Hard rules
 
 - **Discovery files are source of truth and read-only.** No create / delete / modify of files under the case root via MCP.
-- **Writable only:** notebook wiki pages, per-file `user_note`, per-file `user_tags`, optional forensics map pins.
+- **Writable only:** notebook wiki pages, per-file `user_note`, per-file `hot_doc` (`set_file_hot_doc` / `list_flagged_files`), per-file `user_tags`, optional forensics map pins.
 - **Cite real paths** from tool results: `[[doc:rel/path|Label]]` in the notebook.
 
 ## Default loop
@@ -24,7 +24,7 @@ Marshal indexes the production and exposes it over MCP. **You** (Cowork) answer 
    - Or `max_chars=0` for the remainder once  
    - Optional `chunk_offset` / `chunk_limit` for ingest chunks
 4. Draft the answer in chat; persist lasting work with `notebook_upsert` and real `[[doc:]]` cites
-5. Optional: `set_file_note` / `set_file_tags` on exhibits you reviewed
+5. Optional: `set_file_note` / `set_file_hot_doc` / `set_file_tags` on exhibits you reviewed (`list_flagged_files` to see hot docs + notes)
 
 ## Forensics / CSLI (pull data — you analyze)
 

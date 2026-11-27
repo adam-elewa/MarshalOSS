@@ -33,7 +33,7 @@ def load_cowork_playbook(*, strip_frontmatter: bool = True) -> str:
         return (
             "# Marshal Cowork\n\n"
             "search / ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
-            "Discovery is read-only; writable: notebook, user_note, user_tags.\n"
+            "Discovery is read-only; writable: notebook, user_note, hot_doc, user_tags.\n"
         )
     text = path.read_text(encoding="utf-8")
     return _strip_frontmatter(text) if strip_frontmatter else text

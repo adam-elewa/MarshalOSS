@@ -643,6 +643,29 @@ def _parse_and_normalize(
     return payload
 
 
+def _message_day_keys(messages: list[dict[str, Any]] | None) -> list[str]:
+    """Unique calendar days (YYYY-MM-DD) for chat-list date filtering."""
+    days: set[str] = set()
+    for m in messages or []:
+        ts = m.get("timestamp") or m.get("time") or ""
+        if not ts:
+            continue
+        s = str(ts).strip()
+        try:
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            dt = datetime.fromisoformat(s)
+            # Wall-clock date in the timestamp's own offset (matches Cellebrite local times).
+            days.add(dt.date().isoformat())
+            continue
+        except Exception:
+            pass
+        m_iso = re.search(r"(\d{4}-\d{2}-\d{2})", s)
+        if m_iso:
+            days.add(m_iso.group(1))
+    return sorted(days)
+
+
 def chat_summaries(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Strip message bodies for list endpoints."""
     out = []
@@ -660,6 +683,7 @@ def chat_summaries(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "last_activity": c.get("last_activity"),
                 "message_count": c.get("message_count") or 0,
                 "preview": c.get("preview") or "",
+                "message_days": _message_day_keys(c.get("messages") or []),
             }
         )
     return out

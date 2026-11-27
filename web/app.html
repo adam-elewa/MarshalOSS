@@ -324,6 +324,12 @@
   .forensics-hero:hover {
     border-color: #94a3b8; background: #f8fafc;
   }
+  .forensics-hero .hero-ico {
+    display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px;
+    background: #eef2f7; color: var(--ink); margin-bottom: 12px;
+  }
+  .forensics-hero .hero-ico svg { width: 22px; height: 22px }
+  .forensics-hero.csli .hero-ico { background: #eef6f0 }
   .forensics-hero .hero-title {
     margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg);
   }
@@ -1180,7 +1186,7 @@
     overflow: hidden; min-width: 0;
   }
   .explorer-browse {
-    display: flex; align-items: center;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
   .explorer-browse .seg {
     display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
@@ -1190,6 +1196,22 @@
     font-size: 13px; font-weight: 600; color: var(--muted-strong);
   }
   .explorer-browse .seg button.active { background: var(--ink); color: #fff }
+  .explorer-browse .seg button:disabled {
+    opacity: 0.45; cursor: default;
+  }
+  .explorer-browse .browse-divider {
+    width: 1px; height: 22px; background: var(--border); flex-shrink: 0;
+  }
+  .explorer-browse .notes-btn {
+    appearance: none; border: 1px solid var(--border); background: #fff; color: var(--muted-strong);
+    border-radius: 10px; padding: 7px 12px 7px 10px; font: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .explorer-browse .notes-btn:hover { background: #f6f6f4; color: var(--ink) }
+  .explorer-browse .notes-btn.active {
+    background: var(--ink); border-color: var(--ink); color: #fff;
+  }
+  .explorer-browse .notes-btn .hot-diamond { color: inherit; margin: 0 }
   .explorer-search {
     display: grid;
     grid-template-columns: auto 1fr auto;
@@ -1418,7 +1440,89 @@
     background: var(--panel); border-bottom: 1px solid var(--border); padding: 12px 16px 0;
   }
   .doc-title-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap }
-  .doc-title-row h1 { margin: 0; font-size: 16px; font-weight: 650; flex: 1; min-width: 160px }
+  .doc-title-row h1 { margin: 0; font-size: 16px; font-weight: 650; flex: 1; min-width: 160px; display: flex; align-items: center; gap: 6px }
+  .hot-diamond {
+    color: #c62828; font-size: 1.05em; line-height: 1; margin-right: 4px;
+    vertical-align: -0.05em; flex-shrink: 0; font-weight: 700;
+  }
+  .row-title .hot-diamond { font-size: 1.15em; margin-right: 7px }
+  .doc-title-row h1 .hot-diamond { font-size: 1.2em; margin-right: 8px }
+  .facet-edit-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .facet-edit-bar .hot-toggle {
+    appearance: none; border: 1px solid var(--border); background: #fff; color: var(--muted-strong);
+    border-radius: 8px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 650;
+    cursor: pointer; box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+  .facet-edit-bar .hot-toggle:hover { color: var(--ink); background: #f6f6f4 }
+  .facet-edit-bar .hot-toggle.is-on {
+    border-color: #9b2c2c; background: #9b2c2c; color: #fff;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.22);
+  }
+  .facet-edit-bar .hot-toggle.is-on:hover { background: #862525; border-color: #862525; color: #fff }
+  .tag-chip.editable, .entity-row.editable {
+    display: inline-flex; align-items: stretch; gap: 0; position: relative;
+  }
+  .entity-row.editable {
+    display: flex; width: 100%; align-items: stretch;
+  }
+  .tag-chip-main, .entity-row-main {
+    appearance: none; border: 0; background: transparent; font: inherit; color: inherit;
+    cursor: pointer; text-align: left; flex: 1; display: flex; align-items: center; gap: 8px;
+    padding: 0; min-width: 0;
+  }
+  .chip-x {
+    appearance: none; border: 0; background: transparent; color: var(--muted-strong);
+    cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 7px; border-radius: 6px;
+  }
+  .chip-x:hover { color: #9b2c2c; background: #fff1f1 }
+  .notes-panel .notes-label {
+    display: block; font-size: 12px; font-weight: 650; color: var(--muted-strong); margin-bottom: 6px;
+  }
+  .notes-area {
+    width: 100%; min-height: 12rem; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border); font: inherit; color: var(--fg); resize: vertical;
+  }
+  .notes-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap }
+  .notes-actions .note-status {
+    font-size: 12.5px; font-weight: 600; color: var(--muted-strong); min-height: 1.2em;
+  }
+  .notes-actions .note-status.is-ok { color: #166534 }
+  .notes-actions .note-status.is-err { color: var(--danger, #9b2c2c) }
+  .notes-actions .primary:disabled { opacity: 0.65; cursor: default }
+  .csli-info-box {
+    margin: 0 16px 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: #f8fafc; max-width: 40rem; font-size: 12.5px; line-height: 1.45; color: var(--ink);
+  }
+  .csli-info-box.toolbar { margin-top: 0 }
+  .csli-info-box strong { display: block; margin-bottom: 4px; font-size: 12.5px }
+  .csli-info-box p { margin: 0 0 8px }
+  .csli-info-box p:last-child { margin-bottom: 0 }
+  .forensics-toolbar .toolbar-info {
+    appearance: none; border: 1px solid transparent; background: transparent; color: var(--muted-strong);
+    width: 36px; height: 36px; border-radius: 9px; padding: 0; display: grid; place-items: center;
+    cursor: pointer; margin-left: -2px;
+  }
+  .forensics-toolbar .toolbar-info svg { width: 20px; height: 20px; stroke-width: 2 }
+  .forensics-toolbar .toolbar-info:hover { color: var(--ink); background: var(--hover) }
+  .forensics-toolbar .toolbar-info.active {
+    color: var(--ink); background: #eef2f7; border-color: var(--border);
+  }
+  .forensics-toolbar .chk.date-range {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-strong);
+    flex-wrap: wrap;
+  }
+  .forensics-toolbar .chk.date-range input[type="text"] {
+    font: inherit; font-size: 12.5px; border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 8px; background: #fff; color: var(--fg); width: 7.6rem;
+  }
+  .forensics-toolbar .chk.date-range input[type="text"]:focus {
+    outline: none; border-color: #94a3b8; box-shadow: 0 0 0 2px rgba(148,163,184,0.25);
+  }
+  .forensics-toolbar .chk.date-range input.is-bad {
+    border-color: #f1a0a0; background: #fff8f8;
+  }
   .doc-actions { display: flex; gap: 8px; flex-wrap: wrap }
   .tabs { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto }
   .doc-body { flex: 1; min-height: 0; overflow: auto; padding: 16px }
@@ -1498,9 +1602,17 @@
     border: 1px solid transparent; font: inherit;
     font-size: 12px; font-weight: 600; cursor: pointer;
   }
-  button.tag-chip:hover {
+  .tag-chip.editable {
+    padding: 4px 4px 4px 10px; cursor: default;
+  }
+  button.tag-chip:hover, .tag-chip.editable:hover {
     border-color: #94a3b8; background: #e8eef7;
   }
+  .entity-row.editable {
+    border: 1px solid var(--border); border-radius: 10px; padding: 6px 4px 6px 10px;
+    background: var(--panel);
+  }
+  .entity-row.editable:hover { border-color: #94a3b8; background: var(--hover) }
   .tag-chip .facet-count {
     padding: 1px 7px; border-radius: 999px; background: #fff;
     border: 1px solid var(--border); font-size: 11px;
@@ -1535,6 +1647,23 @@
   </div>
 </header>
 <main id="main"></main>
+
+<div class="case-rename-modal" id="confirmModal" hidden>
+  <div class="case-rename-backdrop" data-confirm-dismiss="1"></div>
+  <div class="case-rename-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="case-rename-head">
+      <h2 id="confirmTitle">Confirm</h2>
+      <button type="button" class="case-rename-close" aria-label="Close" data-confirm-dismiss="1">&times;</button>
+    </div>
+    <div class="case-rename-body">
+      <p class="pin-meta" id="confirmMessage">Are you sure?</p>
+    </div>
+    <div class="case-rename-actions">
+      <button type="button" class="ghost" data-confirm-dismiss="1">Cancel</button>
+      <button type="button" class="primary" id="confirmOk">Delete</button>
+    </div>
+  </div>
+</div>
 
 <div class="case-rename-modal" id="caseRenameModal" hidden>
   <div class="case-rename-backdrop" data-case-rename-dismiss="1"></div>
@@ -1610,6 +1739,47 @@
   </div>
 </div>
 
+<div class="case-rename-modal" id="docTagModal" hidden>
+  <div class="case-rename-backdrop" data-doc-tag-dismiss="1"></div>
+  <div class="case-rename-card" role="dialog" aria-modal="true" aria-labelledby="docTagTitle">
+    <div class="case-rename-head">
+      <h2 id="docTagTitle">Add tags</h2>
+      <button type="button" class="case-rename-close" aria-label="Close" data-doc-tag-dismiss="1">&times;</button>
+    </div>
+    <div class="case-rename-body">
+      <label for="docTagInput">Tags</label>
+      <input id="docTagInput" type="text" autocomplete="off" placeholder="e.g. ballistics, hope-manor" />
+      <p class="pin-meta">Comma-separate to add more than one.</p>
+      <p class="case-rename-status" id="docTagStatus" hidden></p>
+    </div>
+    <div class="case-rename-actions">
+      <button type="button" class="ghost" data-doc-tag-dismiss="1">Cancel</button>
+      <button type="button" class="primary" id="docTagSave">Add</button>
+    </div>
+  </div>
+</div>
+
+<div class="case-rename-modal" id="docEntityModal" hidden>
+  <div class="case-rename-backdrop" data-doc-entity-dismiss="1"></div>
+  <div class="case-rename-card" role="dialog" aria-modal="true" aria-labelledby="docEntityTitle">
+    <div class="case-rename-head">
+      <h2 id="docEntityTitle">Add entity</h2>
+      <button type="button" class="case-rename-close" aria-label="Close" data-doc-entity-dismiss="1">&times;</button>
+    </div>
+    <div class="case-rename-body">
+      <label for="docEntityType">Type</label>
+      <input id="docEntityType" type="text" autocomplete="off" placeholder="e.g. Person, Location, Org" />
+      <label for="docEntityName">Name</label>
+      <input id="docEntityName" type="text" autocomplete="off" placeholder="e.g. Jane Doe" />
+      <p class="case-rename-status" id="docEntityStatus" hidden></p>
+    </div>
+    <div class="case-rename-actions">
+      <button type="button" class="ghost" data-doc-entity-dismiss="1">Cancel</button>
+      <button type="button" class="primary" id="docEntitySave">Add</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const state = {
   route: { name: "home" },
@@ -1648,6 +1818,7 @@ const state = {
   breadcrumbs: [],
   selectedPath: null,
   doc: null,
+  noteSaveFlash: null, // { kind: "ok"|"err"|"saving", text }
   tab: "preview",
   hits: null,
   searchQuery: "",
@@ -1672,8 +1843,13 @@ const state = {
   forensicsApp: null, // selected messaging app / source
   forensicsQuery: "",
   forensicsShowEmpty: false,
+  forensicsDateFrom: "",
+  forensicsDateTo: "",
+  forensicsDateFromText: null, // null = show applied; string = draft while typing
+  forensicsDateToText: null,
   forensicsChatId: null,
   forensicsChat: null,
+  csliInfoOpen: false,
   forensicsCsliMap: null,
   csliDay: null,
   csliPhone: null,
@@ -1866,7 +2042,8 @@ function parseHash() {
     const tag = qs.get("tag") || null;
     const entity = qs.get("entity") || null;
     const entity_type = qs.get("entity_type") || null;
-    const browseMode = qs.get("browse") === "folders" ? "folders" : "categories";
+    const browseRaw = qs.get("browse") || "categories";
+    const browseMode = browseRaw === "folders" ? "folders" : (browseRaw === "notes" ? "notes" : "categories");
     const category = qs.get("category") || null;
     const notebookPath = qs.get("page") || "Home";
     const view = qs.get("view") || "overview";
@@ -1904,6 +2081,7 @@ function setHash(route) {
   if (route.module === "explorer") {
     const browseMode = route.browseMode || "categories";
     if (browseMode === "folders") qs.set("browse", "folders");
+    else if (browseMode === "notes") qs.set("browse", "notes");
     else qs.set("browse", "categories");
     if (browseMode === "folders" && route.folder) qs.set("path", route.folder);
     if (browseMode === "categories" && route.category) qs.set("category", route.category);
@@ -2072,6 +2250,14 @@ async function loadForRoute() {
       state.explorerPage = 1;
       state.breadcrumbs = dir.breadcrumbs || [];
       state.path = dir.path || state.path;
+    } else if (state.browseMode === "notes") {
+      const data = await api(`/api/files/flagged?case_id=${state.caseId}`);
+      if (!state.caseMeta) state.caseMeta = data.case;
+      state.entries = data.entries || [];
+      state.explorerPage = 1;
+      state.breadcrumbs = [{ name: "Notes / Hot Docs", path: "" }];
+      state.path = "";
+      state.category = null;
     } else {
       const params = new URLSearchParams({ case_id: String(state.caseId) });
       if (state.category) params.set("category", state.category);
@@ -2115,6 +2301,11 @@ function relativize(url) {
 
 async function loadDoc(relPath, push) {
   state.selectedPath = relPath;
+  state.noteSaveFlash = null;
+  if (state._noteSaveFlashTimer) {
+    clearTimeout(state._noteSaveFlashTimer);
+    state._noteSaveFlashTimer = null;
+  }
   state.module = "explorer";
   const searching = !!(state.searchQuery && state.hits);
   if (push !== false) {
@@ -4087,6 +4278,16 @@ async function fetchBrowseEntries({ browseMode, category, path } = {}) {
       browseMode: "folders",
     };
   }
+  if (mode === "notes") {
+    const data = await api(`/api/files/flagged?case_id=${state.caseId}`);
+    return {
+      entries: data.entries || [],
+      breadcrumbs: [{ name: "Notes / Hot Docs", path: "" }],
+      path: "",
+      category: null,
+      browseMode: "notes",
+    };
+  }
   const params = new URLSearchParams({ case_id: String(state.caseId) });
   if (category) params.set("category", category);
   const data = await api(`/api/files/categories?${params}`);
@@ -4372,7 +4573,16 @@ function icoBwc() {
   return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="14" height="12" rx="2"/><path d="M17 11l4-2v8l-4-2"/><circle cx="10" cy="13" r="2.5"/></svg>`;
 }
 function icoForensics() {
-  return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v6l2 2"/><circle cx="12" cy="14" r="7"/><path d="M9 14h6"/></svg>`;
+  return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>`;
+}
+function icoHeroComputer() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>`;
+}
+function icoInfo() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><circle cx="12" cy="7.2" r="0.9" fill="currentColor" stroke="none"/></svg>`;
+}
+function icoHotDiamond() {
+  return `<span class="hot-diamond" title="Hot doc" aria-label="Hot doc">◆</span>`;
 }
 
 function statusLabel(status) {
@@ -5215,6 +5425,7 @@ function renderOverview() {
 
 function explorerCanGoBack() {
   if (state.selectedPath) return true;
+  if (state.browseMode === "notes") return !!state.selectedPath;
   if (state.browseMode === "categories" && state.category) return true;
   if (state.browseMode === "folders" && state.path) return true;
   return false;
@@ -5299,6 +5510,20 @@ function ensureExplorerListObserver() {
 
 function explorerTrailHtml() {
   if (state.facet || Array.isArray(state.hits)) return "";
+  if (state.browseMode === "notes") {
+    // Notes is a flat flagged list — no folder-style crumbs.
+    if (!state.selectedPath) return "";
+    const fileName = (state.doc && state.doc.name) || state.selectedPath.split("/").pop();
+    return `
+      <div class="explorer-trail">
+        <button type="button" class="entity-back-btn" id="btnExplorerBack" title="Back to flagged list">
+          ${facetBackChevron()}Back
+        </button>
+        <nav class="crumbs" aria-label="Notes path">
+          <span class="crumb-here" title="${esc(fileName)}">${esc(fileName)}</span>
+        </nav>
+      </div>`;
+  }
   if (!explorerCanGoBack()) return "";
 
   const backBtn = `
@@ -5440,6 +5665,7 @@ function renderDocTabs() {
     ["metadata", "Metadata"],
     ["entities", "Entities"],
     ["tags", "Tags"],
+    ["notes", "Notes"],
   ];
   const tabBtns = tabs.map(([id, label]) =>
     `<button type="button" class="tab ${state.tab === id ? "active" : ""}" data-tab="${id}">${label}</button>`
@@ -5512,50 +5738,76 @@ function renderDocTabs() {
   } else if (state.tab === "entities") {
     const ents = (doc.entities || []).map(entityLabel);
     const entCounts = (doc.facet_counts && doc.facet_counts.entities) || {};
-    if (!ents.length) {
-      body = `<div class="panel-card placeholder">No entities extracted for this document.</div>`;
-    } else {
-      body = `<div class="panel-card"><div class="entity-list">
-        ${ents.map(e => {
+    body = `<div class="panel-card">
+      <div class="facet-edit-bar">
+        <button type="button" class="ghost" id="docAddEntity">+ Add entities</button>
+      </div>
+      ${!ents.length
+        ? `<div class="placeholder">No entities on this document.</div>`
+        : `<div class="entity-list">
+        ${ents.map((e, idx) => {
           const key = `${String(e.type || "other").toLowerCase()}::${e.text}`;
           const n = Number(entCounts[key] || 0);
           const countLabel = n > 0 ? `${fmtNum(n)} doc${n === 1 ? "" : "s"}` : "";
-          return `<button type="button" class="entity-row" data-doc-facet-entity="${esc(e.text)}" data-doc-facet-type="${esc(e.type)}" title="Show all documents with this entity">
-          <div class="entity-type">${esc(prettyType(e.type))}</div>
-          <div class="entity-main">
-            <div class="entity-name">${esc(e.text)}</div>
-            ${e.extra ? `<div class="meta">${esc(e.extra)}</div>` : ""}
-          </div>
-          ${countLabel ? `<span class="facet-count">${esc(countLabel)}</span>` : `<span class="facet-count">—</span>`}
-        </button>`;
+          return `<div class="entity-row editable">
+          <button type="button" class="entity-row-main" data-doc-facet-entity="${esc(e.text)}" data-doc-facet-type="${esc(e.type)}" title="Show all documents with this entity">
+            <div class="entity-type">${esc(prettyType(e.type))}</div>
+            <div class="entity-main">
+              <div class="entity-name">${esc(e.text)}</div>
+              ${e.extra ? `<div class="meta">${esc(e.extra)}</div>` : ""}
+            </div>
+            ${countLabel ? `<span class="facet-count">${esc(countLabel)}</span>` : `<span class="facet-count">—</span>`}
+          </button>
+          <button type="button" class="chip-x" data-del-entity="${idx}" title="Remove entity" aria-label="Remove entity">×</button>
+        </div>`;
         }).join("")}
-      </div></div>`;
-    }
+      </div>`}
+    </div>`;
   } else if (state.tab === "tags") {
     const tags = doc.tags || [];
     const tagCounts = (doc.facet_counts && doc.facet_counts.tags) || {};
-    if (!tags.length) {
-      body = `<div class="panel-card placeholder">No tags on this document.</div>`;
-    } else {
-      body = `<div class="panel-card"><div class="tag-list">
-        ${tags.map(t => {
+    body = `<div class="panel-card">
+      <div class="facet-edit-bar">
+        <button type="button" class="ghost" id="docAddTag">+ Add tags</button>
+      </div>
+      ${!tags.length
+        ? `<div class="placeholder">No tags on this document.</div>`
+        : `<div class="tag-list">
+        ${tags.map((t, idx) => {
           const raw = typeof t === "string" ? t : (t.name || t.label || t.tag || JSON.stringify(t));
           const n = Number(tagCounts[raw] || tagCounts[String(raw).toLowerCase()] || 0);
           const countLabel = n > 0 ? fmtNum(n) : "—";
-          return `<button type="button" class="tag-chip" data-doc-facet-tag="${esc(raw)}" title="Show all documents tagged “${esc(prettyLabel(raw))}”">
-            <span>${esc(prettyLabel(raw))}</span>
-            <span class="facet-count">${esc(countLabel)}</span>
-          </button>`;
+          return `<span class="tag-chip editable">
+            <button type="button" class="tag-chip-main" data-doc-facet-tag="${esc(raw)}" title="Show all documents tagged “${esc(prettyLabel(raw))}”">
+              <span>${esc(prettyLabel(raw))}</span>
+              <span class="facet-count">${esc(countLabel)}</span>
+            </button>
+            <button type="button" class="chip-x" data-del-tag="${idx}" title="Remove tag" aria-label="Remove tag">×</button>
+          </span>`;
         }).join("")}
-      </div></div>`;
-    }
+      </div>`}
+    </div>`;
+  } else if (state.tab === "notes") {
+    const note = doc.user_note || "";
+    const hot = !!doc.hot_doc;
+    body = `<div class="panel-card notes-panel">
+      <div class="facet-edit-bar">
+        <button type="button" class="hot-toggle ${hot ? "is-on" : ""}" id="docHotToggle" aria-pressed="${hot ? "true" : "false"}" title="${hot ? "Remove hot doc flag" : "Mark as hot doc"}">Hot Doc</button>
+      </div>
+      <label class="notes-label" for="docUserNote">Notes</label>
+      <textarea id="docUserNote" class="notes-area" rows="10" placeholder="Free-form notes about this document…">${esc(note)}</textarea>
+      <div class="notes-actions">
+        <button type="button" class="primary" id="docNoteSave"${state.noteSaveFlash?.kind === "saving" ? " disabled" : ""}>${state.noteSaveFlash?.kind === "saving" ? "Saving…" : "Save note"}</button>
+        <span class="note-status ${state.noteSaveFlash?.kind === "ok" ? "is-ok" : ""}${state.noteSaveFlash?.kind === "err" ? "is-err" : ""}" id="docNoteStatus" aria-live="polite">${esc(state.noteSaveFlash?.text || "")}</span>
+      </div>
+    </div>`;
   }
 
   return `
     <div class="doc-head">
       <div class="doc-title-row">
         <div>
-          <h1>${esc(doc.name)}</h1>
+          <h1>${doc.hot_doc ? icoHotDiamond() : ""}<span>${esc(doc.name)}</span></h1>
           ${doc.bates ? `<div class="bates">${esc(doc.bates)}</div>` : ""}
           <div class="meta">${esc(doc.rel_path)}</div>
         </div>
@@ -5572,16 +5824,29 @@ function renderDocTabs() {
 function renderExplorer() {
   const searching = Array.isArray(state.hits);
   const showPreview = !!(state.selectedPath && state.doc);
-  const listEntries = searching ? searchResultEntries() : (state.entries || []);
+  const notesMode = !searching && !state.facet && state.browseMode === "notes";
+  let listEntries = searching ? searchResultEntries() : (state.entries || []);
+  if (notesMode) {
+    // Only hot docs / docs with notes — never categories, folders, or unflagged files.
+    listEntries = listEntries.filter((e) => {
+      const typ = e.type || "file";
+      if (typ !== "file") return false;
+      return !!(e.hot_doc || e.has_note || (e.user_note && String(e.user_note).trim()));
+    });
+  }
 
   const facetBanner = state.facet ? facetBannerHtml(listEntries.length) : "";
 
   const browseToggle = (state.facet || searching) ? "" : `
     <div class="explorer-browse">
-      <div class="seg" id="browseSeg">
-        <button type="button" data-browse="categories" class="${state.browseMode !== "folders" ? "active" : ""}">Categories</button>
+      <div class="seg" id="browseSeg" role="group" aria-label="Browse by">
+        <button type="button" data-browse="categories" class="${state.browseMode === "categories" || (!state.browseMode) ? "active" : ""}">Categories</button>
         <button type="button" data-browse="folders" class="${state.browseMode === "folders" ? "active" : ""}">Native folders</button>
       </div>
+      <span class="browse-divider" aria-hidden="true"></span>
+      <button type="button" class="notes-btn ${notesMode ? "active" : ""}" data-browse="notes" title="Hot docs and documents with notes">
+        ${icoHotDiamond()}<span>Notes / Hot Docs</span>
+      </button>
     </div>`;
 
   const showClear = searching || !!(state.searchQuery && String(state.searchQuery).trim());
@@ -5598,7 +5863,11 @@ function renderExplorer() {
 
   const emptyMsg = searching
     ? "No matching files."
-    : (state.facet ? "No matching documents." : (state.browseMode === "categories" ? "No categorized documents." : "Empty folder."));
+    : (state.facet
+      ? "No matching documents."
+      : (notesMode
+        ? "No hot docs or notes yet. Open a document and use the Notes tab to flag one."
+        : (state.browseMode === "categories" ? "No categorized documents." : "Empty folder.")));
 
   const pageSize = 10;
   const total = listEntries.length;
@@ -5645,10 +5914,13 @@ function renderExplorer() {
     const snip = searching && e.snippet
       ? `<span class="file-snip">${highlightSearchHtml(String(e.snippet).slice(0, 160), state.searchQuery)}</span>`
       : "";
+    const noteHint = notesMode
+      ? `<span class="row-meta">${e.hot_doc ? "Hot doc" : ""}${e.hot_doc && e.has_note ? " · " : ""}${e.has_note ? "Has note" : ""}</span>`
+      : (sub ? `<span class="row-meta">${esc(sub)}</span>` : "");
     return `<li class="${p === state.selectedPath ? "active" : ""}" data-type="file" data-path="${esc(p)}">
       <span class="row-main">
-        <span class="row-title">${esc(e.name)}</span>
-        ${sub ? `<span class="row-meta">${esc(sub)}</span>` : ""}
+        <span class="row-title">${e.hot_doc ? icoHotDiamond() : ""}<span>${esc(e.name)}</span></span>
+        ${noteHint}
         ${snip}
       </span>
     </li>`;
@@ -5737,13 +6009,100 @@ function forensicsIsSent(msg, owners) {
   return own.some((o) => o && (from === o || from.includes(o) || o.includes(from)));
 }
 
+function forensicsMsgDay(ts) {
+  if (!ts) return "";
+  // Local calendar day so the filter matches what the chat UI shows.
+  const d = new Date(ts);
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${day}`;
+  }
+  const m = String(ts).match(/(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "";
+}
+
+/** Parse typed dates: 2020-07-31, 7/31/2020, 07-31-20, etc. → YYYY-MM-DD or "". */
+function forensicsParseDateInput(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) {
+    const y = Number(m[1]); const mo = Number(m[2]); const d = Number(m[3]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+    return null;
+  }
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);
+  if (m) {
+    let y = Number(m[3]);
+    if (y < 100) y += y >= 70 ? 1900 : 2000;
+    const mo = Number(m[1]);
+    const d = Number(m[2]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+    return null;
+  }
+  return null;
+}
+
+function forensicsFmtDateInput(iso) {
+  const s = String(iso || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const [y, mo, d] = s.split("-");
+  return `${Number(mo)}/${Number(d)}/${y}`;
+}
+
+function forensicsInDateRange(ts) {
+  const from = String(state.forensicsDateFrom || "").trim();
+  const to = String(state.forensicsDateTo || "").trim();
+  if (!from && !to) return true;
+  const day = forensicsMsgDay(ts);
+  if (!day) return false;
+  if (from && day < from) return false;
+  if (to && day > to) return false;
+  return true;
+}
+
+function forensicsFilteredMessages(messages) {
+  const msgs = Array.isArray(messages) ? messages : [];
+  return msgs.filter((m) => forensicsInDateRange(m.timestamp || m.ts || m.when));
+}
+
 function forensicsFilteredChats() {
   const app = state.forensicsApp;
   const q = String(state.forensicsQuery || "").trim().toLowerCase();
   const showEmpty = !!state.forensicsShowEmpty;
+  const hasRange = !!(state.forensicsDateFrom || state.forensicsDateTo);
   let list = (state.forensicsChats || []).filter((c) => {
     if (app && (c.source || "Unknown") !== app) return false;
     if (!showEmpty && !(Number(c.message_count) > 0)) return false;
+    if (hasRange) {
+      const from = String(state.forensicsDateFrom || "").trim();
+      const to = String(state.forensicsDateTo || "").trim();
+      const days = Array.isArray(c.message_days) ? c.message_days : null;
+      if (days && days.length) {
+        // Real activity days from the UFDR — require at least one day in range.
+        const hit = days.some((d) => {
+          const day = String(d || "").slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+          if (from && day < from) return false;
+          if (to && day > to) return false;
+          return true;
+        });
+        if (!hit) return false;
+      } else {
+        const last = c.last_activity || c.last_timestamp || c.last_ts || c.preview_ts || "";
+        const first = c.start || c.first_activity || c.start_time || c.first_timestamp || c.first_ts || "";
+        const end = last ? forensicsMsgDay(last) : "";
+        const start = first ? forensicsMsgDay(first) : "";
+        if (from && end && end < from) return false;
+        if (to && start && start > to) return false;
+      }
+    }
     return true;
   });
   if (q) {
@@ -5760,6 +6119,44 @@ function forensicsFilteredChats() {
     });
   }
   return list;
+}
+
+function exportForensicsChatPdf() {
+  const chat = state.forensicsChat;
+  if (!chat) return;
+  const owners = state.forensicsOwners || [];
+  const messages = forensicsFilteredMessages(chat.messages || []);
+  const title = forensicsChatTitle(chat) || "Chat";
+  const phone = state.forensicsUfdrPath || "";
+  const caseName = state.caseMeta?.display_name || state.caseMeta?.slug || ("Case " + state.caseId);
+  const range = [state.forensicsDateFrom, state.forensicsDateTo].filter(Boolean).join(" → ") || "all dates";
+  const rows = messages.map((m) => {
+    const sent = forensicsIsSent(m, owners);
+    const who = m.from || (sent ? "Me" : "Unknown");
+    const time = forensicsFmtWhen(m.timestamp);
+    return `<div class="msg ${sent ? "sent" : "recv"}"><div class="meta">${esc(who)}${time ? " · " + esc(time) : ""}</div><div class="body">${esc(m.body || "")}</div></div>`;
+  }).join("");
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>${esc(title)}</title>
+    <style>
+      body{font:13px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#0f172a;margin:24px}
+      h1{font-size:18px;margin:0 0 6px} .sub{color:#64748b;font-size:12px;margin-bottom:18px}
+      .msg{margin:0 0 10px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;max-width:36rem}
+      .msg.sent{background:#f8fafc;margin-left:2rem}.msg.recv{background:#fff}
+      .meta{font-size:11px;color:#64748b;margin-bottom:4px}.body{white-space:pre-wrap;word-break:break-word}
+      .footer{margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b}
+      @media print{.no-print{display:none}}
+    </style></head><body>
+    <button class="no-print" onclick="window.print()">Print / Save PDF</button>
+    <h1>${esc(title)}</h1>
+    <div class="sub">${esc(caseName)} · ${esc(chat.source || "Cellebrite")} · ${esc(range)} · ${fmtNum(messages.length)} message${messages.length === 1 ? "" : "s"}</div>
+    ${rows || "<p>No messages in this range.</p>"}
+    <div class="footer">Exported from Marshal · Case: ${esc(caseName)} · Source: Cellebrite UFDR${phone ? " · " + esc(phone) : ""} · Chat id: ${esc(String(chat.id || ""))} · ${esc(new Date().toLocaleString())}</div>
+    </body></html>`;
+  const w = window.open("", "_blank");
+  if (!w) { alert("Allow pop-ups to export the chat PDF."); return; }
+  w.document.write(html);
+  w.document.close();
+  try { setTimeout(() => w.print(), 250); } catch {}
 }
 
 function icoHeroPhone() {
@@ -5783,6 +6180,7 @@ function renderForensics() {
     if (showCellebrite) {
       cards.push(`
         <button type="button" class="forensics-hero cellebrite" data-forensics-section="cellebrite">
+          <span class="hero-ico" aria-hidden="true">${icoHeroComputer()}</span>
           <h2 class="hero-title">Cellebrite</h2>
           <p class="hero-sub">Phone extractions and chats</p>
           <div class="hero-meta">${fmtNum(ufdrSources.length)} phone${ufdrSources.length === 1 ? "" : "s"} →</div>
@@ -5791,6 +6189,7 @@ function renderForensics() {
     if (showCsli) {
       cards.push(`
         <button type="button" class="forensics-hero csli" data-forensics-section="csli">
+          <span class="hero-ico" aria-hidden="true">${icoHeroTower()}</span>
           <h2 class="hero-title">CSLI</h2>
           <p class="hero-sub">Call location movement by day</p>
           <div class="hero-meta">${fmtNum(csliSources.length)} source${csliSources.length === 1 ? "" : "s"} →</div>
@@ -5852,7 +6251,6 @@ function renderForensics() {
             <span class="row-main">
               <span class="row-title">
                 <span>${esc(title)}</span>
-                ${p.is_target ? `<span class="badge">Target</span>` : ""}
               </span>
               <span class="row-num">${esc(csliFmtPhonePretty(p.phone))}</span>
               ${meta ? `<span class="row-meta">${esc(meta)}</span>` : ""}
@@ -5988,8 +6386,14 @@ function renderForensics() {
       <div class="forensics-toolbar">
         <button type="button" class="forensics-back" id="csliBackToPhones">Change phones</button>
         <span class="toolbar-title">CSLI map</span>
+        <button type="button" class="toolbar-info ${state.csliInfoOpen ? "active" : ""}" id="csliInfoToggle" title="About this map" aria-label="About this map" aria-expanded="${state.csliInfoOpen ? "true" : "false"}">${icoInfo()}</button>
         ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
       </div>
+      ${state.csliInfoOpen ? `<div class="csli-info-box toolbar" id="csliInfoBox">
+        <strong>How this map is built</strong>
+        <p>Marshal reads carrier CSLI exports and plots the raw GPS / sector hits on a map. Subscriber names come straight from the carrier’s subscriber records on ingest.</p>
+        <p>This is a mapping aid, not a forensic conclusion. Sector cones are approximate (azimuth + a default beamwidth). Tower locations and handset precision vary. Have a forensic expert validate results before relying on them in court.</p>
+      </div>` : ""}
       <div class="forensics-body">
         ${mapData && (mapData.events || []).length
           ? `<div class="csli-map-host">
@@ -6121,10 +6525,15 @@ function renderForensics() {
     : "";
 
   let thread = `<div class="forensics-empty">${state.forensicsLoading ? "Loading…" : "Select a conversation."}</div>`;
+  let filteredMsgCount = 0;
   if (state.forensicsChat) {
-    const msgs = state.forensicsChat.messages || [];
-    if (!msgs.length) {
+    const allMsgs = state.forensicsChat.messages || [];
+    const msgs = forensicsFilteredMessages(allMsgs);
+    filteredMsgCount = msgs.length;
+    if (!allMsgs.length) {
       thread = `<div class="forensics-empty">No messages in this conversation.</div>`;
+    } else if (!msgs.length) {
+      thread = `<div class="forensics-empty">No messages in this date range.</div>`;
     } else {
       let lastDay = null;
       const parts = [];
@@ -6160,8 +6569,31 @@ function renderForensics() {
         <button type="button" class="forensics-back" id="forensicsBackPhones">Change phone</button>
         <span class="toolbar-title">${esc(phoneLabel)}</span>
         <input type="search" id="forensicsSearch" placeholder="Search name, number, preview…" value="${esc(state.forensicsQuery || "")}" />
+        <div class="chk date-range" title="Filter messages by date — type MM/DD/YYYY, then Apply or Enter">
+          <span>From</span>
+          <input type="text" id="forensicsDateFrom" inputmode="numeric" autocomplete="off" spellcheck="false"
+            placeholder="7/31/2020"
+            value="${esc(state.forensicsDateFromText != null
+              ? state.forensicsDateFromText
+              : (forensicsFmtDateInput(state.forensicsDateFrom) || ""))}" />
+          <span>to</span>
+          <input type="text" id="forensicsDateTo" inputmode="numeric" autocomplete="off" spellcheck="false"
+            placeholder="8/1/2020"
+            value="${esc(state.forensicsDateToText != null
+              ? state.forensicsDateToText
+              : (forensicsFmtDateInput(state.forensicsDateTo) || ""))}" />
+          <button type="button" class="ghost" id="forensicsDateApply">Apply</button>
+          ${(state.forensicsDateFrom || state.forensicsDateTo
+            || (state.forensicsDateFromText != null && state.forensicsDateFromText !== "")
+            || (state.forensicsDateToText != null && state.forensicsDateToText !== ""))
+            ? `<button type="button" class="ghost" id="forensicsDateClear">Clear</button>`
+            : ""}
+        </div>
         <label class="chk"><input type="checkbox" id="forensicsShowEmpty" ${state.forensicsShowEmpty ? "checked" : ""} /> Show empty threads</label>
-        <span class="meta">${fmtNum(nonempty)} with messages · ${fmtNum((state.forensicsChats || []).length)} total</span>
+        ${state.forensicsChat
+          ? `<button type="button" class="ghost" id="forensicsExportPdf" title="Export chat as PDF">Export PDF</button>`
+          : ""}
+        <span class="meta">${fmtNum(nonempty)} with messages · ${fmtNum((state.forensicsChats || []).length)} total${state.forensicsChat ? ` · ${fmtNum(filteredMsgCount)} shown` : ""}</span>
         ${summary.ufedlib === false ? `<span class="err">Install ufedlib-py on the server to parse UFDRs.</span>` : ""}
         ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
       </div>
@@ -6456,6 +6888,223 @@ function renderNotebook() {
   `;
 }
 
+let _confirmResolver = null;
+function closeConfirmModal() {
+  const modal = document.getElementById("confirmModal");
+  if (modal) modal.hidden = true;
+  if (_confirmResolver) {
+    const r = _confirmResolver;
+    _confirmResolver = null;
+    r(false);
+  }
+}
+function confirmAction({ title = "Confirm", message = "Are you sure?", okLabel = "Delete" } = {}) {
+  const modal = document.getElementById("confirmModal");
+  if (!modal) return Promise.resolve(window.confirm(message));
+  document.getElementById("confirmTitle").textContent = title;
+  document.getElementById("confirmMessage").textContent = message;
+  const ok = document.getElementById("confirmOk");
+  if (ok) ok.textContent = okLabel;
+  modal.hidden = false;
+  return new Promise((resolve) => {
+    _confirmResolver = resolve;
+  });
+}
+function wireConfirmModal() {
+  const modal = document.getElementById("confirmModal");
+  if (!modal || modal.dataset.wired) return;
+  modal.dataset.wired = "1";
+  modal.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-confirm-dismiss]")) {
+      closeConfirmModal();
+      return;
+    }
+    if (ev.target.id === "confirmOk" || ev.target.closest("#confirmOk")) {
+      const r = _confirmResolver;
+      _confirmResolver = null;
+      modal.hidden = true;
+      if (r) r(true);
+    }
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && modal && !modal.hidden) closeConfirmModal();
+  });
+}
+wireConfirmModal();
+
+let _docTagResolver = null;
+function closeDocTagModal(result = null) {
+  const modal = document.getElementById("docTagModal");
+  if (modal) modal.hidden = true;
+  const status = document.getElementById("docTagStatus");
+  if (status) { status.hidden = true; status.textContent = ""; }
+  if (_docTagResolver) {
+    const r = _docTagResolver;
+    _docTagResolver = null;
+    r(result);
+  }
+}
+function openDocTagModal() {
+  const modal = document.getElementById("docTagModal");
+  const input = document.getElementById("docTagInput");
+  const status = document.getElementById("docTagStatus");
+  if (!modal || !input) return Promise.resolve(null);
+  input.value = "";
+  if (status) { status.hidden = true; status.textContent = ""; }
+  modal.hidden = false;
+  requestAnimationFrame(() => { input.focus(); });
+  return new Promise((resolve) => { _docTagResolver = resolve; });
+}
+function submitDocTagModal() {
+  const input = document.getElementById("docTagInput");
+  const status = document.getElementById("docTagStatus");
+  const parts = String(input?.value || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) {
+    if (status) { status.hidden = false; status.textContent = "Enter at least one tag."; }
+    return;
+  }
+  closeDocTagModal(parts);
+}
+function wireDocTagModal() {
+  const modal = document.getElementById("docTagModal");
+  if (!modal || modal.dataset.wired) return;
+  modal.dataset.wired = "1";
+  modal.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-doc-tag-dismiss]")) closeDocTagModal(null);
+  });
+  const save = document.getElementById("docTagSave");
+  if (save) save.addEventListener("click", () => submitDocTagModal());
+  const input = document.getElementById("docTagInput");
+  if (input) {
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); submitDocTagModal(); }
+      if (ev.key === "Escape") { ev.preventDefault(); closeDocTagModal(null); }
+    });
+  }
+}
+
+let _docEntityResolver = null;
+function closeDocEntityModal(result = null) {
+  const modal = document.getElementById("docEntityModal");
+  if (modal) modal.hidden = true;
+  const status = document.getElementById("docEntityStatus");
+  if (status) { status.hidden = true; status.textContent = ""; }
+  if (_docEntityResolver) {
+    const r = _docEntityResolver;
+    _docEntityResolver = null;
+    r(result);
+  }
+}
+function openDocEntityModal() {
+  const modal = document.getElementById("docEntityModal");
+  const typeEl = document.getElementById("docEntityType");
+  const nameEl = document.getElementById("docEntityName");
+  const status = document.getElementById("docEntityStatus");
+  if (!modal || !nameEl) return Promise.resolve(null);
+  if (typeEl) typeEl.value = "Person";
+  nameEl.value = "";
+  if (status) { status.hidden = true; status.textContent = ""; }
+  modal.hidden = false;
+  requestAnimationFrame(() => { nameEl.focus(); });
+  return new Promise((resolve) => { _docEntityResolver = resolve; });
+}
+function submitDocEntityModal() {
+  const typeEl = document.getElementById("docEntityType");
+  const nameEl = document.getElementById("docEntityName");
+  const status = document.getElementById("docEntityStatus");
+  const type = String(typeEl?.value || "other").trim() || "other";
+  const name = String(nameEl?.value || "").trim();
+  if (!name) {
+    if (status) { status.hidden = false; status.textContent = "Enter a name."; }
+    nameEl?.focus();
+    return;
+  }
+  closeDocEntityModal({ type, text: name });
+}
+function wireDocEntityModal() {
+  const modal = document.getElementById("docEntityModal");
+  if (!modal || modal.dataset.wired) return;
+  modal.dataset.wired = "1";
+  modal.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-doc-entity-dismiss]")) closeDocEntityModal(null);
+  });
+  const save = document.getElementById("docEntitySave");
+  if (save) save.addEventListener("click", () => submitDocEntityModal());
+  ["docEntityType", "docEntityName"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); submitDocEntityModal(); }
+      if (ev.key === "Escape") { ev.preventDefault(); closeDocEntityModal(null); }
+    });
+  });
+}
+
+async function saveDocTags(nextTags) {
+  if (!state.doc || !state.caseId) return;
+  const data = await api("/api/files/tags", {
+    method: "PUT",
+    body: JSON.stringify({ case_id: state.caseId, path: state.doc.rel_path, tags: nextTags, kind: "document" }),
+  });
+  state.doc.tags = data.tags || nextTags;
+  render();
+}
+async function saveDocEntities(nextEntities) {
+  if (!state.doc || !state.caseId) return;
+  const data = await api("/api/files/entities", {
+    method: "PUT",
+    body: JSON.stringify({ case_id: state.caseId, path: state.doc.rel_path, entities: nextEntities }),
+  });
+  state.doc.entities = data.entities || nextEntities;
+  render();
+}
+async function saveDocNote(note) {
+  if (!state.doc || !state.caseId) return;
+  const data = await api("/api/files/note", {
+    method: "PUT",
+    body: JSON.stringify({ case_id: state.caseId, path: state.doc.rel_path, note }),
+  });
+  state.doc.user_note = data.user_note != null ? data.user_note : note;
+  const path = state.doc.rel_path;
+  const hasNote = !!(state.doc.user_note && String(state.doc.user_note).trim());
+  (state.entries || []).forEach((e) => {
+    if ((e.path || e.rel_path) === path) {
+      e.user_note = state.doc.user_note;
+      e.has_note = hasNote;
+    }
+  });
+  if (state.browseMode === "notes") {
+    try {
+      const browse = await fetchBrowseEntries({ browseMode: "notes" });
+      state.entries = browse.entries || [];
+    } catch {}
+  }
+}
+async function saveDocHot(hot) {
+  if (!state.doc || !state.caseId) return;
+  const data = await api("/api/files/hot", {
+    method: "PUT",
+    body: JSON.stringify({ case_id: state.caseId, path: state.doc.rel_path, hot: !!hot }),
+  });
+  state.doc.hot_doc = !!data.hot_doc;
+  // Reflect in current list row if present
+  const path = state.doc.rel_path;
+  (state.entries || []).forEach((e) => {
+    if ((e.path || e.rel_path) === path) {
+      e.hot_doc = !!data.hot_doc;
+      e.has_note = !!(e.has_note || (e.user_note && String(e.user_note).trim()));
+    }
+  });
+  // Keep Notes / Hot Docs list in sync whenever the flag changes
+  try {
+    const browse = await fetchBrowseEntries({ browseMode: "notes" });
+    if (state.browseMode === "notes") {
+      state.entries = browse.entries || [];
+    }
+  } catch {}
+  render();
+}
+
 function bindCaseHandlers() {
   const all = document.getElementById("btnAllCases");
   if (all) all.onclick = () => navigate({ name: "home" });
@@ -6540,6 +7189,93 @@ function bindCaseHandlers() {
         render();
       };
     }
+    const applyForensicsDates = () => {
+      const fromEl = document.getElementById("forensicsDateFrom");
+      const toEl = document.getElementById("forensicsDateTo");
+      let bad = false;
+      const rawFrom = fromEl ? fromEl.value : (state.forensicsDateFromText || "");
+      const rawTo = toEl ? toEl.value : (state.forensicsDateToText || "");
+      const from = forensicsParseDateInput(rawFrom);
+      const to = forensicsParseDateInput(rawTo);
+      if (fromEl) {
+        if (String(rawFrom).trim() && from == null) { fromEl.classList.add("is-bad"); bad = true; }
+        else fromEl.classList.remove("is-bad");
+      }
+      if (toEl) {
+        if (String(rawTo).trim() && to == null) { toEl.classList.add("is-bad"); bad = true; }
+        else toEl.classList.remove("is-bad");
+      }
+      if (bad) return false;
+      state.forensicsDateFrom = from || "";
+      state.forensicsDateTo = to || "";
+      state.forensicsDateFromText = null;
+      state.forensicsDateToText = null;
+      render();
+      return true;
+    };
+    const maybeAutoApplyDates = () => {
+      const fromEl = document.getElementById("forensicsDateFrom");
+      const toEl = document.getElementById("forensicsDateTo");
+      const rawFrom = fromEl ? fromEl.value.trim() : "";
+      const rawTo = toEl ? toEl.value.trim() : "";
+      // Auto-apply once both sides parse (or one side filled & valid and the other empty).
+      const from = rawFrom ? forensicsParseDateInput(rawFrom) : "";
+      const to = rawTo ? forensicsParseDateInput(rawTo) : "";
+      if (rawFrom && from == null) return;
+      if (rawTo && to == null) return;
+      if (!rawFrom && !rawTo) return;
+      if (from === state.forensicsDateFrom && to === state.forensicsDateTo
+        && state.forensicsDateFromText == null && state.forensicsDateToText == null) return;
+      applyForensicsDates();
+    };
+    const dateFrom = document.getElementById("forensicsDateFrom");
+    if (dateFrom) {
+      dateFrom.oninput = () => {
+        state.forensicsDateFromText = dateFrom.value;
+        dateFrom.classList.remove("is-bad");
+      };
+      dateFrom.onchange = () => maybeAutoApplyDates();
+      dateFrom.onkeydown = (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          applyForensicsDates();
+        }
+      };
+    }
+    const dateTo = document.getElementById("forensicsDateTo");
+    if (dateTo) {
+      dateTo.oninput = () => {
+        state.forensicsDateToText = dateTo.value;
+        dateTo.classList.remove("is-bad");
+      };
+      dateTo.onchange = () => maybeAutoApplyDates();
+      dateTo.onkeydown = (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          applyForensicsDates();
+        }
+      };
+    }
+    const dateApply = document.getElementById("forensicsDateApply");
+    if (dateApply) {
+      dateApply.onclick = (ev) => {
+        ev.preventDefault();
+        applyForensicsDates();
+      };
+    }
+    const dateClear = document.getElementById("forensicsDateClear");
+    if (dateClear) {
+      dateClear.onclick = (ev) => {
+        ev.preventDefault();
+        state.forensicsDateFrom = "";
+        state.forensicsDateTo = "";
+        state.forensicsDateFromText = null;
+        state.forensicsDateToText = null;
+        render();
+      };
+    }
+    const exportPdf = document.getElementById("forensicsExportPdf");
+    if (exportPdf) exportPdf.onclick = () => exportForensicsChatPdf();
     const showEmpty = document.getElementById("forensicsShowEmpty");
     if (showEmpty) {
       showEmpty.onchange = () => {
@@ -6670,6 +7406,13 @@ function bindCaseHandlers() {
             csliSyncHash();
             render();
             mountCsliMap();
+          };
+        }
+        const infoToggle = document.getElementById("csliInfoToggle");
+        if (infoToggle) {
+          infoToggle.onclick = () => {
+            state.csliInfoOpen = !state.csliInfoOpen;
+            render();
           };
         }
         const poiAddBtn = document.getElementById("csliPoiAdd");
@@ -6999,7 +7742,15 @@ function bindCaseHandlers() {
   }
 
   document.querySelectorAll("[data-browse]").forEach(btn => {
-    btn.onclick = () => setBrowseMode(btn.dataset.browse);
+    btn.onclick = () => {
+      const mode = btn.dataset.browse;
+      // Toggle Notes off → back to Categories
+      if (mode === "notes" && state.browseMode === "notes") {
+        setBrowseMode("categories");
+        return;
+      }
+      setBrowseMode(mode);
+    };
   });
 
   const explorerPrev = document.getElementById("explorerPrevPage");
@@ -7090,6 +7841,117 @@ function bindCaseHandlers() {
         .catch((e) => alert(e.message || String(e)));
     };
   });
+  document.querySelectorAll("[data-del-tag]").forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const idx = Number(btn.dataset.delTag);
+      const tags = [...(state.doc?.tags || [])];
+      const raw = tags[idx];
+      const label = typeof raw === "string" ? raw : (raw?.name || raw?.label || "this tag");
+      const ok = await confirmAction({
+        title: "Remove tag",
+        message: `Remove “${prettyLabel(label)}” from this document?`,
+        okLabel: "Remove",
+      });
+      if (!ok) return;
+      tags.splice(idx, 1);
+      try { await saveDocTags(tags.map((t) => typeof t === "string" ? t : (t.name || t.label || t.tag || String(t)))); }
+      catch (e) { alert(e.message || String(e)); }
+    };
+  });
+  document.querySelectorAll("[data-del-entity]").forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const idx = Number(btn.dataset.delEntity);
+      const ents = [...(state.doc?.entities || [])];
+      const labeled = entityLabel(ents[idx] || {});
+      const ok = await confirmAction({
+        title: "Remove entity",
+        message: `Remove “${labeled.text || "this entity"}” from this document?`,
+        okLabel: "Remove",
+      });
+      if (!ok) return;
+      ents.splice(idx, 1);
+      try { await saveDocEntities(ents); }
+      catch (e) { alert(e.message || String(e)); }
+    };
+  });
+  const addTag = document.getElementById("docAddTag");
+  if (addTag) {
+    addTag.onclick = async () => {
+      const parts = await openDocTagModal();
+      if (!parts || !parts.length) return;
+      const cur = (state.doc?.tags || []).map((t) => typeof t === "string" ? t : (t.name || t.label || t.tag || String(t)));
+      const next = [...cur];
+      for (const p of parts) {
+        if (!next.some((t) => String(t).toLowerCase() === p.toLowerCase())) next.push(p);
+      }
+      try { await saveDocTags(next); }
+      catch (e) { alert(e.message || String(e)); }
+    };
+  }
+  const addEntity = document.getElementById("docAddEntity");
+  if (addEntity) {
+    addEntity.onclick = async () => {
+      const ent = await openDocEntityModal();
+      if (!ent || !ent.text) return;
+      const next = [...(state.doc?.entities || []), { type: ent.type || "other", text: ent.text }];
+      try { await saveDocEntities(next); }
+      catch (e) { alert(e.message || String(e)); }
+    };
+  }
+  const hotBtn = document.getElementById("docHotToggle");
+  if (hotBtn) {
+    hotBtn.onclick = () => {
+      saveDocHot(!state.doc?.hot_doc).catch((e) => alert(e.message || String(e)));
+    };
+  }
+  const noteArea = document.getElementById("docUserNote");
+  if (noteArea) {
+    noteArea.oninput = () => {
+      if (state.noteSaveFlash) {
+        state.noteSaveFlash = null;
+        const status = document.getElementById("docNoteStatus");
+        if (status) {
+          status.textContent = "";
+          status.classList.remove("is-ok", "is-err");
+        }
+      }
+    };
+  }
+  const noteSave = document.getElementById("docNoteSave");
+  if (noteSave) {
+    noteSave.onclick = async () => {
+      const ta = document.getElementById("docUserNote");
+      const draft = ta ? ta.value : "";
+      state.noteSaveFlash = { kind: "saving", text: "Saving…" };
+      render();
+      // Restore draft if render reset from stale state.doc.user_note
+      const ta2 = document.getElementById("docUserNote");
+      if (ta2 && ta2.value !== draft) ta2.value = draft;
+      try {
+        await saveDocNote(draft);
+        state.noteSaveFlash = { kind: "ok", text: "Saved" };
+        render();
+        if (state._noteSaveFlashTimer) clearTimeout(state._noteSaveFlashTimer);
+        state._noteSaveFlashTimer = setTimeout(() => {
+          if (state.noteSaveFlash?.kind === "ok") {
+            state.noteSaveFlash = null;
+            const status = document.getElementById("docNoteStatus");
+            if (status && state.tab === "notes") {
+              status.textContent = "";
+              status.classList.remove("is-ok", "is-err");
+            }
+          }
+        }, 2500);
+      } catch (e) {
+        state.noteSaveFlash = { kind: "err", text: e.message || String(e) };
+        render();
+        const ta3 = document.getElementById("docUserNote");
+        if (ta3 && ta3.value !== draft) ta3.value = draft;
+      }
+    };
+  }
   const clear = document.getElementById("btnClearHits");
   if (clear) clear.onclick = clearSearchResults;
 
@@ -7181,6 +8043,8 @@ window.addEventListener("hashchange", () => {
   wireCaseRenameModal();
   wireCsliPinModal();
   wireCsliPhoneRenameModal();
+  wireDocTagModal();
+  wireDocEntityModal();
   state.route = parseHash();
   render();
   await loadForRoute();

@@ -433,8 +433,15 @@ class Database:
         d["text"] = "\n\n".join(
             (c["text"] or "").strip() for c in d["chunks"] if (c.get("text") or "").strip()
         )
-        entities = meta.get("entities") or []
-        tags = meta.get("tags") or []
+        # Prefer reviewer-edited meta lists when the key exists (including empty).
+        has_meta_entities = "entities" in meta
+        has_meta_tags = "tags" in meta
+        entities = meta.get("entities") if has_meta_entities else []
+        tags = meta.get("tags") if has_meta_tags else []
+        if not isinstance(entities, list):
+            entities = []
+        if not isinstance(tags, list):
+            tags = []
         man = self.conn.execute(
             """
             SELECT entities_json, tags_json, ingest_status, quality_score, quality_reasons,
@@ -445,12 +452,12 @@ class Database:
         ).fetchone()
         if man:
             md = dict(man)
-            if md.get("entities_json") and not entities:
+            if md.get("entities_json") and not has_meta_entities:
                 try:
                     entities = json.loads(md["entities_json"])
                 except Exception:
                     pass
-            if md.get("tags_json") and not tags:
+            if md.get("tags_json") and not has_meta_tags:
                 try:
                     parsed_tags = json.loads(md["tags_json"])
                     tags = parsed_tags if isinstance(parsed_tags, list) else tags
@@ -475,6 +482,7 @@ class Database:
         )
         ut = meta.get("user_tags")
         d["user_tags"] = [str(t) for t in ut] if isinstance(ut, list) else []
+        d["hot_doc"] = bool(meta.get("hot_doc"))
         return d
 
     def _load_file_meta(self, case_id: int, rel_path: str) -> tuple[int, dict[str, Any]] | None:
@@ -520,6 +528,96 @@ class Database:
         )
         self.conn.commit()
         return {"rel_path": rel_path, "user_tags": clean}
+
+    def set_file_tags(self, case_id: int, rel_path: str, tags: list[str]) -> dict[str, Any]:
+        """Replace document tags stored in file meta (reviewer edits)."""
+        loaded = self._load_file_meta(case_id, rel_path)
+        if not loaded:
+            raise ValueError(f"file not found: {rel_path}")
+        file_id, meta = loaded
+        clean = [str(t).strip() for t in tags if str(t).strip()]
+        meta["tags"] = clean
+        self.conn.execute(
+            "UPDATE files SET meta=? WHERE id=?",
+            (json.dumps(meta, ensure_ascii=False), file_id),
+        )
+        self.conn.commit()
+        return {"rel_path": rel_path, "tags": clean}
+
+    def set_file_entities(self, case_id: int, rel_path: str, entities: list[Any]) -> dict[str, Any]:
+        """Replace document entities stored in file meta (reviewer edits)."""
+        loaded = self._load_file_meta(case_id, rel_path)
+        if not loaded:
+            raise ValueError(f"file not found: {rel_path}")
+        file_id, meta = loaded
+        clean: list[Any] = []
+        for e in entities or []:
+            if isinstance(e, str):
+                text = e.strip()
+                if text:
+                    clean.append({"type": "other", "text": text})
+                continue
+            if not isinstance(e, dict):
+                continue
+            text = str(
+                e.get("text") or e.get("canonical") or e.get("value") or e.get("name") or ""
+            ).strip()
+            if not text:
+                continue
+            item = dict(e)
+            item["text"] = text
+            item["type"] = str(e.get("type") or e.get("label") or "other").strip() or "other"
+            clean.append(item)
+        meta["entities"] = clean
+        self.conn.execute(
+            "UPDATE files SET meta=? WHERE id=?",
+            (json.dumps(meta, ensure_ascii=False), file_id),
+        )
+        self.conn.commit()
+        return {"rel_path": rel_path, "entities": clean}
+
+    def set_file_hot_doc(self, case_id: int, rel_path: str, hot: bool) -> dict[str, Any]:
+        """Mark or unmark a document as a hot doc."""
+        loaded = self._load_file_meta(case_id, rel_path)
+        if not loaded:
+            raise ValueError(f"file not found: {rel_path}")
+        file_id, meta = loaded
+        meta["hot_doc"] = bool(hot)
+        self.conn.execute(
+            "UPDATE files SET meta=? WHERE id=?",
+            (json.dumps(meta, ensure_ascii=False), file_id),
+        )
+        self.conn.commit()
+        return {"rel_path": rel_path, "hot_doc": bool(hot)}
+
+    def list_flagged_files(self, case_id: int) -> list[dict[str, Any]]:
+        """Files with a reviewer note and/or hot_doc flag."""
+        out: list[dict[str, Any]] = []
+        for f in self.list_files_with_meta(case_id):
+            meta = f.get("meta") or {}
+            note = meta.get("user_note")
+            note_s = note if isinstance(note, str) else (str(note) if note is not None else "")
+            hot = bool(meta.get("hot_doc"))
+            if not hot and not note_s.strip():
+                continue
+            out.append(
+                {
+                    "id": f["id"],
+                    "rel_path": f["rel_path"],
+                    "path": f["rel_path"],
+                    "name": f["name"],
+                    "bates": f.get("bates"),
+                    "mime": f.get("mime"),
+                    "size": f.get("size"),
+                    "status": f.get("status"),
+                    "type": "file",
+                    "hot_doc": hot,
+                    "has_note": bool(note_s.strip()),
+                    "user_note": note_s,
+                }
+            )
+        out.sort(key=lambda d: (0 if d.get("hot_doc") else 1, str(d.get("name") or "").lower()))
+        return out
 
     def list_files(self, case_id: int, prefix: str = "") -> list[dict[str, Any]]:
         if prefix:
@@ -709,6 +807,11 @@ class Database:
             d["meta"] = meta
             d["tags"] = meta.get("tags") or []
             d["entities"] = meta.get("entities") or []
+            d["hot_doc"] = bool(meta.get("hot_doc"))
+            note = meta.get("user_note")
+            note_s = note if isinstance(note, str) else (str(note) if note is not None else "")
+            d["user_note"] = note_s
+            d["has_note"] = bool(note_s.strip())
             out.append(d)
         return out
 

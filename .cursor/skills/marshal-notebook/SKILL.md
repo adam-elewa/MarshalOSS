@@ -33,4 +33,4 @@ Same files are mirrored in the wiki at `Meta/Skills/*`.
 
 ## Core loop (see `cowork`)
 
-`search` / `ask` → `get_file` (page if needed) → `notebook_upsert` with `[[doc:]]`. Discovery is **read-only**. Writable: notebook, `user_note`, `user_tags`.
+`search` / `ask` → `get_file` (page if needed) → `notebook_upsert` with `[[doc:]]`. Discovery is **read-only**. Writable: notebook, `user_note`, `hot_doc`, `user_tags`.

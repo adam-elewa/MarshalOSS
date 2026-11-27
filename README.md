@@ -309,12 +309,12 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 | `ask` | Same hybrid retrieval as `search`, plus a packed `context` string for the host LLM to answer |
 | `get_file` | Read-only: metadata + extracted text window (page with `offset_chars` / `has_more`, or `max_chars=0` for remainder; optional chunk paging) |
 | `get_file_link` / `open_file_browser` | Read-only file / UI links |
-| `set_file_note` / `set_file_tags` | **Writable annotations only** (SQLite meta — not the dump on disk) |
+| `set_file_note` / `set_file_hot_doc` / `list_flagged_files` / `set_file_tags` | **Writable annotations only** (SQLite meta — not the dump on disk). Notes + hot docs show in Explorer → Notes |
 | `notebook_list` / `notebook_get` / `notebook_upsert` / `notebook_delete` | **Writable** case wiki pages |
 | `notebook_skill` | **Lists** all skills in `skills/`; pass `name` to load one (mirrored at `Meta/Skills/*`) |
 | `notebook_build_witness_pack` | Optional helper to seed wiki `Witnesses/*` pages (not discovery files) |
 
-**Discovery is source of truth and read-only over MCP.** Tools cannot add, delete, or modify production files under the case root. Ingest remains a separate ops/CLI path. Editable surfaces: notebook, per-file `user_note`, per-file `user_tags`.
+**Discovery is source of truth and read-only over MCP.** Tools cannot add, delete, or modify production files under the case root. Ingest remains a separate ops/CLI path. Editable surfaces: notebook, per-file `user_note`, per-file `hot_doc`, per-file `user_tags`.
 
 ---
 

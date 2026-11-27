@@ -238,6 +238,8 @@ def create_app(
                     "status": f.get("status"),
                     "category": cid,
                     "category_label": CATEGORY_LABELS.get(cid, cid),
+                    "hot_doc": bool(f.get("hot_doc")),
+                    "has_note": bool(f.get("has_note")),
                     **urls,
                 }
             )
@@ -659,6 +661,9 @@ def create_app(
                 "text": detail.get("text") or "",
                 "chunk_count": len(detail.get("chunks") or []),
                 "chunks": detail.get("chunks") or [],
+                "hot_doc": bool(detail.get("hot_doc")),
+                "user_note": detail.get("user_note") or "",
+                "user_tags": detail.get("user_tags") or [],
                 **urls,
             },
         }
@@ -852,7 +857,7 @@ def create_app(
                     "search/ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
                     "Forensics: forensics_overview / csli_events / forensics_search "
                     "(pull data; you analyze). Optional map_pin_*. "
-                    "Discovery read-only; writable: notebook, user_note, user_tags, map pins."
+                    "Discovery read-only; writable: notebook, user_note, hot_doc, user_tags, map pins."
                 ),
                 "playbook": ptr,
             }
@@ -870,8 +875,9 @@ def create_app(
             "discovery_writable": False,
             "notes": (
                 "Discovery files on disk are read-only via MCP/API. "
-                "Writable surfaces: notebook pages, file user_note, file user_tags, "
-                "forensics map pins (map_pin_add / map_pin_update / map_pin_delete / csli_phone_rename)."
+                "Writable surfaces: notebook pages, file user_note, file hot_doc, file user_tags, "
+                "forensics map pins (map_pin_add / map_pin_update / map_pin_delete / csli_phone_rename). "
+                "list_flagged_files returns hot docs and docs with notes."
             ),
             "playbook": playbook_pointer(settings.public_base),
             "tools": [
@@ -886,6 +892,8 @@ def create_app(
                 "get_file_link",
                 "open_file_browser",
                 "set_file_note",
+                "set_file_hot_doc",
+                "list_flagged_files",
                 "set_file_tags",
                 "forensics_overview",
                 "csli_events",
@@ -902,6 +910,21 @@ def create_app(
                 "notebook_skill",
                 "notebook_build_witness_pack",
             ],
+        }
+
+    @app.get("/api/files/flagged")
+    def api_files_flagged(case_id: int | None = None) -> dict[str, Any]:
+        """Hot docs and documents with reviewer notes."""
+        c = resolve_case(case_id=case_id)
+        entries = []
+        for f in db.list_flagged_files(c.id):
+            urls = file_urls(settings, c, f["rel_path"])
+            entries.append({**f, **urls})
+        return {
+            "case": c.__dict__,
+            "mode": "notes",
+            "count": len(entries),
+            "entries": entries,
         }
 
     @app.put("/api/files/note")
@@ -928,8 +951,41 @@ def create_app(
         if not isinstance(tags, list):
             raise HTTPException(400, "tags must be a list of strings")
         c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        # Prefer meta.tags when `kind` is document; keep user_tags for MCP compatibility.
+        kind = str(payload.get("kind") or "document").lower()
         try:
-            out = db.set_file_user_tags(c.id, path, [str(t) for t in tags])
+            if kind in ("user", "user_tags"):
+                out = db.set_file_user_tags(c.id, path, [str(t) for t in tags])
+            else:
+                out = db.set_file_tags(c.id, path, [str(t) for t in tags])
+        except ValueError as e:
+            raise HTTPException(404, str(e)) from e
+        return {"ok": True, "case": c.__dict__, **out}
+
+    @app.put("/api/files/entities")
+    async def api_file_entities(request: Request) -> dict[str, Any]:
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        path = str(payload.get("path") or "")
+        entities = payload.get("entities") or []
+        if not isinstance(entities, list):
+            raise HTTPException(400, "entities must be a list")
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            out = db.set_file_entities(c.id, path, entities)
+        except ValueError as e:
+            raise HTTPException(404, str(e)) from e
+        return {"ok": True, "case": c.__dict__, **out}
+
+    @app.put("/api/files/hot")
+    async def api_file_hot(request: Request) -> dict[str, Any]:
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        path = str(payload.get("path") or "")
+        hot = bool(payload.get("hot"))
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            out = db.set_file_hot_doc(c.id, path, hot)
         except ValueError as e:
             raise HTTPException(404, str(e)) from e
         return {"ok": True, "case": c.__dict__, **out}
@@ -943,7 +999,8 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     Discovery dump on disk is **read-only** here (no create/delete/modify of
     production files). Writable via MCP: notebook pages, per-file user_note,
-    per-file user_tags, forensics map pins. Ingest remains a separate CLI/ops path.
+    per-file hot_doc, per-file user_tags, forensics map pins. Ingest remains a
+    separate CLI/ops path.
     """
     from mcp.server.mcpserver import MCPServer
 
@@ -1000,7 +1057,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
                     "search/ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
                     "Forensics: forensics_overview / csli_events / forensics_search "
                     "(pull data; you analyze). Optional map_pin_*. "
-                    "Discovery read-only; writable: notebook, user_note, user_tags, map pins."
+                    "Discovery read-only; writable: notebook, user_note, hot_doc, user_tags, map pins."
                 ),
                 "playbook": ptr,
             }
@@ -1139,6 +1196,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             "tags": detail.get("tags") or [],
             "user_note": detail.get("user_note") or "",
             "user_tags": detail.get("user_tags") or [],
+            "hot_doc": bool(detail.get("hot_doc")),
             "text": text,
             "text_total_chars": total,
             "offset_chars": start,
@@ -1185,10 +1243,31 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     @mcp.tool()
     def set_file_note(path: str, note: str, case_id: int | None = None) -> dict[str, Any]:
-        """Writable annotation: set reviewer note on a file (SQLite meta only — never writes discovery bytes)."""
+        """Writable annotation: set/clear reviewer note on a discovery file (SQLite meta only — never writes discovery bytes). Shows in Document Explorer Notes tab; non-empty notes appear in list_flagged_files. Pass empty string to clear."""
         c = active_or(case_id)
         out = db.set_file_user_note(c.id, path, note)
         return {"ok": True, "case": c.__dict__, **out}
+
+    @mcp.tool()
+    def set_file_hot_doc(path: str, hot: bool = True, case_id: int | None = None) -> dict[str, Any]:
+        """Writable annotation: mark or unmark a discovery file as a hot doc (SQLite meta only). Hot docs show a diamond in Explorer and appear in list_flagged_files / the Notes browse list. Set hot=false to clear."""
+        c = active_or(case_id)
+        out = db.set_file_hot_doc(c.id, path, bool(hot))
+        return {"ok": True, "case": c.__dict__, **out}
+
+    @mcp.tool()
+    def list_flagged_files(case_id: int | None = None) -> dict[str, Any]:
+        """List discovery files flagged as hot_doc and/or that have a non-empty reviewer note. Same set as Document Explorer → Notes."""
+        c = active_or(case_id)
+        entries = []
+        for f in db.list_flagged_files(c.id):
+            entries.append({**f, **file_urls(settings, c, f["rel_path"])})
+        return {
+            "ok": True,
+            "case": c.__dict__,
+            "count": len(entries),
+            "entries": entries,
+        }
 
     @mcp.tool()
     def set_file_tags(path: str, tags: list[str], case_id: int | None = None) -> dict[str, Any]:

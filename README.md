@@ -1,8 +1,10 @@
 # MarshalOSS
 
-Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal defense discovery: PDFs (including bad or missing OCR), emails, bodycam and surveillance video, radio and call audio, photos, forensic dumps, and similar production material.
+**A medium-size criminal case can cost about $20 one time to ingest, then about $20/month for Claude Pro to analyze it with frontier models (Opus-class and the like).**
 
-MarshalOSS runs on your computer. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions in Cowork or Computer, so query cost stays close to a normal subscription instead of enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
+That is the point of the project. Enterprise e-discovery AI is priced for big civil matters. Here, the expensive work of turning a dump into searchable text runs **once on your machine** (local OCR first; paid APIs mainly for bodycam/audio and the odd bad PDF). After that, questions go through **Cowork or Computer** on a normal subscription — not a per-gigabyte discovery platform.
+
+Use Cowork or Computer against PDFs (including bad or missing OCR), email, bodycam and surveillance video, radio and call audio, photos, forensic dumps, and similar productions. MarshalOSS extracts text, builds the index, and exposes the case over MCP. Built for **CJA appointments, public defender work, and smaller private cases**. See [Benchmarks and projected cost](#benchmarks-and-projected-cost) for the breakdown.
 
 License: AGPL-3.0 (see [License](#license)). Private: [github.com/adam-elewa/MarshalOSS](https://github.com/adam-elewa/MarshalOSS).
 
@@ -91,6 +93,8 @@ uv run marshaloss estimate "/path/to/case" --mode retranscribe   # ASR-only redo
 ```
 
 Economy profile (`asr.hq = false`, fewer visual frames) cuts API spend and often wall-clock; max-quality raises both. Details live in [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml).
+
+**Bottom line (same punchline as the intro):** a medium-size criminal case ≈ **$20 one-time** ingest + **$20/month** Claude Pro to analyze it with frontier models.
 
 ---
 

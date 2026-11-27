@@ -10,7 +10,7 @@ License: AGPL-3.0 (see [License](#license)). Private: [github.com/adam-elewa/Mar
 
 No commercial platform today offers serious search over a large, messy discovery corpus at a price that makes sense for most criminal matters. Enterprise tools are built for civil megacases; criminal productions are often just as complex — and the budget is not.
 
-Criminal defense discovery is rarely a clean PDF binder. It is PDFs and Office files with poor or missing OCR, email dumps, body-worn and surveillance video, radio and call audio, and forensic exports. Even a “minor” case can mean hundreds of gigabytes of media and file types that off-the-shelf tools ignore or bill by the gigabyte to touch.
+A typical production is a mix of PDFs (often with bad or missing OCR), email, bodycam and surveillance video, radio and call audio, photos, and phone dumps. Even a smaller case can run to hundreds of gigabytes, with file types that ordinary tools skip or charge heavily to process.
 
 MarshalOSS closes that gap: ingest and search on your machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. Local tools first (Docling, ffmpeg, SQLite); paid APIs only when local extraction is wrong or empty.
 

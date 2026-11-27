@@ -19,7 +19,10 @@ from .forensics_ufdr import (
     case_forensics_summary,
     chat_summaries,
     get_chat,
+    parse_csli_map_for_case,
     parse_ufdr_chats_for_case,
+    query_csli_events,
+    search_forensics,
     ufedlib_available,
 )
 from .fsbrowse import list_dir
@@ -416,6 +419,120 @@ def create_app(
             raise HTTPException(404, "chat not found")
         return {"case": c.__dict__, "rel_path": path, "chat": chat}
 
+    @app.get("/api/forensics/csli/map")
+    def api_forensics_csli_map(
+        case_id: int | None = None,
+        refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Map payload: cell towers + call/location pings from CSLI / tower-dump files."""
+        c = resolve_case(case_id=case_id)
+        try:
+            payload = parse_csli_map_for_case(c.files_root, use_cache=not refresh)
+        except Exception as e:
+            raise HTTPException(500, f"CSLI map parse failed: {e}") from e
+        pins = db.list_map_pins(c.id)
+        phone_labels = db.get_csli_phone_labels(c.id)
+        return {
+            "case": c.__dict__,
+            **payload,
+            "pins": pins,
+            "phone_labels": phone_labels,
+        }
+
+    @app.get("/api/forensics/search")
+    def api_forensics_search(
+        q: str = "",
+        case_id: int | None = None,
+        top_k: int = 25,
+    ) -> dict[str, Any]:
+        """Search forensic files + CSLI events + map pins."""
+        c = resolve_case(case_id=case_id)
+        pins = db.list_map_pins(c.id)
+        try:
+            result = search_forensics(c.files_root, q, top_k=top_k, map_pins=pins)
+        except Exception as e:
+            raise HTTPException(500, f"forensics search failed: {e}") from e
+        return {"case": c.__dict__, **result}
+
+    @app.get("/api/forensics/map/pins")
+    def api_map_pins_list(
+        case_id: int | None = None,
+        phone: str | None = None,
+    ) -> dict[str, Any]:
+        c = resolve_case(case_id=case_id)
+        return {"case": c.__dict__, "pins": db.list_map_pins(c.id, phone=phone)}
+
+    @app.post("/api/forensics/map/pins")
+    async def api_map_pins_add(request: Request) -> dict[str, Any]:
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            pin = db.add_map_pin(
+                c.id,
+                label=str(payload.get("label") or "Point of interest"),
+                lat=payload.get("lat"),
+                lon=payload.get("lon"),
+                note=str(payload.get("note") or ""),
+                phone=payload.get("phone"),
+                source_path=payload.get("source_path") or payload.get("rel_path"),
+                kind=str(payload.get("kind") or "user"),
+                event_when=payload.get("event_when") or payload.get("when"),
+            )
+        except (TypeError, ValueError) as e:
+            raise HTTPException(400, str(e)) from e
+        return {"ok": True, "case": c.__dict__, "pin": pin}
+
+    @app.patch("/api/forensics/map/pins")
+    async def api_map_pins_update(request: Request) -> dict[str, Any]:
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        pin_id = payload.get("pin_id") or payload.get("id")
+        if pin_id is None:
+            raise HTTPException(400, "pin_id required")
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            pin = db.update_map_pin(
+                c.id,
+                int(pin_id),
+                label=payload.get("label"),
+                note=payload.get("note"),
+                event_when=payload.get("event_when") or payload.get("when"),
+                lat=payload.get("lat"),
+                lon=payload.get("lon"),
+                phone=payload.get("phone"),
+            )
+        except (TypeError, ValueError) as e:
+            raise HTTPException(400, str(e)) from e
+        if not pin:
+            raise HTTPException(404, "pin not found")
+        return {"ok": True, "case": c.__dict__, "pin": pin}
+
+    @app.delete("/api/forensics/map/pins")
+    def api_map_pins_delete(
+        pin_id: int,
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        c = resolve_case(case_id=case_id)
+        ok = db.delete_map_pin(c.id, pin_id)
+        if not ok:
+            raise HTTPException(404, "pin not found")
+        return {"ok": True, "id": pin_id}
+
+    @app.put("/api/forensics/csli/phone-label")
+    async def api_csli_phone_label(request: Request) -> dict[str, Any]:
+        """Rename a CSLI phone for display (does not change source data)."""
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        phone = payload.get("phone")
+        label = payload.get("label") or payload.get("name") or ""
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        try:
+            labels = db.set_csli_phone_label(c.id, str(phone or ""), str(label))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return {"ok": True, "case": c.__dict__, "phone_labels": labels}
+
     @app.get("/api/bwc/index")
     def api_bwc_index(case_id: int | None = None) -> dict[str, Any]:
         """Multi-cam bodycam/dashcam index (timed speech + visual segments)."""
@@ -722,7 +839,9 @@ def create_app(
                 "ok": True,
                 "summary": (
                     "search/ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
-                    "Discovery read-only; writable: notebook, user_note, user_tags."
+                    "Forensics: forensics_overview / csli_events / forensics_search "
+                    "(pull data; you analyze). Optional map_pin_*. "
+                    "Discovery read-only; writable: notebook, user_note, user_tags, map pins."
                 ),
                 "playbook": ptr,
             }
@@ -740,7 +859,8 @@ def create_app(
             "discovery_writable": False,
             "notes": (
                 "Discovery files on disk are read-only via MCP/API. "
-                "Writable surfaces: notebook pages, file user_note, file user_tags."
+                "Writable surfaces: notebook pages, file user_note, file user_tags, "
+                "forensics map pins (map_pin_add / map_pin_update / map_pin_delete / csli_phone_rename)."
             ),
             "playbook": playbook_pointer(settings.public_base),
             "tools": [
@@ -756,6 +876,14 @@ def create_app(
                 "open_file_browser",
                 "set_file_note",
                 "set_file_tags",
+                "forensics_overview",
+                "csli_events",
+                "forensics_search",
+                "map_pin_list",
+                "map_pin_add",
+                "map_pin_update",
+                "map_pin_delete",
+                "csli_phone_rename",
                 "notebook_list",
                 "notebook_get",
                 "notebook_upsert",
@@ -804,7 +932,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     Discovery dump on disk is **read-only** here (no create/delete/modify of
     production files). Writable via MCP: notebook pages, per-file user_note,
-    per-file user_tags. Ingest remains a separate CLI/ops path.
+    per-file user_tags, forensics map pins. Ingest remains a separate CLI/ops path.
     """
     from mcp.server.mcpserver import MCPServer
 
@@ -859,7 +987,9 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
                 "ok": True,
                 "summary": (
                     "search/ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
-                    "Discovery read-only; writable: notebook, user_note, user_tags."
+                    "Forensics: forensics_overview / csli_events / forensics_search "
+                    "(pull data; you analyze). Optional map_pin_*. "
+                    "Discovery read-only; writable: notebook, user_note, user_tags, map pins."
                 ),
                 "playbook": ptr,
             }
@@ -1136,5 +1266,141 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             min_count=max(1, int(min_count)),
             max_witnesses=max(1, min(int(max_witnesses), 100)),
         )
+
+    @mcp.tool()
+    def forensics_overview(case_id: int | None = None) -> dict[str, Any]:
+        """List forensic sources in the case (CSLI spreadsheets / AT&T returns, Cellebrite UFDRs). Use before csli_events or forensics_search."""
+        c = active_or(case_id)
+        summary = case_forensics_summary(c.files_root)
+        return {
+            "case": c.__dict__,
+            **summary,
+            "instructions": (
+                "Pull CSLI rows with csli_events (filter by phone/day/start/end as needed). "
+                "Search loosely with forensics_search. You analyze — Marshal only supplies data."
+            ),
+        }
+
+    @mcp.tool()
+    def csli_events(
+        case_id: int | None = None,
+        phone: str | None = None,
+        day: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        source_path: str | None = None,
+        limit: int = 200,
+        offset: int = 0,
+        refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Pull CSLI / cell-site events for analysis. Filter optionally by phone, day (YYYY-MM-DD), start/end (as-recorded timestamps), source_path substring. Page with offset while has_more. Times include source_tz (AT&T is UTC). Tower lat/lon — not handset GPS. Analyze arbitrarily in Cowork."""
+        c = active_or(case_id)
+        result = query_csli_events(
+            c.files_root,
+            phone=phone,
+            day=day,
+            start=start,
+            end=end,
+            source_path=source_path,
+            limit=limit,
+            offset=offset,
+            use_cache=not refresh,
+        )
+        return {"case": c.__dict__, **result}
+
+    @mcp.tool()
+    def forensics_search(
+        query: str,
+        case_id: int | None = None,
+        top_k: int = 25,
+    ) -> dict[str, Any]:
+        """Keyword search over forensic file names and CSLI events. For bulk pull + your own analysis prefer csli_events. pin_ready hits can be passed to map_pin_add."""
+        c = active_or(case_id)
+        pins = db.list_map_pins(c.id)
+        result = search_forensics(c.files_root, query, top_k=top_k, map_pins=pins)
+        return {"case": c.__dict__, **result}
+
+    @mcp.tool()
+    def map_pin_list(case_id: int | None = None, phone: str | None = None) -> dict[str, Any]:
+        """List CSLI map pins (points of interest) for the case. Optional phone filter shows global pins + that phone's pins."""
+        c = active_or(case_id)
+        return {"case": c.__dict__, "pins": db.list_map_pins(c.id, phone=phone)}
+
+    @mcp.tool()
+    def map_pin_add(
+        label: str,
+        lat: float,
+        lon: float,
+        note: str = "",
+        phone: str | None = None,
+        source_path: str | None = None,
+        event_when: str | None = None,
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Writable: pin a lat/lon on the Forensics CSLI map. Pins only appear for the event_when date (and near that time when a timeline stop is selected). Prefer event_when from forensics_search hits."""
+        c = active_or(case_id)
+        pin = db.add_map_pin(
+            c.id,
+            label=label,
+            lat=lat,
+            lon=lon,
+            note=note or "",
+            phone=phone,
+            source_path=source_path,
+            kind="user",
+            event_when=event_when,
+        )
+        return {
+            "ok": True,
+            "pin": pin,
+            "map_url": f"{settings.public_base.rstrip('/')}/#/cases/{c.id}?module=forensics&csli=1",
+        }
+
+    @mcp.tool()
+    def map_pin_delete(pin_id: int, case_id: int | None = None) -> dict[str, Any]:
+        """Writable: remove a map pin by id from map_pin_list."""
+        c = active_or(case_id)
+        ok = db.delete_map_pin(c.id, int(pin_id))
+        if not ok:
+            raise ValueError(f"pin not found: {pin_id}")
+        return {"ok": True, "id": int(pin_id)}
+
+    @mcp.tool()
+    def map_pin_update(
+        pin_id: int,
+        label: str | None = None,
+        note: str | None = None,
+        event_when: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        phone: str | None = None,
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Writable: edit an existing map pin (label, note, event_when, coords, phone)."""
+        c = active_or(case_id)
+        pin = db.update_map_pin(
+            c.id,
+            int(pin_id),
+            label=label,
+            note=note,
+            event_when=event_when,
+            lat=lat,
+            lon=lon,
+            phone=phone,
+        )
+        if not pin:
+            raise ValueError(f"pin not found: {pin_id}")
+        return {"ok": True, "pin": pin}
+
+    @mcp.tool()
+    def csli_phone_rename(
+        phone: str,
+        label: str,
+        case_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Writable: set a display name for a CSLI phone number (UI + tools). Empty label clears it."""
+        c = active_or(case_id)
+        labels = db.set_csli_phone_label(c.id, phone, label)
+        return {"ok": True, "phone_labels": labels}
 
     return mcp

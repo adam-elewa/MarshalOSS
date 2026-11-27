@@ -19,7 +19,7 @@ Parsed chat indexes are also built on first open if ingest has not run yet.
 
 ## Cell Site Location Information (CSLI)
 
-Placeholder subsection. Shown only when CSLI-like materials are detected (future).
+Landing uses a cell-tower hero card when CDR / tower-dump spreadsheets with coordinates are found. The viewer is a **map** (towers + sector wedges + call/location pings)—not the raw spreadsheet. Parsed geo cache lives under `.marshaloss/forensics/csli/`.
 
 ## Design rules
 

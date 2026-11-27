@@ -242,6 +242,33 @@ class Database:
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_notebook_pages_case ON notebook_pages(case_id, path)"
         )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS map_pins (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+              label TEXT NOT NULL,
+              lat REAL NOT NULL,
+              lon REAL NOT NULL,
+              note TEXT NOT NULL DEFAULT '',
+              phone TEXT,
+              source_path TEXT,
+              kind TEXT NOT NULL DEFAULT 'user',
+              event_when TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
+        # Older DBs created before event_when
+        pin_cols = {
+            r[1] for r in self.conn.execute("PRAGMA table_info(map_pins)").fetchall()
+        }
+        if pin_cols and "event_when" not in pin_cols:
+            self.conn.execute("ALTER TABLE map_pins ADD COLUMN event_when TEXT")
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_map_pins_case ON map_pins(case_id, id)"
+        )
         self.conn.commit()
 
     def close(self) -> None:
@@ -1323,6 +1350,212 @@ class Database:
         )
         self.conn.commit()
         return cur.rowcount > 0
+
+    # --- map pins (CSLI / forensics map POIs) ---
+    @staticmethod
+    def normalize_event_when(value: str | None) -> str | None:
+        """Normalize to 'YYYY-MM-DD HH:MM:SS' or 'YYYY-MM-DD' or None."""
+        raw = (value or "").strip()
+        if not raw:
+            return None
+        raw = raw.replace("T", " ").replace("Z", "")
+        # keep date + optional time
+        m = re.match(
+            r"^(\d{4}-\d{2}-\d{2})(?:[ ]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+            raw,
+        )
+        if not m:
+            raise ValueError("event_when must be YYYY-MM-DD or YYYY-MM-DD HH:MM[:SS]")
+        day = m.group(1)
+        if m.group(2) is None:
+            return day
+        hh = int(m.group(2))
+        mm = int(m.group(3))
+        ss = int(m.group(4) or 0)
+        if not (0 <= hh <= 23 and 0 <= mm <= 59 and 0 <= ss <= 59):
+            raise ValueError("event_when time out of range")
+        return f"{day} {hh:02d}:{mm:02d}:{ss:02d}"
+
+    def _map_pin_row(self, row: Any) -> dict[str, Any]:
+        d = dict(row)
+        d["id"] = int(d["id"])
+        d["lat"] = float(d["lat"])
+        d["lon"] = float(d["lon"])
+        d["note"] = d.get("note") or ""
+        d["phone"] = (d.get("phone") or None) or None
+        d["source_path"] = (d.get("source_path") or None) or None
+        d["kind"] = d.get("kind") or "user"
+        d["event_when"] = d.get("event_when") or None
+        d["event_day"] = (d["event_when"] or "")[:10] or None
+        return d
+
+    def list_map_pins(self, case_id: int, phone: str | None = None) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT id, case_id, label, lat, lon, note, phone, source_path, kind,
+                   event_when, created_at, updated_at
+            FROM map_pins
+            WHERE case_id=?
+            ORDER BY id ASC
+            """,
+            (case_id,),
+        ).fetchall()
+        out = [self._map_pin_row(r) for r in rows]
+        if phone:
+            digits = "".join(ch for ch in str(phone) if ch.isdigit())
+            filtered = []
+            for p in out:
+                if not p.get("phone"):
+                    filtered.append(p)
+                    continue
+                pd = "".join(ch for ch in str(p["phone"]) if ch.isdigit())
+                if not digits or pd == digits:
+                    filtered.append(p)
+            return filtered
+        return out
+
+    def get_map_pin(self, case_id: int, pin_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, case_id, label, lat, lon, note, phone, source_path, kind,
+                   event_when, created_at, updated_at
+            FROM map_pins WHERE case_id=? AND id=?
+            """,
+            (case_id, int(pin_id)),
+        ).fetchone()
+        return self._map_pin_row(row) if row else None
+
+    def add_map_pin(
+        self,
+        case_id: int,
+        *,
+        label: str,
+        lat: float,
+        lon: float,
+        note: str = "",
+        phone: str | None = None,
+        source_path: str | None = None,
+        kind: str = "user",
+        event_when: str | None = None,
+    ) -> dict[str, Any]:
+        label = (label or "").strip() or "Point of interest"
+        try:
+            lat_f = float(lat)
+            lon_f = float(lon)
+        except (TypeError, ValueError) as e:
+            raise ValueError("lat and lon must be numbers") from e
+        if not (-90 <= lat_f <= 90 and -180 <= lon_f <= 180):
+            raise ValueError("lat/lon out of range")
+        if lat_f == 0 and lon_f == 0:
+            raise ValueError("refusing 0,0 pin")
+        note = note if note is not None else ""
+        phone_s = (str(phone).strip() if phone else "") or None
+        src = (str(source_path).strip() if source_path else "") or None
+        kind_s = (kind or "user").strip() or "user"
+        when_s = self.normalize_event_when(event_when)
+        now = utc_now()
+        cur = self.conn.execute(
+            """
+            INSERT INTO map_pins(
+              case_id, label, lat, lon, note, phone, source_path, kind, event_when,
+              created_at, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (case_id, label, lat_f, lon_f, note, phone_s, src, kind_s, when_s, now, now),
+        )
+        self.conn.commit()
+        pin = self.get_map_pin(case_id, int(cur.lastrowid))
+        assert pin is not None
+        return pin
+
+    def update_map_pin(
+        self,
+        case_id: int,
+        pin_id: int,
+        *,
+        label: str | None = None,
+        note: str | None = None,
+        event_when: str | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        phone: str | None = None,
+    ) -> dict[str, Any] | None:
+        existing = self.get_map_pin(case_id, pin_id)
+        if not existing:
+            return None
+        new_label = existing["label"] if label is None else ((label or "").strip() or "Point of interest")
+        new_note = (existing.get("note") or "") if note is None else str(note)
+        if event_when is None:
+            when_s = existing.get("event_when")
+        else:
+            when_s = self.normalize_event_when(event_when)
+        if lat is None:
+            lat_f = float(existing["lat"])
+        else:
+            lat_f = float(lat)
+        if lon is None:
+            lon_f = float(existing["lon"])
+        else:
+            lon_f = float(lon)
+        if not (-90 <= lat_f <= 90 and -180 <= lon_f <= 180):
+            raise ValueError("lat/lon out of range")
+        if phone is None:
+            phone_s = existing.get("phone")
+        else:
+            phone_s = (str(phone).strip() if phone else "") or None
+        now = utc_now()
+        self.conn.execute(
+            """
+            UPDATE map_pins
+            SET label=?, note=?, event_when=?, lat=?, lon=?, phone=?, updated_at=?
+            WHERE case_id=? AND id=?
+            """,
+            (new_label, new_note, when_s, lat_f, lon_f, phone_s, now, case_id, int(pin_id)),
+        )
+        self.conn.commit()
+        return self.get_map_pin(case_id, pin_id)
+
+    def delete_map_pin(self, case_id: int, pin_id: int) -> bool:
+        cur = self.conn.execute(
+            "DELETE FROM map_pins WHERE case_id=? AND id=?",
+            (case_id, int(pin_id)),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def csli_phone_labels_key(self, case_id: int) -> str:
+        return f"csli_phone_labels:{int(case_id)}"
+
+    def get_csli_phone_labels(self, case_id: int) -> dict[str, str]:
+        raw = self.get_setting(self.csli_phone_labels_key(case_id))
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+        except Exception:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        out: dict[str, str] = {}
+        for k, v in data.items():
+            digits = "".join(ch for ch in str(k) if ch.isdigit())
+            name = str(v or "").strip()
+            if digits and name:
+                out[digits] = name
+        return out
+
+    def set_csli_phone_label(self, case_id: int, phone: str, label: str) -> dict[str, str]:
+        digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+        if not digits:
+            raise ValueError("phone required")
+        labels = self.get_csli_phone_labels(case_id)
+        name = (label or "").strip()
+        if name:
+            labels[digits] = name
+        else:
+            labels.pop(digits, None)
+        self.set_setting(self.csli_phone_labels_key(case_id), json.dumps(labels, ensure_ascii=False))
+        return labels
 
     def ensure_notebook_home(self, case_id: int, case_name: str) -> dict[str, Any]:
         """Ensure Home + git-mirrored Meta/Skills pages. Home refreshes when stock copy is stale."""

@@ -4,6 +4,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Marshal</title>
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
 <style>
   :root {
     --bg: #f8fafc;
@@ -47,6 +49,8 @@
   button { cursor: pointer }
   button.primary { background: var(--ink); color: #fff; border-color: var(--ink) }
   button.ghost { background: transparent }
+  button.ghost.danger { color: #b91c1c }
+  button.ghost.danger:hover { background: #fef2f2; color: #991b1b }
   button.tab {
     border: 0; border-bottom: 2px solid transparent; border-radius: 0;
     background: transparent; padding: 10px 14px; color: var(--muted-strong); font-weight: 600;
@@ -86,7 +90,7 @@
   .case-rename-pen svg { width: 14px; height: 14px; display: block }
   .case-rename-modal[hidden] { display: none !important }
   .case-rename-modal {
-    position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+    position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center;
     padding: 1.25rem;
   }
   .case-rename-backdrop {
@@ -110,8 +114,21 @@
   }
   .case-rename-close:hover { color: var(--fg) }
   .case-rename-body { display: grid; gap: 0.35rem }
-  .case-rename-body input {
+  .case-rename-body input,
+  .case-rename-body textarea {
     width: 100%; padding: 0.55rem 0.7rem; border-radius: 8px;
+    border: 1px solid var(--border); background: #fff; font: inherit; color: var(--fg);
+  }
+  .case-rename-body textarea { min-height: 4.2rem; resize: vertical }
+  .case-rename-body label {
+    font-size: 11.5px; font-weight: 650; color: var(--muted-strong); margin-top: 0.35rem;
+  }
+  .case-rename-body label:first-child { margin-top: 0 }
+  .case-rename-body .pin-meta {
+    font-size: 11.5px; color: var(--muted-strong); line-height: 1.35;
+  }
+  .case-rename-body .pin-when-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;
   }
   .case-rename-status {
     margin: 0.55rem 0 0; font-size: 12px; color: var(--danger); min-height: 1.1em;
@@ -119,6 +136,7 @@
   .case-rename-actions {
     display: flex; justify-content: flex-end; gap: 0.45rem; margin-top: 1rem;
   }
+  .case-rename-card.pin-card { width: min(28rem, 100%) }
   .case-tile .view-bar {
     display: flex; align-items: center; justify-content: center;
     background: #020617; color: #fff; padding: 16px; font-size: 14px; font-weight: 500;
@@ -243,6 +261,266 @@
     flex: 1; display: flex; align-items: center; justify-content: center;
     padding: 24px; color: var(--muted-strong); text-align: center;
   }
+  .forensics-landing {
+    flex: 1; min-height: 0; overflow: auto;
+    display: flex; align-items: center; justify-content: center;
+    padding: 32px 24px 48px;
+  }
+  .forensics-heroes {
+    display: grid; gap: 28px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
+    width: min(640px, 100%);
+    justify-content: center;
+  }
+  .forensics-hero {
+    appearance: none; border: 1px solid var(--border); background: #fff;
+    border-radius: 18px; padding: 28px 22px 22px; cursor: pointer; text-align: center;
+    box-shadow: 0 1px 0 rgba(15,23,42,0.04);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .forensics-hero:hover {
+    border-color: #94a3b8; box-shadow: 0 8px 24px rgba(15,23,42,0.08);
+    transform: translateY(-2px);
+  }
+  .forensics-hero .hero-ico {
+    width: 88px; height: 88px; margin: 0 auto 16px;
+    display: grid; place-items: center;
+    border-radius: 22px; background: #f1f5f9; color: var(--ink);
+  }
+  .forensics-hero .hero-ico svg { width: 52px; height: 52px }
+  .forensics-hero.cellebrite .hero-ico { background: #e8eef7 }
+  .forensics-hero.csli .hero-ico { background: #eef6f0 }
+  .forensics-hero .hero-title {
+    margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg);
+  }
+  .forensics-hero .hero-sub {
+    margin: 8px 0 0; font-size: 13px; line-height: 1.4; color: var(--muted-strong);
+    word-break: break-word;
+  }
+  .forensics-hero .hero-meta {
+    margin: 12px 0 0; font-size: 11px; font-weight: 650; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .forensics-phone-list {
+    display: flex; flex-direction: column; gap: 10px;
+    width: min(420px, 100%); margin: 0 auto;
+  }
+  .forensics-phone-card {
+    appearance: none; width: 100%; text-align: left; cursor: pointer;
+    border: 1px solid var(--border); background: #fff; border-radius: 14px;
+    padding: 16px 16px 14px; display: grid; grid-template-columns: 48px 1fr; gap: 14px;
+    align-items: center;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .forensics-phone-card:hover {
+    border-color: #94a3b8; box-shadow: 0 6px 18px rgba(15,23,42,0.07);
+  }
+  .forensics-phone-card .pico {
+    width: 48px; height: 48px; border-radius: 12px; background: #e8eef7;
+    display: grid; place-items: center; color: var(--ink);
+  }
+  .forensics-phone-card .pico svg { width: 26px; height: 26px }
+  .forensics-phone-card .pt { font-size: 15px; font-weight: 700; letter-spacing: -0.02em }
+  .forensics-phone-card .ps { margin-top: 3px; font-size: 12px; color: var(--muted-strong); line-height: 1.35 }
+  .forensics-back {
+    border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px;
+    font-weight: 650; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .forensics-back:hover { text-decoration: underline }
+  .csli-map-host {
+    flex: 1; min-height: 0; display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+    background: #e8eef3;
+  }
+  html.popout-mode, html.popout-mode body {
+    height: 100%; overflow: hidden;
+  }
+  html.popout-mode header.app-bar { display: none }
+  html.popout-mode #main {
+    height: 100vh; max-width: none; margin: 0; padding: 0;
+  }
+  html.popout-mode .case-shell {
+    grid-template-columns: 1fr; height: 100vh;
+  }
+  html.popout-mode .case-nav { display: none }
+  html.popout-mode .case-content { height: 100vh; min-height: 0 }
+  html.popout-mode .forensics { height: 100%; }
+  html.popout-mode .forensics-toolbar { display: none }
+  html.popout-mode .forensics-body { height: 100%; }
+  html.popout-mode .csli-map-host {
+    height: 100%;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  }
+  html.popout-mode .csli-map { min-height: 0; }
+  .csli-map-main {
+    min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative;
+  }
+  .csli-map { flex: 1; min-height: 320px; width: 100%; }
+  .csli-tools {
+    position: absolute; z-index: 600; top: 12px; left: 12px; right: 12px;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    pointer-events: none;
+  }
+  .csli-tools > * { pointer-events: auto }
+  .csli-tools-bar {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    padding: 6px 8px; border-radius: 12px;
+    background: rgba(255,255,255,0.96); border: 1px solid rgba(15,23,42,0.1);
+    box-shadow: 0 4px 16px rgba(15,23,42,0.12); backdrop-filter: blur(8px);
+  }
+  .csli-tools-bar select {
+    font: inherit; font-size: 12.5px; font-weight: 600; color: var(--fg);
+    border: 1px solid transparent; border-radius: 8px;
+    padding: 6px 8px; background: #f1f5f9; max-width: 200px;
+  }
+  .csli-tools-bar select:hover, .csli-tools-bar select:focus {
+    border-color: #cbd5e1; outline: none; background: #fff;
+  }
+  .csli-tools-bar .tool-sep {
+    width: 1px; height: 22px; background: #e2e8f0; margin: 0 2px;
+  }
+  .csli-tools-bar .tool-btn {
+    font: inherit; font-size: 12.5px; font-weight: 700;
+    border: 1px solid transparent; border-radius: 8px;
+    padding: 6px 12px; background: #f1f5f9; color: var(--fg); cursor: pointer;
+  }
+  .csli-tools-bar .tool-btn:hover { background: #e2e8f0 }
+  .csli-tools-bar .tool-btn.active {
+    background: #0f172a; color: #fff;
+  }
+  .csli-tools-hint {
+    padding: 6px 12px; border-radius: 999px;
+    background: #0f172a; color: #fff; font-size: 12px; font-weight: 650;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.2);
+  }
+  .csli-map-chip {
+    position: absolute; z-index: 500; left: 12px; bottom: 12px;
+    display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+    padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,0.94);
+    border: 1px solid rgba(15,23,42,0.08); font-size: 11px; color: #475569;
+    box-shadow: 0 2px 10px rgba(15,23,42,0.08); pointer-events: none;
+  }
+  .csli-map-chip .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px;
+    vertical-align: middle;
+  }
+  .csli-map-chip .dot.tower { background: #0f172a }
+  .csli-map-chip .dot.num {
+    background: #1e3a8a; color: #fff; width: 14px; height: 14px;
+    font: 700 9px/14px ui-sans-serif, system-ui, sans-serif; text-align: center;
+  }
+  .csli-map-chip .line {
+    display: inline-block; width: 14px; height: 2px; margin-right: 5px;
+    vertical-align: middle; background: #64748b;
+  }
+  .csli-map-chip .cone {
+    display: inline-block; width: 0; height: 0; margin-right: 5px; vertical-align: middle;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-bottom: 10px solid rgba(37, 99, 235, 0.5);
+  }
+  .csli-map-chip .poi {
+    display: inline-block; width: 8px; height: 8px; margin-right: 5px; vertical-align: middle;
+    background: #9f1239; transform: rotate(45deg); border: 1px solid #fff;
+    box-shadow: 0 0 0 1px #9f1239;
+  }
+  .csli-cast-num {
+    width: 24px; height: 24px; margin-left: -12px; margin-top: -12px;
+    border-radius: 50%; background: #1e3a8a; color: #fff;
+    font: 700 11px/24px ui-sans-serif, system-ui, sans-serif;
+    text-align: center; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(15,23,42,0.4);
+  }
+  .csli-cast-num.active { background: #b91c1c; width: 28px; height: 28px; margin-left: -14px; margin-top: -14px; line-height: 28px; font-size: 12px }
+  .csli-map.add-poi { cursor: crosshair !important }
+  /* Pin mode: let clicks reach the map (wedges/markers otherwise swallow them) */
+  .csli-map.add-poi .leaflet-overlay-pane,
+  .csli-map.add-poi .leaflet-marker-pane,
+  .csli-map.add-poi .leaflet-shadow-pane,
+  .csli-map.add-poi .leaflet-tooltip-pane,
+  .csli-map.add-poi .leaflet-popup-pane {
+    pointer-events: none !important;
+  }
+  .csli-poi-marker { background: transparent !important; border: 0 !important }
+  .csli-poi-pin {
+    width: 16px; height: 16px; margin-left: -8px; margin-top: -8px;
+    background: #9f1239; transform: rotate(45deg);
+    border: 2px solid #fff; box-shadow: 0 1px 4px rgba(15,23,42,0.35);
+  }
+  .csli-poi-pin.user {
+    background: #c2410c; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    width: 16px; height: 16px; margin-left: -8px; margin-top: -16px;
+  }
+  .csli-timeline {
+    min-height: 0; display: flex; flex-direction: column;
+    border-left: 1px solid var(--border); background: #fafbfc;
+  }
+  .csli-timeline-head {
+    flex-shrink: 0; padding: 14px 14px 12px; border-bottom: 1px solid var(--border);
+    background: #fff;
+  }
+  .csli-timeline-head .title {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 750; color: var(--fg); letter-spacing: -0.01em;
+  }
+  .csli-timeline-head .title .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .csli-timeline-head .case-rename-pen { flex-shrink: 0 }
+  .csli-timeline-head .sub {
+    display: block; margin-top: 3px; font-size: 11.5px; font-weight: 500;
+    color: var(--muted-strong); line-height: 1.35;
+  }
+  .csli-timeline-list {
+    list-style: none; margin: 0; padding: 6px 0; overflow: auto; flex: 1;
+  }
+  .csli-timeline-list li {
+    display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: start;
+    margin: 0 8px 4px; padding: 10px 10px; border-radius: 10px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .csli-timeline-list li:hover { background: #fff; border-color: #e2e8f0 }
+  .csli-timeline-list li.active {
+    background: #fff; border-color: #cbd5e1;
+    box-shadow: 0 1px 4px rgba(15,23,42,0.06);
+  }
+  .csli-timeline-list .cast-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%; margin-top: 1px;
+    background: #1e3a8a; color: #fff; font: 700 11px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .csli-timeline-list li.active .cast-num { background: #0f172a }
+  .csli-timeline-list .cast-pin {
+    display: block; width: 12px; height: 12px; margin: 6px auto 0;
+    background: #9f1239; transform: rotate(45deg);
+    border: 2px solid #fff; box-shadow: 0 0 0 1px #9f1239;
+  }
+  .csli-timeline-list .cast-pin.user { background: #c2410c; box-shadow: 0 0 0 1px #c2410c }
+  .csli-timeline-list li.is-pin {
+    grid-template-columns: 28px minmax(0, 1fr) 28px;
+  }
+  .csli-timeline-list li.is-pin .body { min-width: 0 }
+  .csli-timeline-list .case-rename-pen {
+    align-self: start; margin-top: 1px;
+    color: #64748b; opacity: 1;
+  }
+  .csli-timeline-list li:hover .case-rename-pen,
+  .csli-timeline-list li.active .case-rename-pen { color: #0f172a }
+  .csli-timeline-list .t {
+    font-size: 13px; font-weight: 700; color: var(--fg); letter-spacing: -0.01em;
+  }
+  .csli-timeline-list .s {
+    margin-top: 2px; font-size: 11.5px; color: var(--muted-strong); line-height: 1.35;
+  }
+  .csli-map.leaflet-container,
+  .leaflet-container { font: inherit; background: #dbe4ec; width: 100%; height: 100% }
+  .leaflet-container .leaflet-tile {
+    max-width: none !important;
+    max-height: none !important;
+  }
+  .leaflet-pane, .leaflet-tile, .leaflet-tile-container { position: absolute; left: 0; top: 0 }
+  .leaflet-tile-pane { opacity: 1 }
+  @media (max-width: 900px) {
+    .csli-map-host { grid-template-columns: 1fr; grid-template-rows: minmax(280px, 1fr) minmax(180px, 40%) }
+    .csli-timeline { border-left: 0; border-top: 1px solid var(--border) }
+  }
 
   .overview { flex: 1; overflow: auto; padding: 28px 32px 40px }
   .overview-intro {
@@ -253,7 +531,7 @@
   }
   .overview-tiles {
     display: grid; gap: 14px;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
     max-width: 56rem;
     margin-top: 20px;
   }
@@ -331,8 +609,39 @@
     font-size: 14px; line-height: 1.5;
   }
   .files-detail-copy p { margin: 0 }
+  .forensics-overview-subs {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .forensics-overview-sub {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    text-align: left; padding: 18px 18px 16px;
+    border: 1px solid var(--border); border-radius: 12px;
+    background: #fff; cursor: pointer; color: var(--fg); font: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .forensics-overview-sub:hover {
+    border-color: #94a3b8; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
+  }
+  .forensics-overview-sub .fos-ico {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .forensics-overview-sub .fos-ico svg { width: 20px; height: 20px }
+  .forensics-overview-sub.phones .fos-ico { background: #e8eef7; color: #1e3a8a }
+  .forensics-overview-sub.csli .fos-ico { background: #eef6f0; color: #166534 }
+  .forensics-overview-sub .fos-title {
+    font-size: 14px; font-weight: 700; letter-spacing: -0.02em;
+  }
+  .forensics-overview-sub .fos-meta {
+    font-size: 12px; color: var(--muted-strong); line-height: 1.35;
+  }
+  .forensics-overview-sub .fos-cta {
+    margin-top: 4px; font-size: 12px; font-weight: 650; color: var(--ink);
+  }
   @media (max-width: 700px) {
     .files-detail { grid-template-columns: 1fr }
+    .forensics-overview-subs { grid-template-columns: 1fr }
   }
   .attention-split {
     display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 42%);
@@ -777,31 +1086,47 @@
   }
   .explorer-browse .seg button.active { background: var(--ink); color: #fff }
   .explorer-search {
-    display: flex; align-items: center; gap: 0;
-    border: 1px solid var(--border); border-radius: 14px; background: #fff;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-    overflow: hidden;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.55rem;
+    align-items: center;
   }
-  .explorer-search:focus-within {
-    border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  .explorer-search .search-icon {
+    display: grid; place-items: center;
+    width: 2.55rem; height: 2.55rem; flex-shrink: 0;
+    border: 0; padding: 0; cursor: pointer;
+    border-radius: 12px; background: #e8eef6; color: #2563eb;
   }
+  .explorer-search .search-icon:hover { background: #dbe7f5 }
+  .explorer-search.is-searching .search-icon {
+    background: #ffe566; color: #5c4500;
+  }
+  .explorer-search.is-searching .search-icon:hover { background: #ffef9a }
+  .explorer-search .search-icon svg { width: 1.35rem; height: 1.35rem; display: block }
   .explorer-search input {
-    flex: 1; min-width: 0; border: 0; background: transparent;
-    padding: 14px 4px 14px 16px; font-size: 15px; outline: none;
+    width: 100%; min-width: 0;
+    border: 1px solid var(--border); border-radius: 10px; background: #fff;
+    padding: 0.75rem 0.85rem; font: 500 0.95rem/1.2 inherit; color: var(--fg);
+    outline: none;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  }
+  .explorer-search input:focus {
+    border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+  .explorer-search.is-searching input {
+    background: #fff3a3; border-color: #e0c44a;
+    box-shadow: 0 0 0 3px rgba(224, 196, 74, 0.35);
+  }
+  .explorer-search.is-searching input:focus {
+    border-color: #c9a820; box-shadow: 0 0 0 3px rgba(224, 196, 74, 0.5);
   }
   .explorer-search .search-clear-btn {
-    flex: 0 0 auto; border: 0; background: transparent; cursor: pointer;
-    color: var(--muted-strong); font-size: 13px; font-weight: 600;
-    padding: 8px 10px; white-space: nowrap;
+    border: 1px solid #e0c44a; background: #fff8d1; color: #5c4500;
+    border-radius: 10px; padding: 0 0.85rem; align-self: stretch;
+    font: 650 0.82rem inherit; cursor: pointer; white-space: nowrap;
   }
-  .explorer-search .search-clear-btn:hover { color: var(--fg); background: var(--hover) }
-  .explorer-search .search-ico-btn {
-    flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
-    width: 48px; height: 48px; border: 0; background: transparent; cursor: pointer;
-    color: #2563eb;
-  }
-  .explorer-search .search-ico-btn:hover { color: #1d4ed8; background: #eff6ff }
-  .explorer-search .search-ico-btn svg { width: 22px; height: 22px }
+  .explorer-search .search-clear-btn:hover { background: #ffef9a }
+  .explorer-search .search-clear-btn[hidden] { display: none !important }
   .search-result-meta {
     font-size: 12px; color: var(--muted-strong); padding: 0 4px;
   }
@@ -1067,6 +1392,62 @@
   </div>
 </div>
 
+<div class="case-rename-modal" id="csliPinModal" hidden>
+  <div class="case-rename-backdrop" data-csli-pin-dismiss="1"></div>
+  <div class="case-rename-card pin-card" role="dialog" aria-modal="true" aria-labelledby="csliPinTitle">
+    <div class="case-rename-head">
+      <h2 id="csliPinTitle">Pin location</h2>
+      <button type="button" class="case-rename-close" aria-label="Close" data-csli-pin-dismiss="1">&times;</button>
+    </div>
+    <div class="case-rename-body">
+      <p class="pin-meta" id="csliPinCoords"></p>
+      <label for="csliPinLabel">Label</label>
+      <input id="csliPinLabel" type="text" autocomplete="off" placeholder="e.g. Hope Manor shooting" />
+      <label for="csliPinNote">Note</label>
+      <textarea id="csliPinNote" placeholder="Address, report #, source…"></textarea>
+      <div class="pin-when-row">
+        <div>
+          <label for="csliPinDate">Event date</label>
+          <input id="csliPinDate" type="date" />
+        </div>
+        <div>
+          <label for="csliPinTime">Event time</label>
+          <input id="csliPinTime" type="time" step="1" />
+        </div>
+      </div>
+      <p class="pin-meta">Pin appears on this date in the timeline and on the map.</p>
+      <p class="case-rename-status" id="csliPinStatus" hidden></p>
+    </div>
+    <div class="case-rename-actions">
+      <button type="button" class="ghost danger" id="csliPinDelete" hidden>Delete</button>
+      <span style="flex:1"></span>
+      <button type="button" class="ghost" data-csli-pin-dismiss="1">Cancel</button>
+      <button type="button" class="primary" id="csliPinSave">Save pin</button>
+    </div>
+  </div>
+</div>
+
+<div class="case-rename-modal" id="csliPhoneRenameModal" hidden>
+  <div class="case-rename-backdrop" data-csli-phone-rename-dismiss="1"></div>
+  <div class="case-rename-card" role="dialog" aria-modal="true" aria-labelledby="csliPhoneRenameTitle">
+    <div class="case-rename-head">
+      <h2 id="csliPhoneRenameTitle">Rename phone</h2>
+      <button type="button" class="case-rename-close" aria-label="Close" data-csli-phone-rename-dismiss="1">&times;</button>
+    </div>
+    <div class="case-rename-body">
+      <p class="pin-meta" id="csliPhoneRenameMeta"></p>
+      <label for="csliPhoneRenameInput">Display name</label>
+      <input id="csliPhoneRenameInput" type="text" autocomplete="off" placeholder="e.g. Gede" />
+      <p class="pin-meta">Clears back to the number if left blank.</p>
+      <p class="case-rename-status" id="csliPhoneRenameStatus" hidden></p>
+    </div>
+    <div class="case-rename-actions">
+      <button type="button" class="ghost" data-csli-phone-rename-dismiss="1">Cancel</button>
+      <button type="button" class="primary" id="csliPhoneRenameSave">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const state = {
   route: { name: "home" },
@@ -1091,7 +1472,7 @@ const state = {
   tagPage: 1,
   tagDocPage: 1,
   tagLetter: null, // null = all | "A".."Z" | "#"
-  overviewFocus: "files", // null | attention | entities | tags | files
+  overviewFocus: "files", // null | attention | entities | tags | files | forensics
   overviewDocPath: null,
   overviewDoc: null,
   overviewOpen: {}, // section id -> bool; default collapsed
@@ -1119,7 +1500,7 @@ const state = {
   notebookDoc: null,
   notebookDocTab: "preview",
   forensicsSummary: null, // from /api/forensics/summary
-  forensicsSection: "cellebrite", // cellebrite | csli
+  forensicsSection: null, // null=landing | cellebrite | csli
   forensicsUfdrPath: null,
   forensicsChats: [],
   forensicsOwners: [],
@@ -1128,6 +1509,20 @@ const state = {
   forensicsShowEmpty: false,
   forensicsChatId: null,
   forensicsChat: null,
+  forensicsCsliMap: null,
+  csliDay: null,
+  csliPhone: null,
+  csliSelectedId: null,
+  csliSelectedPinId: null,
+  csliTzMode: (typeof localStorage !== "undefined" && localStorage.getItem("marshaloss.csliTzMode")) || "eastern",
+  csliPois: [], // user pins [{id,label,lat,lon,note,event_when}]
+  csliPhoneLabels: {}, // { digits: displayName }
+  csliPoiAddMode: false,
+  csliPoiDraft: null, // {lat, lon} create, or {id, lat, lon, ...} edit
+  popout: false, // fullscreen CSLI (or other) window without case chrome
+  _csliMap: null,
+  _csliPathLayer: null,
+  _csliPoiLayer: null,
   forensicsLoading: false,
   forensicsErr: null,
   err: null,
@@ -1270,8 +1665,14 @@ function confClass(score) {
   if (n >= 0.85) return "high";
   return "";
 }
-async function api(path) {
-  const res = await fetch(path);
+async function api(path, opts) {
+  const init = opts ? { ...opts } : undefined;
+  if (init?.body && !init.headers) {
+    init.headers = { "Content-Type": "application/json" };
+  } else if (init?.body && init.headers && !init.headers["Content-Type"]) {
+    init.headers = { ...init.headers, "Content-Type": "application/json" };
+  }
+  const res = await fetch(path, init);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = data.detail;
@@ -1307,12 +1708,18 @@ function parseHash() {
     else if (view === "forensics") module = "forensics";
     else if (view === "explorer" || docPath || folder || category || hasFacet) module = "explorer";
     const facet = hasFacet ? { tag, entity, entity_type } : null;
-    const forensicsSection = qs.get("section") || "cellebrite";
+    const forensicsSection = qs.get("section") || null;
     const forensicsUfdr = qs.get("ufdr") || null;
     const forensicsChat = qs.get("chat") || null;
+    const forensicsCsli = qs.get("csli") || null;
+    const popout = qs.get("popout") === "1";
+    const csliPhone = qs.get("phone") || null;
+    const csliDay = qs.get("day") || null;
+    const csliTz = qs.get("tz") || null;
     return {
       name: "case", caseId, module, docPath, tab, folder, facet, browseMode, category, notebookPath,
-      forensicsSection, forensicsUfdr, forensicsChat,
+      forensicsSection, forensicsUfdr, forensicsChat, forensicsCsli,
+      popout, csliPhone, csliDay, csliTz,
     };
   }
   return { name: "home" };
@@ -1344,8 +1751,50 @@ function setHash(route) {
     if (route.forensicsSection) qs.set("section", route.forensicsSection);
     if (route.forensicsUfdr) qs.set("ufdr", route.forensicsUfdr);
     if (route.forensicsChat) qs.set("chat", route.forensicsChat);
+    if (route.forensicsCsli) qs.set("csli", route.forensicsCsli);
+    if (route.forensicsSection === "csli" || state.forensicsSection === "csli") {
+      const phone = route.csliPhone || state.csliPhone;
+      const day = route.csliDay || state.csliDay;
+      const tz = route.csliTz || state.csliTzMode;
+      if (phone) qs.set("phone", phone);
+      if (day) qs.set("day", day);
+      if (tz) qs.set("tz", tz);
+    }
   }
+  if (route.popout || state.popout) qs.set("popout", "1");
   history.replaceState(null, "", `#/cases/${route.caseId}?${qs.toString()}`);
+}
+
+function csliSyncHash() {
+  if (state.module !== "forensics" || state.forensicsSection !== "csli" || !state.caseId) return;
+  state.route = {
+    ...(state.route || {}),
+    name: "case",
+    caseId: state.caseId,
+    module: "forensics",
+    forensicsSection: "csli",
+    forensicsCsli: "1",
+    popout: !!state.popout,
+    csliPhone: state.csliPhone,
+    csliDay: state.csliDay,
+    csliTz: state.csliTzMode,
+  };
+  setHash(state.route);
+}
+
+function popOutCsli() {
+  if (!state.caseId) return;
+  const qs = new URLSearchParams({
+    view: "forensics",
+    section: "csli",
+    csli: "1",
+    popout: "1",
+  });
+  if (state.csliPhone) qs.set("phone", state.csliPhone);
+  if (state.csliDay) qs.set("day", state.csliDay);
+  if (state.csliTzMode) qs.set("tz", state.csliTzMode);
+  const url = `${location.origin}${location.pathname}#/cases/${state.caseId}?${qs.toString()}`;
+  window.open(url, `marshal-csli-${state.caseId}`, "noopener,noreferrer,width=1440,height=920");
 }
 
 function navigate(route) {
@@ -1379,9 +1828,17 @@ async function loadForRoute() {
     state.browseMode = state.route.browseMode || "categories";
     state.category = state.route.category || null;
     state.notebookPath = state.route.notebookPath || state.notebookPath || "Home";
-    state.forensicsSection = state.route.forensicsSection || state.forensicsSection || "cellebrite";
+    state.forensicsSection = state.route.forensicsSection || null;
     state.forensicsUfdrPath = state.route.forensicsUfdr || state.forensicsUfdrPath || null;
     state.forensicsChatId = state.route.forensicsChat || state.forensicsChatId || null;
+    state.forensicsCsliMap = state.forensicsCsliMap || null;
+    state.popout = !!state.route.popout;
+    if (state.route.csliTz && ["eastern", "utc", "source"].includes(state.route.csliTz)) {
+      state.csliTzMode = state.route.csliTz;
+      try { localStorage.setItem("marshaloss.csliTzMode", state.csliTzMode); } catch {}
+    }
+    if (state.route.csliPhone) state.csliPhone = state.route.csliPhone;
+    if (state.route.csliDay) state.csliDay = state.route.csliDay;
 
     const casesData = await api("/api/cases");
     state.cases = casesData.cases || [];
@@ -1573,12 +2030,6 @@ function setTab(tab) {
 }
 
 function setModule(module) {
-  const sections = state.forensicsSummary?.sections || {};
-  let forensicsSection = state.forensicsSection || "cellebrite";
-  if (module === "forensics") {
-    if (!sections.cellebrite?.available && sections.csli?.available) forensicsSection = "csli";
-    else if (sections.cellebrite?.available) forensicsSection = "cellebrite";
-  }
   navigate({
     name: "case",
     caseId: state.caseId,
@@ -1590,28 +2041,1393 @@ function setModule(module) {
     tab: state.tab || "preview",
     facet: module === "explorer" ? state.facet : null,
     notebookPath: module === "notebook" ? (state.notebookPath || "Home") : null,
-    forensicsSection: module === "forensics" ? forensicsSection : null,
-    forensicsUfdr: module === "forensics" ? state.forensicsUfdrPath : null,
-    forensicsChat: module === "forensics" ? state.forensicsChatId : null,
+    forensicsSection: null,
+    forensicsUfdr: null,
+    forensicsChat: null,
   });
+  if (module === "forensics") {
+    state.forensicsSection = null;
+    state.forensicsChatId = null;
+    state.forensicsChat = null;
+    state.forensicsCsliMap = null;
+    if (state._csliMap) {
+      try { state._csliMap.remove(); } catch {}
+      state._csliMap = null;
+    }
+  }
+}
+
+function openForensicsSection(section) {
+  state.forensicsSection = section || null;
+  state.forensicsUfdrPath = null;
+  state.forensicsChatId = null;
+  state.forensicsChat = null;
+  state.forensicsApp = null;
+  state.forensicsCsliMap = null;
+  if (state._csliMap) {
+    try { state._csliMap.remove(); } catch {}
+    state._csliMap = null;
+  }
+  if (state._csliMapRo) {
+    try { state._csliMapRo.disconnect(); } catch {}
+    state._csliMapRo = null;
+  }
+  state._csliPathLayer = null;
+  state._csliPoiLayer = null;
+  state.csliPoiAddMode = false;
+  navigate({
+    name: "case",
+    caseId: state.caseId,
+    module: "forensics",
+    forensicsSection: section || null,
+    forensicsUfdr: null,
+    forensicsChat: null,
+  });
+}
+
+async function loadForensicsCsli(push) {
+  state.forensicsLoading = true;
+  render();
+  try {
+    state.forensicsCsliMap = await api(
+      `/api/forensics/csli/map?case_id=${state.caseId}`
+    );
+    state.forensicsErr = null;
+    initCsliTimeFilter(state.forensicsCsliMap);
+    csliApplyPhoneLabels(state.forensicsCsliMap.phone_labels || {});
+    csliApplyPinsFromServer(state.forensicsCsliMap.pins || []);
+    await csliMigrateLocalPoisIfNeeded();
+    // reload pins if migration added any
+    if ((state.csliPois || []).length !== (state.forensicsCsliMap.pins || []).length) {
+      const pinned = await api(`/api/forensics/map/pins?case_id=${state.caseId}`);
+      csliApplyPinsFromServer(pinned.pins || []);
+      state.forensicsCsliMap.pins = state.csliPois;
+    }
+  } catch (e) {
+    state.forensicsErr = e.message || String(e);
+    state.forensicsCsliMap = null;
+  } finally {
+    state.forensicsLoading = false;
+  }
+  if (push) {
+    state.route = {
+      ...state.route,
+      module: "forensics",
+      forensicsSection: "csli",
+    };
+    setHash(state.route);
+  }
+  render();
+  mountCsliMap();
+}
+
+/** Display zone for unified clocks. Pins are always Eastern wall times. */
+function csliDisplayZone() {
+  const mode = state.csliTzMode || "eastern";
+  if (mode === "utc") return "UTC";
+  if (mode === "source") return null;
+  return "America/New_York";
+}
+
+function csliTzLabel() {
+  const mode = state.csliTzMode || "eastern";
+  if (mode === "utc") return "UTC";
+  if (mode === "source") return "Raw";
+  return "ET";
+}
+
+function csliEventSourceTz(e) {
+  const tagged = String(e?.source_tz || "").trim();
+  if (tagged) return tagged;
+  const c = String(e?.carrier || "").toUpperCase();
+  if (c.includes("AT&T") || c === "ATT") return "UTC";
+  return "America/New_York";
+}
+
+function csliParseWallParts(raw) {
+  const s = String(raw || "").replace("T", " ").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ ]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return null;
+  return {
+    y: Number(m[1]), mo: Number(m[2]), d: Number(m[3]),
+    h: Number(m[4] || 0), mi: Number(m[5] || 0), s: Number(m[6] || 0),
+  };
+}
+
+/** Interpret a wall-clock string in `timeZone` as a Date (UTC instant). */
+function csliParseInZone(raw, timeZone) {
+  const p = csliParseWallParts(raw);
+  if (!p) return null;
+  if (!timeZone || timeZone === "UTC") {
+    return new Date(Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi, p.s));
+  }
+  const want = Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi, p.s);
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hourCycle: "h23",
+  });
+  const read = (ms) => {
+    const parts = Object.fromEntries(
+      fmt.formatToParts(new Date(ms))
+        .filter((x) => x.type !== "literal")
+        .map((x) => [x.type, x.value])
+    );
+    return Date.UTC(
+      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour), Number(parts.minute), Number(parts.second)
+    );
+  };
+  let guess = want;
+  for (let i = 0; i < 3; i++) {
+    const shown = read(guess);
+    guess -= (shown - want);
+  }
+  return new Date(guess);
+}
+
+function csliEventInstant(e) {
+  const raw = e?.ts || e?.when || "";
+  return csliParseInZone(raw, csliEventSourceTz(e));
+}
+
+function csliFormatParts(date, timeZone) {
+  if (!date || Number.isNaN(date.getTime())) return null;
+  const zone = timeZone || "UTC";
+  return Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "short",
+    }).formatToParts(date)
+      .filter((x) => x.type !== "literal")
+      .map((x) => [x.type, x.value])
+  );
+}
+
+function csliEventDay(e) {
+  const zone = csliDisplayZone();
+  if (!zone) {
+    const ts = String(e?.ts || e?.when || "");
+    return ts.length >= 10 ? ts.slice(0, 10) : null;
+  }
+  const inst = csliEventInstant(e);
+  const parts = csliFormatParts(inst, zone);
+  if (!parts) return null;
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function csliFmt12(hour24, minute, second, withSeconds) {
+  let h = Number(hour24);
+  const mi = String(minute ?? "00").padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  if (withSeconds) {
+    const s = String(second ?? "00").padStart(2, "0");
+    return `${h}:${mi}:${s} ${ampm}`;
+  }
+  return `${h}:${mi} ${ampm}`;
+}
+
+function csliFmtClock(e, opts) {
+  const withSeconds = !!(opts && opts.withSeconds);
+  const zone = csliDisplayZone();
+  if (!zone) {
+    const ts = String(e?.ts || e?.when || "");
+    const m = ts.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+    if (!m) return ts || "—";
+    return csliFmt12(m[1], m[2], m[3] || "00", withSeconds);
+  }
+  const parts = csliFormatParts(csliEventInstant(e), zone);
+  if (!parts) return "—";
+  return csliFmt12(parts.hour, parts.minute, parts.second, withSeconds);
+}
+
+/** Pin event_when is Eastern wall time — clock in the active display zone. */
+function csliFmtPinClock(pin, opts) {
+  const withSeconds = !!(opts && opts.withSeconds);
+  const raw = pin?.event_when || "";
+  const zone = csliDisplayZone();
+  if (!zone) {
+    const m = String(raw).match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+    if (!m) return raw ? "All day" : "—";
+    return csliFmt12(m[1], m[2], m[3] || "00", withSeconds);
+  }
+  const inst = csliParseInZone(raw, "America/New_York");
+  if (!inst) return raw ? "All day" : "—";
+  const parts = csliFormatParts(inst, zone);
+  if (!parts) return "—";
+  return csliFmt12(parts.hour, parts.minute, parts.second, withSeconds);
+}
+
+function csliFmtDay(day) {
+  if (!day) return "";
+  const m = String(day).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return day;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+}
+
+function setCsliTzMode(mode) {
+  const next = (mode === "utc" || mode === "source") ? mode : "eastern";
+  state.csliTzMode = next;
+  try { localStorage.setItem("marshaloss.csliTzMode", next); } catch {}
+  // Remap selected day into the new zone's day list
+  const days = csliDaysForPhone(state.forensicsCsliMap, state.csliPhone);
+  if (!days.includes(state.csliDay)) state.csliDay = days[0] || null;
+  state.csliSelectedId = null;
+  state.csliSelectedPinId = null;
+}
+
+function csliPhoneList(data) {
+  if (Array.isArray(data?.phones) && data.phones.length) {
+    return data.phones.map((p) => ({
+      phone: String(p.phone || "").trim(),
+      count: Number(p.count) || 0,
+      name: String(p.name || "").trim(),
+      device: String(p.device || "").trim(),
+      carrier: String(p.carrier || "").trim(),
+      is_target: !!p.is_target,
+    })).filter((p) => p.phone);
+  }
+  const byPhone = new Map();
+  for (const e of (data?.events || [])) {
+    const phone = String(e.phone || "").trim();
+    if (!phone) continue;
+    const cur = byPhone.get(phone);
+    if (!cur) {
+      byPhone.set(phone, {
+        phone,
+        count: 1,
+        name: String(e.name || "").trim(),
+        device: String(e.device || "").trim(),
+        carrier: String(e.carrier || "").trim(),
+      });
+    } else {
+      cur.count += 1;
+      if (!cur.name && e.name) cur.name = String(e.name).trim();
+      if (!cur.device && e.device) cur.device = String(e.device).trim();
+      if (!cur.carrier && e.carrier) cur.carrier = String(e.carrier).trim();
+    }
+  }
+  return [...byPhone.values()].sort((a, b) => b.count - a.count || a.phone.localeCompare(b.phone));
+}
+
+function csliDeviceUseful(device) {
+  const d = String(device || "").trim();
+  if (!d) return "";
+  const low = d.toLowerCase();
+  if (low.includes("unknown") || low.includes("undetermined")) return "";
+  return d;
+}
+
+function csliPhoneAlias(phone) {
+  const dig = csliPhoneDigits(phone);
+  const labels = state.csliPhoneLabels || {};
+  return (dig && labels[dig]) || labels[String(phone || "")] || "";
+}
+
+function csliPhoneDisplayName(phone, fallbackName) {
+  return csliPhoneAlias(phone) || String(fallbackName || "").trim() || "";
+}
+
+function csliPhoneLabel(p) {
+  if (!p) return "";
+  const mark = p.is_target ? "★ " : "";
+  const name = csliPhoneDisplayName(p.phone, p.name);
+  if (name) return `${mark}${name} · ${p.phone}`;
+  const device = csliDeviceUseful(p.device);
+  if (device) return `${mark}${p.phone} · ${device}`;
+  return `${mark}${p.phone}`;
+}
+
+function csliApplyPhoneLabels(labels) {
+  const out = {};
+  if (labels && typeof labels === "object") {
+    for (const [k, v] of Object.entries(labels)) {
+      const dig = csliPhoneDigits(k);
+      const name = String(v || "").trim();
+      if (dig && name) out[dig] = name;
+    }
+  }
+  state.csliPhoneLabels = out;
+}
+
+function csliDaysForPhone(data, phone) {
+  const days = new Set();
+  for (const e of (data?.events || [])) {
+    if (phone && String(e.phone || e.label || "").trim() !== phone) continue;
+    const d = csliEventDay(e);
+    if (d) days.add(d);
+  }
+  return [...days].sort();
+}
+
+function initCsliTimeFilter(data) {
+  if (!data) return;
+  const phones = csliPhoneList(data);
+  const primary = String(data.primary_phone || "").trim();
+  const preferred = phones.find((p) => p.phone === primary && p.count > 0)
+    || phones.find((p) => p.is_target && p.count > 0)
+    || phones.find((p) => p.count > 0)
+    || phones[0];
+  if (!state.csliPhone || !phones.some((p) => p.phone === state.csliPhone)) {
+    state.csliPhone = preferred?.phone || null;
+  }
+  const days = csliDaysForPhone(data, state.csliPhone);
+  if (!state.csliDay || !days.includes(state.csliDay)) {
+    state.csliDay = days[0] || null;
+  }
+  state.csliSelectedId = null;
+  state.csliSelectedPinId = null;
+  csliSyncHash();
+}
+
+/** Pings for selected phone + day, chronological (display-zone day). */
+function csliDayEvents() {
+  const data = state.forensicsCsliMap;
+  if (!data) return [];
+  const day = state.csliDay;
+  const phone = state.csliPhone;
+  return (data.events || [])
+    .filter((e) => {
+      if (phone && String(e.phone || e.label || "").trim() !== phone) return false;
+      if (day && csliEventDay(e) && csliEventDay(e) !== day) return false;
+      return true;
+    })
+    .slice()
+    .sort((a, b) => {
+      const ia = csliEventInstant(a)?.getTime() ?? 0;
+      const ib = csliEventInstant(b)?.getTime() ?? 0;
+      if (ia !== ib) return ia - ib;
+      return String(a.ts || a.when || "").localeCompare(String(b.ts || b.when || ""));
+    });
+}
+
+/**
+ * Collapse consecutive near-duplicate tower/sector hits into movement stops.
+ * Key includes azimuth so a sector change at the same site stays distinct.
+ */
+function csliMovementStops(events) {
+  const stops = [];
+  for (const e of events) {
+    const az = e.azimuth != null ? Math.round(Number(e.azimuth)) : "";
+    const key = `${Number(e.lat).toFixed(4)}|${Number(e.lon).toFixed(4)}|${az}`;
+    const prev = stops[stops.length - 1];
+    if (prev && prev.key === key) {
+      prev.count += 1;
+      prev.end = e;
+      prev.whenEnd = e.ts || e.when || prev.whenEnd;
+      continue;
+    }
+    const beam = Number(e.beamwidth);
+    stops.push({
+      id: e.id,
+      key,
+      lat: e.lat,
+      lon: e.lon,
+      count: 1,
+      start: e,
+      end: e,
+      whenStart: e.ts || e.when || "",
+      whenEnd: e.ts || e.when || "",
+      label: e.label || "",
+      cell: e.cell || "",
+      sector: e.sector || "",
+      azimuth: e.azimuth != null ? Number(e.azimuth) : null,
+      beamwidth: Number.isFinite(beam) && beam > 0 ? beam : null,
+    });
+  }
+  return stops;
+}
+
+/** Destination point: bearing degrees clockwise from north, distance meters. */
+function csliDestPoint(lat, lon, bearingDeg, distM) {
+  const R = 6371000;
+  const br = (bearingDeg * Math.PI) / 180;
+  const φ1 = (lat * Math.PI) / 180;
+  const λ1 = (lon * Math.PI) / 180;
+  const δ = distM / R;
+  const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(br));
+  const λ2 = λ1 + Math.atan2(
+    Math.sin(br) * Math.sin(δ) * Math.cos(φ1),
+    Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2)
+  );
+  return [(φ2 * 180) / Math.PI, (((λ2 * 180) / Math.PI + 540) % 360) - 180];
+}
+
+/**
+ * Sector wedge: tower at apex, azimuth ± beamwidth/2.
+ * Missing/-1 beamwidth → 120° (typical 3-sector site).
+ * Wedge shows sector direction — not a hard coverage boundary.
+ */
+function csliSectorBeamwidth(beamwidthDeg) {
+  let bw = Number(beamwidthDeg);
+  if (!Number.isFinite(bw) || bw <= 0) bw = 120;
+  return Math.min(360, Math.max(10, bw));
+}
+
+function csliSectorRing(lat, lon, azimuthDeg, beamwidthDeg, radiusM) {
+  const az = Number(azimuthDeg);
+  if (!Number.isFinite(az) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const bw = csliSectorBeamwidth(beamwidthDeg);
+  const half = bw / 2;
+  const start = az - half;
+  const end = az + half;
+  const step = Math.max(1, Math.min(3, bw / 20));
+  const ring = [[lat, lon]];
+  for (let a = start; a <= end + 0.001; a += step) {
+    ring.push(csliDestPoint(lat, lon, a, radiusM));
+  }
+  ring.push(csliDestPoint(lat, lon, end, radiusM));
+  ring.push([lat, lon]);
+  return ring;
+}
+
+/** Sector rays + outer arc (arc length is illustrative, not an RF edge). */
+function csliSectorOpenParts(lat, lon, azimuthDeg, beamwidthDeg, radiusM) {
+  const az = Number(azimuthDeg);
+  if (!Number.isFinite(az) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const bw = csliSectorBeamwidth(beamwidthDeg);
+  const half = bw / 2;
+  const start = az - half;
+  const end = az + half;
+  const left = csliDestPoint(lat, lon, start, radiusM);
+  const right = csliDestPoint(lat, lon, end, radiusM);
+  const mid = csliDestPoint(lat, lon, az, radiusM);
+  const arc = [];
+  const step = Math.max(1, Math.min(3, bw / 20));
+  for (let a = start; a <= end + 0.001; a += step) {
+    arc.push(csliDestPoint(lat, lon, a, radiusM));
+  }
+  arc.push(csliDestPoint(lat, lon, end, radiusM));
+  return { left, right, mid, arc, start, end, az, bw };
+}
+
+/** Distinct colors for numbered stops (readable on street basemap). */
+function csliCastColor(i, n) {
+  const palette = [
+    "#1d4ed8", "#b45309", "#047857", "#7c3aed", "#be123c",
+    "#0e7490", "#a16207", "#4338ca", "#c2410c", "#166534",
+  ];
+  return palette[i % palette.length];
+}
+
+/** Built-in scene markers — only on matching phone + event day/time. */
+const CSLI_SCENE_MARKERS = [
+  {
+    id: "scene-hope-manor-shooting",
+    label: "Hope Manor shooting",
+    lat: 40.490502,
+    lon: -74.442727,
+    note: "3 Hope Manor Drive, New Brunswick · 8/1/2020 01:14 EDT · NBPD 20NB04410",
+    phones: ["7329972985"],
+    event_when: "2020-08-01 01:14:00",
+    kind: "scene",
+  },
+];
+
+function csliPhoneDigits(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function csliPoiStorageKey() {
+  return `marshaloss.csliPois.${state.caseId || "0"}`;
+}
+
+function csliEventWhenDay(when) {
+  const s = String(when || "").replace("T", " ");
+  return s.length >= 10 ? s.slice(0, 10) : "";
+}
+
+function csliEventWhenMins(when) {
+  const s = String(when || "").replace("T", " ");
+  const m = s.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]) + (Number(m[3] || 0) / 60);
+}
+
+function csliNormalizePin(p) {
+  if (!p || !Number.isFinite(Number(p.lat)) || !Number.isFinite(Number(p.lon))) return null;
+  const event_when = p.event_when ? String(p.event_when) : (p.when ? String(p.when) : "");
+  return {
+    id: String(p.id),
+    label: String(p.label || "Point"),
+    lat: Number(p.lat),
+    lon: Number(p.lon),
+    note: p.note ? String(p.note) : "",
+    phone: p.phone ? String(p.phone) : "",
+    source_path: p.source_path ? String(p.source_path) : "",
+    event_when,
+    event_day: csliEventWhenDay(event_when) || (p.event_day ? String(p.event_day) : ""),
+    kind: p.kind === "scene" ? "scene" : "user",
+  };
+}
+
+function csliApplyPinsFromServer(pins) {
+  state.csliPois = (Array.isArray(pins) ? pins : [])
+    .map(csliNormalizePin)
+    .filter(Boolean);
+}
+
+async function csliMigrateLocalPoisIfNeeded() {
+  const key = csliPoiStorageKey();
+  const migratedKey = `${key}.migrated`;
+  try {
+    if (localStorage.getItem(migratedKey)) return;
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      localStorage.setItem(migratedKey, "1");
+      return;
+    }
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || !arr.length) {
+      localStorage.setItem(migratedKey, "1");
+      return;
+    }
+    for (const p of arr) {
+      if (!Number.isFinite(Number(p.lat)) || !Number.isFinite(Number(p.lon))) continue;
+      try {
+        await api(`/api/forensics/map/pins`, {
+          method: "POST",
+          body: JSON.stringify({
+            case_id: state.caseId,
+            label: p.label || "Point of interest",
+            lat: Number(p.lat),
+            lon: Number(p.lon),
+            note: p.note || "",
+            phone: p.phone || null,
+            source_path: p.source_path || null,
+          }),
+        });
+      } catch {}
+    }
+    localStorage.setItem(migratedKey, "1");
+    localStorage.removeItem(key);
+  } catch {}
+}
+
+async function csliLoadUserPois() {
+  try {
+    await csliMigrateLocalPoisIfNeeded();
+    const fromMap = state.forensicsCsliMap?.pins;
+    if (Array.isArray(fromMap) && fromMap.length) {
+      csliApplyPinsFromServer(fromMap);
+      return;
+    }
+    const data = await api(`/api/forensics/map/pins?case_id=${state.caseId}`);
+    csliApplyPinsFromServer(data.pins || []);
+    if (state.forensicsCsliMap) state.forensicsCsliMap.pins = state.csliPois;
+  } catch {
+    state.csliPois = state.csliPois || [];
+  }
+}
+
+function csliScenePoisForPhone(phone) {
+  const digits = csliPhoneDigits(phone);
+  if (!digits) return [];
+  // Prefer server pin with same coords/label day over duplicate built-in
+  const server = state.csliPois || [];
+  return CSLI_SCENE_MARKERS.filter((m) => {
+    if (!(m.phones || []).some((p) => csliPhoneDigits(p) === digits)) return false;
+    const day = csliEventWhenDay(m.event_when);
+    const dup = server.some((p) =>
+      Math.abs(Number(p.lat) - m.lat) < 1e-5
+      && Math.abs(Number(p.lon) - m.lon) < 1e-5
+      && (!day || csliEventWhenDay(p.event_when) === day)
+    );
+    return !dup;
+  }).map((m) => csliNormalizePin({ ...m, kind: "scene" })).filter(Boolean);
+}
+
+function csliPinVisibleForPhone(pin, phone) {
+  if (!pin?.phone) return true;
+  const want = csliPhoneDigits(phone);
+  if (!want) return true;
+  return csliPhoneDigits(pin.phone) === want;
+}
+
+/** Pin visible for current phone + selected day (whole date view, not filtered by ping). */
+function csliPinVisibleNow(pin) {
+  if (!csliPinVisibleForPhone(pin, state.csliPhone)) return false;
+  const day = state.csliDay;
+  // Pin event_when is Eastern; map to the active display zone's calendar day
+  let pinDay = "";
+  if (pin.event_when) {
+    const zone = csliDisplayZone();
+    if (!zone || zone === "America/New_York") {
+      pinDay = csliEventWhenDay(pin.event_when) || pin.event_day || "";
+    } else {
+      const inst = csliParseInZone(pin.event_when, "America/New_York");
+      const parts = csliFormatParts(inst, zone);
+      pinDay = parts ? `${parts.year}-${parts.month}-${parts.day}` : csliEventWhenDay(pin.event_when);
+    }
+  } else {
+    pinDay = pin.event_day || "";
+  }
+  if (pinDay) {
+    if (!day || pinDay !== day) return false;
+  } else if (day) {
+    // Untimed pins stay hidden once days are in play — force date on create
+    return false;
+  }
+  return true;
+}
+
+/** Zoom map to the selected ping sector or pin. */
+function csliFocusSelection() {
+  const map = state._csliMap;
+  if (!map || state.csliPoiAddMode) return;
+
+  if (state.csliSelectedPinId) {
+    const pin = csliActivePois().find((p) => String(p.id) === String(state.csliSelectedPinId));
+    if (!pin || !Number.isFinite(pin.lat) || !Number.isFinite(pin.lon)) return;
+    try {
+      map.setView([pin.lat, pin.lon], 16, { animate: false });
+    } catch {}
+    return;
+  }
+
+  if (!state.csliSelectedId) return;
+  const hit = csliMovementStops(csliDayEvents()).find((s) => String(s.id) === String(state.csliSelectedId));
+  if (!hit) return;
+  const coneRadiusM = 1800;
+  const est = csliPingEstimate(hit, coneRadiusM);
+  const latlngs = [[hit.lat, hit.lon], est];
+  if (hit.azimuth != null && Number.isFinite(Number(hit.azimuth))) {
+    const az = Number(hit.azimuth);
+    const bw = csliSectorBeamwidth(hit.beamwidth);
+    latlngs.push(csliDestPoint(hit.lat, hit.lon, az, coneRadiusM * 0.75));
+    latlngs.push(csliDestPoint(hit.lat, hit.lon, az - bw / 2, coneRadiusM * 0.65));
+    latlngs.push(csliDestPoint(hit.lat, hit.lon, az + bw / 2, coneRadiusM * 0.65));
+  }
+  try {
+    map.fitBounds(latlngs, { padding: [56, 56], maxZoom: 15, animate: false });
+  } catch {
+    try { map.setView(est, 14, { animate: false }); } catch {}
+  }
+}
+
+/** Scene + server pins for the current phone/day/(optional) stop. */
+function csliActivePois() {
+  const user = (state.csliPois || []).filter((p) => csliPinVisibleNow(p));
+  const scenes = csliScenePoisForPhone(state.csliPhone).filter((p) => csliPinVisibleNow(p));
+  return [...scenes, ...user];
+}
+
+async function csliAddUserPoi({ label, lat, lon, note, phone, source_path, event_when }) {
+  const body = {
+    case_id: state.caseId,
+    label: String(label || "Point of interest").trim() || "Point of interest",
+    lat: Number(lat),
+    lon: Number(lon),
+    note: note ? String(note).trim() : "",
+    phone: phone || state.csliPhone || null,
+    source_path: source_path || null,
+    event_when: event_when || null,
+  };
+  if (!Number.isFinite(body.lat) || !Number.isFinite(body.lon)) return null;
+  const data = await api(`/api/forensics/map/pins`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const pin = csliNormalizePin(data.pin);
+  if (pin) {
+    state.csliPois = [...(state.csliPois || []), pin];
+    if (state.forensicsCsliMap) {
+      state.forensicsCsliMap.pins = state.csliPois;
+    }
+  }
+  return pin;
+}
+
+async function csliUpdateUserPoi(id, { label, lat, lon, note, phone, event_when }) {
+  const body = {
+    case_id: state.caseId,
+    pin_id: id,
+    label: String(label || "Point of interest").trim() || "Point of interest",
+    lat: Number(lat),
+    lon: Number(lon),
+    note: note != null ? String(note).trim() : "",
+    phone: phone || state.csliPhone || null,
+    event_when: event_when || null,
+  };
+  const data = await api(`/api/forensics/map/pins`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  const pin = csliNormalizePin(data.pin);
+  if (pin) {
+    state.csliPois = (state.csliPois || []).map((p) => String(p.id) === String(pin.id) ? pin : p);
+    if (state.forensicsCsliMap) state.forensicsCsliMap.pins = state.csliPois;
+  }
+  return pin;
+}
+
+function closeCsliPinModal() {
+  const modal = document.getElementById("csliPinModal");
+  if (modal) modal.hidden = true;
+  state.csliPoiDraft = null;
+  state.csliPoiAddMode = false;
+  const status = document.getElementById("csliPinStatus");
+  if (status) { status.hidden = true; status.textContent = ""; }
+  const del = document.getElementById("csliPinDelete");
+  if (del) del.hidden = true;
+  const mapEl = document.getElementById("csliMap");
+  if (mapEl) mapEl.classList.remove("add-poi");
+}
+
+function csliFillPinModalFields({ lat, lon, labelVal, noteVal, day, time, title, showDelete }) {
+  const modal = document.getElementById("csliPinModal");
+  if (!modal) return null;
+  const titleEl = document.getElementById("csliPinTitle");
+  if (titleEl) titleEl.textContent = title || "Pin location";
+  const coords = document.getElementById("csliPinCoords");
+  if (coords) coords.textContent = `${Number(lat).toFixed(6)}, ${Number(lon).toFixed(6)}`;
+  const label = document.getElementById("csliPinLabel");
+  const note = document.getElementById("csliPinNote");
+  const dateEl = document.getElementById("csliPinDate");
+  const timeEl = document.getElementById("csliPinTime");
+  const status = document.getElementById("csliPinStatus");
+  const del = document.getElementById("csliPinDelete");
+  if (label) label.value = labelVal || "";
+  if (note) note.value = noteVal || "";
+  if (dateEl) dateEl.value = day || "";
+  if (timeEl) timeEl.value = time || "";
+  if (status) { status.hidden = true; status.textContent = ""; }
+  if (del) del.hidden = !showDelete;
+  const save = document.getElementById("csliPinSave");
+  if (save) save.textContent = showDelete ? "Save changes" : "Save pin";
+  modal.hidden = false;
+  modal.removeAttribute("hidden");
+  setTimeout(() => { try { label?.focus(); label?.select(); } catch {} }, 30);
+  return modal;
+}
+
+function openCsliPinModal({ lat, lon }) {
+  const la = Number(lat);
+  const lo = Number(lon);
+  if (!Number.isFinite(la) || !Number.isFinite(lo)) return;
+  // Leaflet + DOM click can both fire for one press
+  const now = Date.now();
+  if (state._csliPinOpenAt && now - state._csliPinOpenAt < 400) return;
+  state._csliPinOpenAt = now;
+  state.csliPoiDraft = { mode: "create", lat: la, lon: lo };
+  state.csliPoiAddMode = false;
+  syncCsliPinModeUi();
+  let day = state.csliDay || "";
+  let time = "";
+  if (state.csliSelectedId) {
+    const stop = csliMovementStops(csliDayEvents()).find((s) => String(s.id) === String(state.csliSelectedId));
+    const when = stop?.whenStart || stop?.start?.ts || stop?.start?.when || "";
+    const d = csliEventWhenDay(when);
+    if (d) day = d;
+    const m = String(when).match(/\b(\d{2}:\d{2}(?::\d{2})?)\b/);
+    if (m) time = m[1].length === 5 ? `${m[1]}:00` : m[1];
+  }
+  csliFillPinModalFields({
+    lat: la, lon: lo, labelVal: "", noteVal: "", day, time,
+    title: "Pin location", showDelete: false,
+  });
+}
+
+function csliPinIsEditableUser(pin) {
+  if (!pin || pin.kind === "scene") return false;
+  const id = String(pin.id || "");
+  if (!id || id.startsWith("scene-")) return false;
+  return true;
+}
+
+function openCsliPinEditModal(pin) {
+  if (!pin) return;
+  const la = Number(pin.lat);
+  const lo = Number(pin.lon);
+  if (!Number.isFinite(la) || !Number.isFinite(lo)) return;
+  state.csliPoiAddMode = false;
+  syncCsliPinModeUi();
+  const isUser = csliPinIsEditableUser(pin);
+  // Scene markers aren't in DB — save creates a user pin (replaces scene on map)
+  state.csliPoiDraft = isUser
+    ? { mode: "edit", id: pin.id, lat: la, lon: lo, phone: pin.phone || state.csliPhone || null }
+    : { mode: "create", lat: la, lon: lo, phone: state.csliPhone || null };
+  let day = csliEventWhenDay(pin.event_when) || pin.event_day || state.csliDay || "";
+  let time = "";
+  const m = String(pin.event_when || "").match(/\b(\d{2}:\d{2}(?::\d{2})?)\b/);
+  if (m) time = m[1].length === 5 ? `${m[1]}:00` : m[1];
+  csliFillPinModalFields({
+    lat: la, lon: lo,
+    labelVal: pin.label || "",
+    noteVal: pin.note || "",
+    day, time,
+    title: "Edit pin",
+    showDelete: isUser,
+  });
+}
+
+/** Map-container click while Pin mode is armed (bypasses overlay hit-testing). */
+function csliPinMapDomClick(ev) {
+  if (!state.csliPoiAddMode || !state._csliMap) return;
+  if (ev.target.closest(".leaflet-control, .csli-tools, .csli-map-chip")) return;
+  // Ignore pure drag-end
+  if (state._csliPinDragMoved) return;
+  try {
+    const latlng = state._csliMap.mouseEventToLatLng(ev);
+    if (!latlng) return;
+    openCsliPinModal({ lat: latlng.lat, lon: latlng.lng });
+  } catch (e) {
+    console.warn("pin click failed", e);
+  }
+}
+
+function csliBindPinMapClicks(map, el) {
+  if (!map || !el) return;
+  if (el.dataset.csliPinBound === "1") return;
+  el.dataset.csliPinBound = "1";
+  let down = null;
+  el.addEventListener("pointerdown", (ev) => {
+    if (!state.csliPoiAddMode) return;
+    down = { x: ev.clientX, y: ev.clientY };
+    state._csliPinDragMoved = false;
+  });
+  el.addEventListener("pointermove", (ev) => {
+    if (!down || !state.csliPoiAddMode) return;
+    if (Math.abs(ev.clientX - down.x) + Math.abs(ev.clientY - down.y) > 6) {
+      state._csliPinDragMoved = true;
+    }
+  });
+  el.addEventListener("click", csliPinMapDomClick, true);
+}
+
+function wireCsliPinModal() {
+  const modal = document.getElementById("csliPinModal");
+  if (!modal || modal.dataset.wired) return;
+  modal.dataset.wired = "1";
+  modal.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-csli-pin-dismiss]")) {
+      closeCsliPinModal();
+      render();
+      mountCsliMap();
+    }
+  });
+  const save = document.getElementById("csliPinSave");
+  if (save) {
+    save.onclick = async () => {
+      const draft = state.csliPoiDraft;
+      const status = document.getElementById("csliPinStatus");
+      if (!draft) return;
+      const label = (document.getElementById("csliPinLabel")?.value || "").trim();
+      const note = (document.getElementById("csliPinNote")?.value || "").trim();
+      const day = (document.getElementById("csliPinDate")?.value || "").trim();
+      const time = (document.getElementById("csliPinTime")?.value || "").trim();
+      if (!label) {
+        if (status) { status.hidden = false; status.textContent = "Label is required."; }
+        return;
+      }
+      if (!day) {
+        if (status) { status.hidden = false; status.textContent = "Event date is required — pins only show on that day."; }
+        return;
+      }
+      const event_when = time ? `${day} ${time.length === 5 ? `${time}:00` : time}` : day;
+      save.disabled = true;
+      try {
+        if (draft.mode === "edit" && draft.id != null) {
+          await csliUpdateUserPoi(draft.id, {
+            label,
+            lat: draft.lat,
+            lon: draft.lon,
+            note,
+            phone: draft.phone,
+            event_when,
+          });
+        } else {
+          await csliAddUserPoi({
+            label,
+            lat: draft.lat,
+            lon: draft.lon,
+            note,
+            event_when,
+          });
+        }
+        closeCsliPinModal();
+        render();
+        mountCsliMap();
+      } catch (e) {
+        if (status) { status.hidden = false; status.textContent = e.message || String(e); }
+      } finally {
+        save.disabled = false;
+      }
+    };
+  }
+  const del = document.getElementById("csliPinDelete");
+  if (del) {
+    del.onclick = async () => {
+      const draft = state.csliPoiDraft;
+      if (!draft || draft.mode !== "edit" || draft.id == null) return;
+      if (!confirm("Delete this pin?")) return;
+      del.disabled = true;
+      try {
+        await csliRemoveUserPoi(draft.id);
+        state.csliSelectedPinId = null;
+        closeCsliPinModal();
+        render();
+        mountCsliMap();
+      } catch (e) {
+        const status = document.getElementById("csliPinStatus");
+        if (status) { status.hidden = false; status.textContent = e.message || String(e); }
+      } finally {
+        del.disabled = false;
+      }
+    };
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && modal && !modal.hidden) {
+      closeCsliPinModal();
+      render();
+      mountCsliMap();
+    }
+  });
+}
+
+function closeCsliPhoneRenameModal() {
+  const modal = document.getElementById("csliPhoneRenameModal");
+  if (modal) modal.hidden = true;
+  const status = document.getElementById("csliPhoneRenameStatus");
+  if (status) { status.hidden = true; status.textContent = ""; }
+}
+
+function openCsliPhoneRenameModal() {
+  const phone = state.csliPhone;
+  if (!phone) return;
+  const modal = document.getElementById("csliPhoneRenameModal");
+  if (!modal) return;
+  const meta = document.getElementById("csliPhoneRenameMeta");
+  const input = document.getElementById("csliPhoneRenameInput");
+  const status = document.getElementById("csliPhoneRenameStatus");
+  if (meta) meta.textContent = phone;
+  if (input) {
+    const phones = csliPhoneList(state.forensicsCsliMap);
+    const row = phones.find((p) => p.phone === phone);
+    input.value = csliPhoneDisplayName(phone, row?.name) || "";
+  }
+  if (status) { status.hidden = true; status.textContent = ""; }
+  modal.hidden = false;
+  modal.removeAttribute("hidden");
+  setTimeout(() => { try { input?.focus(); input?.select(); } catch {} }, 30);
+}
+
+function wireCsliPhoneRenameModal() {
+  const modal = document.getElementById("csliPhoneRenameModal");
+  if (!modal || modal.dataset.wired) return;
+  modal.dataset.wired = "1";
+  modal.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-csli-phone-rename-dismiss]")) closeCsliPhoneRenameModal();
+  });
+  const save = document.getElementById("csliPhoneRenameSave");
+  if (save) {
+    save.onclick = async () => {
+      const phone = state.csliPhone;
+      const status = document.getElementById("csliPhoneRenameStatus");
+      if (!phone) return;
+      const label = (document.getElementById("csliPhoneRenameInput")?.value || "").trim();
+      save.disabled = true;
+      try {
+        const data = await api(`/api/forensics/csli/phone-label`, {
+          method: "PUT",
+          body: JSON.stringify({ case_id: state.caseId, phone, label }),
+        });
+        csliApplyPhoneLabels(data.phone_labels || {});
+        if (state.forensicsCsliMap) state.forensicsCsliMap.phone_labels = state.csliPhoneLabels;
+        closeCsliPhoneRenameModal();
+        render();
+        mountCsliMap();
+      } catch (e) {
+        if (status) { status.hidden = false; status.textContent = e.message || String(e); }
+      } finally {
+        save.disabled = false;
+      }
+    };
+  }
+  const input = document.getElementById("csliPhoneRenameInput");
+  if (input) {
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        save?.click();
+      }
+    });
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && modal && !modal.hidden) closeCsliPhoneRenameModal();
+  });
+}
+
+async function csliRemoveUserPoi(id) {
+  const n = Number(id);
+  if (Number.isFinite(n) && String(n) === String(id)) {
+    await api(`/api/forensics/map/pins?case_id=${state.caseId}&pin_id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
+  state.csliPois = (state.csliPois || []).filter((p) => String(p.id) !== String(id));
+  if (state.forensicsCsliMap) state.forensicsCsliMap.pins = state.csliPois;
+}
+
+function paintCsliPois() {
+  const map = state._csliMap;
+  if (!map) return;
+  if (!state._csliPoiLayer) {
+    state._csliPoiLayer = L.layerGroup().addTo(map);
+  }
+  const layer = state._csliPoiLayer;
+  layer.clearLayers();
+  const pinning = !!state.csliPoiAddMode;
+  const pois = csliActivePois();
+  pois.forEach((p) => {
+    const isUser = p.kind === "user";
+    const icon = L.divIcon({
+      className: "csli-poi-marker",
+      html: `<div class="csli-poi-pin${isUser ? " user" : ""}" title="${esc(p.label)}"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: isUser ? [8, 16] : [8, 8],
+    });
+    const m = L.marker([p.lat, p.lon], {
+      icon,
+      zIndexOffset: 600,
+      interactive: !pinning,
+    });
+    if (!pinning) {
+      const bits = [
+        `<strong>${esc(p.label)}</strong>`,
+        p.event_when ? esc(String(p.event_when)) : "",
+        p.note ? esc(p.note) : "",
+        `${Number(p.lat).toFixed(6)}, ${Number(p.lon).toFixed(6)}`,
+        isUser ? "User pin" : "Case scene",
+      ].filter(Boolean);
+      m.bindPopup(bits.join("<br>"));
+    }
+    m.addTo(layer);
+  });
+}
+
+function csliLerpColor(t) {
+  // green → amber → red over the day
+  const stops = [
+    [34, 197, 94],
+    [245, 158, 11],
+    [239, 68, 68],
+  ];
+  const x = Math.max(0, Math.min(1, t));
+  const seg = x < 0.5 ? 0 : 1;
+  const local = x < 0.5 ? x * 2 : (x - 0.5) * 2;
+  const a = stops[seg];
+  const b = stops[seg + 1];
+  const r = Math.round(a[0] + (b[0] - a[0]) * local);
+  const g = Math.round(a[1] + (b[1] - a[1]) * local);
+  const bl = Math.round(a[2] + (b[2] - a[2]) * local);
+  return `rgb(${r},${g},${bl})`;
+}
+
+/**
+ * Label anchor inside the sector (along azimuth) for numbered time markers.
+ * Not a GPS fix — only “phone used this sector.”
+ */
+function csliPingEstimate(s, coneRadiusM) {
+  if (s.azimuth != null && Number.isFinite(Number(s.azimuth))) {
+    return csliDestPoint(s.lat, s.lon, Number(s.azimuth), coneRadiusM * 0.55);
+  }
+  return [s.lat, s.lon];
+}
+
+function paintCsliPath(opts = {}) {
+  const map = state._csliMap;
+  const layer = state._csliPathLayer;
+  if (!map || !layer) return;
+  layer.clearLayers();
+
+  const events = csliDayEvents();
+  const stops = csliMovementStops(events);
+  const selected = state.csliSelectedId;
+  const pinning = !!state.csliPoiAddMode;
+  const n = stops.length;
+  // Illustrative wedge length (arc ≠ measured coverage)
+  const coneRadiusM = 1800;
+  const fitSig = `fit|${state.csliPhone || ""}|${state.csliDay || ""}|${n}|${(state.csliPois || []).length}`;
+  const shouldFit = opts.fit === true || state._csliFitSig !== fitSig;
+
+  const placePinAt = (latlng) => {
+    if (!latlng) return;
+    openCsliPinModal({ lat: latlng.lat, lon: latlng.lng });
+  };
+
+  if (!stops.length) {
+    if (shouldFit) {
+      try {
+        const pois = csliActivePois();
+        if (pois.length) {
+          map.fitBounds(pois.map((p) => [p.lat, p.lon]), { padding: [40, 40], maxZoom: 15 });
+        }
+      } catch {}
+      state._csliFitSig = fitSig;
+    }
+    return;
+  }
+
+  const estimates = stops.map((s) => csliPingEstimate(s, coneRadiusM));
+  // Wedges/lines are decorative — never steal map clicks (needed for Pin mode)
+  const deco = { interactive: false, bubblingMouseEvents: false };
+
+  // 1) Sector wedges (orientation), under everything
+  stops.forEach((s, i) => {
+    if (s.azimuth == null || !Number.isFinite(Number(s.azimuth))) return;
+    const active = selected && String(s.id) === String(selected);
+    const col = csliCastColor(i, n);
+    const parts = csliSectorOpenParts(s.lat, s.lon, s.azimuth, s.beamwidth, coneRadiusM);
+    const ring = csliSectorRing(s.lat, s.lon, s.azimuth, s.beamwidth, coneRadiusM);
+    if (!parts || !ring) return;
+    L.polygon(ring, {
+      ...deco,
+      color: active ? "#0f172a" : col,
+      weight: 0,
+      fillColor: col,
+      fillOpacity: active ? 0.34 : 0.2,
+      opacity: 1,
+    }).addTo(layer);
+    // Radial edges (open wedge)
+    L.polyline([[s.lat, s.lon], parts.left], {
+      ...deco,
+      color: active ? "#0f172a" : col, weight: active ? 2.5 : 2, opacity: 0.95,
+    }).addTo(layer);
+    L.polyline([[s.lat, s.lon], parts.right], {
+      ...deco,
+      color: active ? "#0f172a" : col, weight: active ? 2.5 : 2, opacity: 0.95,
+    }).addTo(layer);
+    // Center azimuth tick
+    L.polyline([[s.lat, s.lon], parts.mid], {
+      ...deco,
+      color: active ? "#0f172a" : col, weight: 1, opacity: 0.55, dashArray: "4 5",
+    }).addTo(layer);
+    // Outer arc dashed — range is illustrative only
+    L.polyline(parts.arc, {
+      ...deco,
+      color: active ? "#0f172a" : col, weight: 1.5, opacity: 0.7, dashArray: "6 5",
+    }).addTo(layer);
+  });
+
+  // 2) Light sequence path between numbered labels
+  for (let i = 0; i < n - 1; i++) {
+    L.polyline([estimates[i], estimates[i + 1]], {
+      ...deco,
+      color: "#475569",
+      weight: 2,
+      opacity: 0.55,
+      dashArray: "3 6",
+      lineJoin: "round",
+    }).addTo(layer);
+  }
+
+  // 3) Towers (black dots) + numbered call markers
+  stops.forEach((s, i) => {
+    const active = !pinning && selected && String(s.id) === String(selected);
+    const num = i + 1;
+    const col = csliCastColor(i, n);
+    const [plat, plon] = estimates[i];
+    const bw = csliSectorBeamwidth(s.beamwidth);
+    const clock = `${csliFmtClock(s.start)}${s.count > 1 ? `–${csliFmtClock(s.end)}` : ""}`;
+
+    const tower = L.circleMarker([s.lat, s.lon], {
+      radius: active ? 5 : 4,
+      color: "#fff",
+      weight: 1.5,
+      fillColor: "#0f172a",
+      fillOpacity: 1,
+      interactive: true,
+    }).addTo(layer);
+    if (pinning) {
+      tower.on("click", (ev) => {
+        L.DomEvent.stopPropagation(ev);
+        placePinAt(ev.latlng);
+      });
+    } else {
+      tower.bindPopup(
+        [
+          `<strong>Cell site</strong>`,
+          s.cell ? `Cell ${esc(s.cell)}` : "",
+          s.azimuth != null ? `Azimuth ${Math.round(s.azimuth)}° · sector width ~${Math.round(bw)}°` : "",
+          `${Number(s.lat).toFixed(5)}, ${Number(s.lon).toFixed(5)}`,
+        ].filter(Boolean).join("<br>")
+      );
+    }
+
+    const icon = L.divIcon({
+      className: "csli-poi-marker",
+      html: `<div class="csli-cast-num${active ? " active" : ""}" style="${active ? "" : `background:${col}`}">${num}</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    const m = L.marker([plat, plon], { icon, zIndexOffset: 500 + num });
+    if (pinning) {
+      m.on("click", (ev) => {
+        L.DomEvent.stopPropagation(ev);
+        placePinAt(ev.latlng);
+      });
+    } else {
+      m.bindPopup([
+        `<strong>#${num} · ${esc(clock)}</strong> · ${esc(csliTzLabel())}`,
+        "Not a GPS fix — the phone used this tower sector.",
+        "The wedge shows which way that sector faces. The phone was somewhere in that direction from the tower (exact distance unknown).",
+        s.azimuth != null
+          ? `Facing ${Math.round(s.azimuth)}° · ~${Math.round(bw)}° wide`
+          : "No sector direction in this record",
+        s.count > 1 ? `${s.count} records on this sector` : "1 record",
+        s.cell ? `Cell ${esc(s.cell)}` : "",
+      ].filter(Boolean).join("<br>"));
+      m.on("click", () => {
+        state.csliSelectedId = s.id;
+        state.csliSelectedPinId = null;
+        render();
+        mountCsliMap();
+      });
+    }
+    m.addTo(layer);
+    if (active) {
+      try { m.openPopup(); } catch {}
+    }
+  });
+
+  if (shouldFit) {
+    try {
+      const latlngs = [];
+      stops.forEach((s, i) => {
+        latlngs.push([s.lat, s.lon], estimates[i]);
+        if (s.azimuth != null) {
+          latlngs.push(csliDestPoint(s.lat, s.lon, Number(s.azimuth), coneRadiusM));
+          const bw = csliSectorBeamwidth(s.beamwidth);
+          latlngs.push(csliDestPoint(s.lat, s.lon, Number(s.azimuth) - bw / 2, coneRadiusM));
+          latlngs.push(csliDestPoint(s.lat, s.lon, Number(s.azimuth) + bw / 2, coneRadiusM));
+        }
+      });
+      csliActivePois().forEach((p) => latlngs.push([p.lat, p.lon]));
+      if (latlngs.length) map.fitBounds(latlngs, { padding: [48, 48], maxZoom: 14 });
+    } catch {}
+    state._csliFitSig = fitSig;
+  }
+}
+
+function syncCsliPinModeUi() {
+  const btn = document.getElementById("csliPoiAdd");
+  if (btn) {
+    btn.classList.toggle("active", !!state.csliPoiAddMode);
+    btn.textContent = state.csliPoiAddMode ? "Click map…" : "Pin";
+  }
+  const mapEl = document.getElementById("csliMap");
+  if (mapEl) mapEl.classList.toggle("add-poi", !!state.csliPoiAddMode);
+  const tools = document.querySelector(".csli-tools");
+  let hint = tools && tools.querySelector(".csli-tools-hint");
+  if (state.csliPoiAddMode) {
+    if (!hint && tools) {
+      hint = document.createElement("div");
+      hint.className = "csli-tools-hint";
+      hint.textContent = "Click the map to place a pin";
+      tools.appendChild(hint);
+    }
+  } else if (hint) {
+    hint.remove();
+  }
+}
+
+function mountCsliMap() {
+  const el = document.getElementById("csliMap");
+  if (!el || typeof L === "undefined") return;
+  const data = state.forensicsCsliMap;
+  if (!data) return;
+  const sig = `path|${data.event_count}|${state.csliPhone || ""}|${state.csliDay || ""}|${state.csliTzMode || "eastern"}|${(state.csliPois || []).length}`;
+
+  if (!(state._csliMap && state._csliMapSig === sig && el._leaflet_id)) {
+    if (state._csliMap) {
+      try { state._csliMap.remove(); } catch {}
+      state._csliMap = null;
+    }
+    if (state._csliMapRo) {
+      try { state._csliMapRo.disconnect(); } catch {}
+      state._csliMapRo = null;
+    }
+    state._csliPathLayer = null;
+    state._csliPoiLayer = null;
+    state._csliFitSig = null;
+    delete el.dataset.csliPinBound;
+    el.innerHTML = "";
+
+    const center = data.center || { lat: 40.49, lon: -74.45 };
+    const map = L.map(el, {
+      zoomControl: false,
+      attributionControl: true,
+      fadeAnimation: false,
+    });
+    state._csliMap = map;
+    state._csliMapSig = sig;
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
+      maxZoom: 19,
+      updateWhenZooming: false,
+      keepBuffer: 2,
+    }).addTo(map);
+
+    state._csliPathLayer = L.layerGroup().addTo(map);
+    state._csliPoiLayer = L.layerGroup().addTo(map);
+    map.setView([center.lat, center.lon], 13);
+    csliBindPinMapClicks(map, el);
+
+    const fixSize = () => { try { map.invalidateSize({ animate: false }); } catch {} };
+    requestAnimationFrame(() => {
+      fixSize();
+      setTimeout(fixSize, 80);
+      setTimeout(fixSize, 300);
+    });
+    if (typeof ResizeObserver !== "undefined") {
+      state._csliMapRo = new ResizeObserver(() => fixSize());
+      state._csliMapRo.observe(el);
+    }
+  }
+
+  el.classList.toggle("add-poi", !!state.csliPoiAddMode);
+  paintCsliPath();
+  paintCsliPois();
+  csliFocusSelection();
 }
 
 async function loadForensicsView(push) {
   state.forensicsErr = null;
-  const section = state.forensicsSection || "cellebrite";
-  if (section !== "cellebrite") {
+  const section = state.forensicsSection;
+  if (!section) {
     state.forensicsChats = [];
     state.forensicsChat = null;
+    state.forensicsCsliMap = null;
     return;
   }
+  if (section === "csli") {
+    state.forensicsChats = [];
+    state.forensicsChat = null;
+    await loadForensicsCsli(push);
+    return;
+  }
+  if (section !== "cellebrite") return;
   const sources = state.forensicsSummary?.sections?.cellebrite?.sources || [];
   if (!sources.length) {
     state.forensicsChats = [];
     state.forensicsChat = null;
     return;
   }
+  // Phone picker step — wait until a UFDR / phone is chosen
   if (!state.forensicsUfdrPath) {
-    state.forensicsUfdrPath = sources[0].rel_path;
+    state.forensicsChats = [];
+    state.forensicsChat = null;
+    state.forensicsLoading = false;
+    return;
   }
   state.forensicsLoading = true;
   render();
@@ -2925,8 +4741,15 @@ function renderOverview() {
     : "";
 
   const attentionCount = unprocessed.length + lowConfidence.length;
-  const focus = state.overviewFocus;
+  let focus = state.overviewFocus;
+  if (focus === "phone_dumps" || focus === "csli_maps") {
+    focus = "forensics";
+    state.overviewFocus = "forensics";
+  }
   const fileCount = s.file_count ?? manifest.length;
+  const forensicsSecs = state.forensicsSummary?.sections || {};
+  const phoneDumpCount = (forensicsSecs.cellebrite?.sources || []).length;
+  const csliCount = (forensicsSecs.csli?.sources || []).length;
 
   const tiles = [
     {
@@ -2958,6 +4781,19 @@ function renderOverview() {
       warn: false,
     },
   ];
+  const forensicsTotal = phoneDumpCount + csliCount;
+  if (forensicsTotal > 0) {
+    const bits = [];
+    if (phoneDumpCount) bits.push(`${phoneDumpCount} phone dump${phoneDumpCount === 1 ? "" : "s"}`);
+    if (csliCount) bits.push(`${csliCount} CSLI source${csliCount === 1 ? "" : "s"}`);
+    tiles.push({
+      id: "forensics",
+      label: "Forensics",
+      value: fmtNum(forensicsTotal),
+      blurb: bits.join(" · ") || "Phone dumps and cell-site maps.",
+      warn: false,
+    });
+  }
 
   let detail = "";
   if (focus === "files") {
@@ -2972,6 +4808,30 @@ function renderOverview() {
             <p>Browse the production by folder or category, and open individual documents.</p>
           </div>
         </div>
+      </div>`;
+  } else if (focus === "forensics") {
+    const subs = [];
+    if (phoneDumpCount > 0) {
+      subs.push(`
+        <button type="button" class="forensics-overview-sub phones" data-open-forensics="cellebrite">
+          <div class="fos-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></div>
+          <div class="fos-title">Phone dumps</div>
+          <div class="fos-meta">${fmtNum(phoneDumpCount)} Cellebrite extraction${phoneDumpCount === 1 ? "" : "s"} — pick a phone, then apps and chats.</div>
+          <div class="fos-cta">Open phones →</div>
+        </button>`);
+    }
+    if (csliCount > 0) {
+      subs.push(`
+        <button type="button" class="forensics-overview-sub csli" data-open-forensics="csli">
+          <div class="fos-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22V8"/><path d="M5 10l7-7 7 7"/><path d="M4 22h16"/><circle cx="12" cy="14" r="2"/></svg></div>
+          <div class="fos-title">CSLI maps</div>
+          <div class="fos-meta">${fmtNum(csliCount)} tower / location source${csliCount === 1 ? "" : "s"} — call pings and nearby cell sites.</div>
+          <div class="fos-cta">Open map →</div>
+        </button>`);
+    }
+    detail = `
+      <div class="overview-detail" style="padding:12px">
+        <div class="forensics-overview-subs">${subs.join("")}</div>
       </div>`;
   } else if (focus === "attention") {
     const previewDoc = state.overviewDoc;
@@ -3385,10 +5245,10 @@ function renderExplorer() {
 
   const showClear = searching || !!(state.searchQuery && String(state.searchQuery).trim());
   const searchRow = state.facet ? "" : `
-    <div class="explorer-search">
+    <div class="explorer-search${searching ? " is-searching" : ""}">
+      <button type="button" class="search-icon" id="btnSearch" title="Search" aria-label="Search">${searchIcon()}</button>
       <input id="q" type="search" placeholder="Search this case…" autocomplete="off" value="${esc(state.searchQuery || "")}"/>
-      ${showClear ? `<button type="button" class="search-clear-btn" id="btnClearHits" title="Clear search">Clear</button>` : ""}
-      <button type="button" class="search-ico-btn" id="btnSearch" title="Search" aria-label="Search">${searchIcon()}</button>
+      <button type="button" class="search-clear-btn" id="btnClearHits" title="Clear search" ${showClear ? "" : "hidden"}>Clear</button>
     </div>
     ${searching
       ? `<div class="search-result-meta">${fmtNum(listEntries.length)} result${listEntries.length === 1 ? "" : "s"}</div>`
@@ -3519,41 +5379,228 @@ function forensicsFilteredChats() {
   return list;
 }
 
+function icoHeroPhone() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M10 5.5h4"/><circle cx="12" cy="18.2" r="0.9" fill="currentColor" stroke="none"/></svg>`;
+}
+function icoHeroTower() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><path d="M9 21h6"/><path d="M12 7l4 4H8l4-4z"/><path d="M8.2 10.5a5.5 5.5 0 0 1 7.6 0"/><path d="M6.2 8.2a8.5 8.5 0 0 1 11.6 0"/><path d="M4.5 6a11 11 0 0 1 15 0"/></svg>`;
+}
+
 function renderForensics() {
   const summary = state.forensicsSummary || {};
   const sections = summary.sections || {};
   const showCellebrite = !!sections.cellebrite?.available;
   const showCsli = !!sections.csli?.available;
-  const section = state.forensicsSection || (showCellebrite ? "cellebrite" : "csli");
+  const section = state.forensicsSection;
+  const ufdrSources = sections.cellebrite?.sources || [];
+  const csliSources = sections.csli?.sources || [];
 
-  const subnav = `
-    <div class="forensics-subnav">
-      ${showCellebrite ? `<button type="button" class="${section === "cellebrite" ? "active" : ""}" data-forensics-section="cellebrite">Cellebrite</button>` : ""}
-      ${showCsli ? `<button type="button" class="${section === "csli" ? "active" : ""}" data-forensics-section="csli">Cell Site Location Information</button>` : ""}
-    </div>`;
-
-  if (section === "csli") {
-    const sources = sections.csli?.sources || [];
-    return `<div class="forensics">${subnav}
-      <div class="forensics-body">
-        <div class="forensics-empty">
-          <div>
-            <p><strong>Cell Site Location Information</strong> — coming next.</p>
-            <p class="meta">${sources.length ? fmtNum(sources.length) + " related file(s) detected in this case." : "No CSLI-like files detected yet."}</p>
-          </div>
-        </div>
+  if (!section) {
+    const cards = [];
+    if (showCellebrite) {
+      cards.push(`
+        <button type="button" class="forensics-hero cellebrite" data-forensics-section="cellebrite">
+          <div class="hero-ico">${icoHeroPhone()}</div>
+          <h2 class="hero-title">Cellebrite</h2>
+          <p class="hero-sub">Phone extractions &amp; chats</p>
+          <div class="hero-meta">${fmtNum(ufdrSources.length)} phone${ufdrSources.length === 1 ? "" : "s"}</div>
+        </button>`);
+    }
+    if (showCsli) {
+      cards.push(`
+        <button type="button" class="forensics-hero csli" data-forensics-section="csli">
+          <div class="hero-ico">${icoHeroTower()}</div>
+          <h2 class="hero-title">CSLI</h2>
+          <p class="hero-sub">Call location movement by day</p>
+          <div class="hero-meta">${fmtNum(csliSources.length)} source${csliSources.length === 1 ? "" : "s"}</div>
+        </button>`);
+    }
+    if (!cards.length) {
+      return `<div class="forensics"><div class="forensics-empty">No forensic sources in this case.</div></div>`;
+    }
+    return `<div class="forensics">
+      <div class="forensics-landing">
+        <div class="forensics-heroes">${cards.join("")}</div>
       </div>
     </div>`;
   }
 
-  const sources = sections.cellebrite?.sources || [];
-  if (!sources.length) {
-    return `<div class="forensics">${subnav}<div class="forensics-empty">No Cellebrite .ufdr packages found in this case.</div></div>`;
+  const backBar = `
+    <div class="forensics-toolbar">
+      <button type="button" class="forensics-back" data-forensics-section="">← Forensics</button>
+      <strong style="color:var(--fg)">${section === "csli" ? "CSLI" : "Cellebrite"}</strong>
+      ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
+    </div>`;
+
+  if (section === "csli") {
+    const mapData = state.forensicsCsliMap;
+    const phones = mapData ? csliPhoneList(mapData) : [];
+    const days = mapData ? csliDaysForPhone(mapData, state.csliPhone) : [];
+    const dayEvents = mapData ? csliDayEvents() : [];
+    const stops = csliMovementStops(dayEvents);
+    const phoneOpts = phones.map((p) =>
+      `<option value="${esc(p.phone)}" ${state.csliPhone === p.phone ? "selected" : ""}>${esc(csliPhoneLabel(p))} (${fmtNum(p.count)})</option>`
+    ).join("");
+    const activePhone = phones.find((p) => p.phone === state.csliPhone) || null;
+    const phoneHead = csliPhoneDisplayName(state.csliPhone, activePhone?.name)
+      || state.csliPhone
+      || "Phone";
+    const dayOpts = days.map((d) =>
+      `<option value="${esc(d)}" ${state.csliDay === d ? "selected" : ""}>${esc(csliFmtDay(d))}</option>`
+    ).join("");
+    const spanLabel = stops.length
+      ? `${csliFmtClock(stops[0].start)} – ${csliFmtClock(stops[stops.length - 1].end)}`
+      : "";
+    const activePois = csliActivePois();
+    const timelineItems = [];
+    stops.forEach((s, i) => {
+      const inst = csliEventInstant(s.start);
+      timelineItems.push({
+        kind: "stop",
+        sort: inst && !Number.isNaN(inst.getTime()) ? inst.getTime() : i,
+        stop: s,
+        num: i + 1,
+      });
+    });
+    activePois.forEach((p, i) => {
+      const inst = csliParseInZone(p.event_when, "America/New_York");
+      timelineItems.push({
+        kind: "pin",
+        sort: inst && !Number.isNaN(inst.getTime()) ? inst.getTime() : (1e15 + i),
+        pin: p,
+      });
+    });
+    timelineItems.sort((a, b) => a.sort - b.sort || (a.kind === "pin" ? 1 : -1));
+    const list = timelineItems.map((item) => {
+      if (item.kind === "pin") {
+        const p = item.pin;
+        const active = String(state.csliSelectedPinId) === String(p.id);
+        const clock = csliFmtPinClock(p);
+        const loc = `${Number(p.lat).toFixed(5)}, ${Number(p.lon).toFixed(5)}`;
+        const detail = [p.label, loc].filter(Boolean).join(" · ");
+        return `<li class="is-pin${active ? " active" : ""}" data-csli-poi="${esc(p.id)}" data-csli-poi-lat="${esc(p.lat)}" data-csli-poi-lon="${esc(p.lon)}">
+          <span class="cast-pin${p.kind === "user" ? " user" : ""}" title="Pin"></span>
+          <div class="body">
+            <div class="t">${esc(clock)}</div>
+            <div class="s">${esc(detail)}</div>
+          </div>
+          <button type="button" class="case-rename-pen" data-csli-poi-edit="${esc(p.id)}" title="Edit pin" aria-label="Edit pin">${icoRenamePen()}</button>
+        </li>`;
+      }
+      const s = item.stop;
+      const active = String(s.id) === String(state.csliSelectedId);
+      const clock = s.count > 1
+        ? `${csliFmtClock(s.start)} – ${csliFmtClock(s.end)}`
+        : csliFmtClock(s.start);
+      const bw = csliSectorBeamwidth(s.beamwidth);
+      const detail = [
+        s.azimuth != null ? `Facing ${Math.round(s.azimuth)}°` : null,
+        s.azimuth != null ? `~${Math.round(bw)}° wide` : null,
+        s.count > 1 ? `${s.count} hits` : null,
+      ].filter(Boolean).join(" · ");
+      return `<li class="${active ? "active" : ""}" data-csli-event="${esc(s.id)}">
+        <span class="cast-num">${item.num}</span>
+        <div class="body">
+          <div class="t">${esc(clock)}</div>
+          <div class="s">${esc(detail || "Sector hit")}</div>
+        </div>
+      </li>`;
+    }).join("") || `<li class="placeholder" style="display:block;padding:16px;color:var(--muted-strong)">${state.forensicsLoading ? "Loading…" : "No locations for this day."}</li>`;
+    const timelineSub = [
+      activePhone?.name ? state.csliPhone : null,
+      csliFmtDay(state.csliDay) || null,
+      csliTzLabel(),
+      spanLabel || null,
+      `${fmtNum(stops.length)} stop${stops.length === 1 ? "" : "s"}`,
+      activePois.length ? `${fmtNum(activePois.length)} pin${activePois.length === 1 ? "" : "s"}` : null,
+    ].filter(Boolean).join(" · ");
+    return `<div class="forensics">
+      <div class="forensics-toolbar">
+        <button type="button" class="forensics-back" data-forensics-section="">← Forensics</button>
+        <strong style="color:var(--fg)">CSLI</strong>
+        ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
+      </div>
+      <div class="forensics-body">
+        ${mapData && (mapData.events || []).length
+          ? `<div class="csli-map-host">
+              <div class="csli-map-main">
+                <div id="csliMap" class="csli-map${state.csliPoiAddMode ? " add-poi" : ""}"></div>
+                <div class="csli-tools">
+                  <div class="csli-tools-bar">
+                    <select id="csliPhone" title="Phone" aria-label="Phone">${phoneOpts || `<option value="">No phones</option>`}</select>
+                    <select id="csliDay" title="Date" aria-label="Date" ${days.length ? "" : "disabled"}>${dayOpts || `<option value="">No dates</option>`}</select>
+                    <select id="csliTzMode" title="Timezone" aria-label="Timezone">
+                      <option value="eastern" ${state.csliTzMode === "eastern" ? "selected" : ""}>ET</option>
+                      <option value="utc" ${state.csliTzMode === "utc" ? "selected" : ""}>UTC</option>
+                      <option value="source" ${state.csliTzMode === "source" ? "selected" : ""}>Raw</option>
+                    </select>
+                    <span class="tool-sep" aria-hidden="true"></span>
+                    <button type="button" class="tool-btn ${state.csliPoiAddMode ? "active" : ""}" id="csliPoiAdd" title="Drop a pin on the map">
+                      ${state.csliPoiAddMode ? "Click map…" : "Pin"}
+                    </button>
+                    ${state.popout
+                      ? ""
+                      : `<button type="button" class="open-icon-btn" id="csliPopOut" title="Pop out" aria-label="Pop out">${openIcon()}</button>`}
+                  </div>
+                  ${state.csliPoiAddMode ? `<div class="csli-tools-hint">Click the map to place a pin</div>` : ""}
+                </div>
+                <div class="csli-map-chip">
+                  <span><span class="cone"></span>Sector used</span>
+                  <span><span class="dot num">#</span>Order</span>
+                  <span><span class="dot tower"></span>Tower</span>
+                  <span><span class="poi"></span>Pin</span>
+                </div>
+              </div>
+              <aside class="csli-timeline">
+                <div class="csli-timeline-head">
+                  <div class="title">
+                    <span class="name">${esc(phoneHead)}</span>
+                    ${state.csliPhone
+                      ? `<button type="button" class="case-rename-pen" id="csliPhoneRename" title="Rename phone" aria-label="Rename phone">${icoRenamePen()}</button>`
+                      : ""}
+                  </div>
+                  <span class="sub">${esc(timelineSub || "Sectors in time order")}</span>
+                </div>
+                <ul class="csli-timeline-list">${list}</ul>
+              </aside>
+            </div>`
+          : `<div class="forensics-empty">${state.forensicsLoading ? "Building map…" : "No coordinates found in CSLI exports for this case."}</div>`}
+      </div>
+    </div>`;
   }
 
-  const sourceOpts = sources.map((s) =>
-    `<option value="${esc(s.rel_path)}" ${s.rel_path === state.forensicsUfdrPath ? "selected" : ""}>${esc(s.name)}</option>`
-  ).join("");
+  const sources = ufdrSources;
+  if (!sources.length) {
+    return `<div class="forensics">${backBar}<div class="forensics-empty">No Cellebrite .ufdr packages found in this case.</div></div>`;
+  }
+
+  // Step 2: pick a phone / UFDR
+  if (!state.forensicsUfdrPath) {
+    const phones = sources.map((s) => {
+      const label = String(s.name || "").replace(/\.ufdr$/i, "").replace(/[-_]+/g, " ");
+      return `
+        <button type="button" class="forensics-phone-card" data-forensics-phone="${esc(s.rel_path)}">
+          <div class="pico">${icoHeroPhone()}</div>
+          <div>
+            <div class="pt">${esc(prettyLabel(label) || s.name)}</div>
+            <div class="ps">${esc(s.name)} · ${fmtSize(s.size)}</div>
+          </div>
+        </button>`;
+    }).join("");
+    return `<div class="forensics">
+      <div class="forensics-toolbar">
+        <button type="button" class="forensics-back" data-forensics-section="">← Forensics</button>
+        <strong style="color:var(--fg)">Cellebrite</strong>
+        <span class="meta">Select a phone</span>
+      </div>
+      <div class="forensics-landing">
+        <div class="forensics-phone-list">${phones}</div>
+      </div>
+    </div>`;
+  }
+
+  const activePhone = sources.find((s) => s.rel_path === state.forensicsUfdrPath) || sources[0];
+  const phoneLabel = prettyLabel(String(activePhone?.name || "").replace(/\.ufdr$/i, "").replace(/[-_]+/g, " ")) || activePhone?.name || "Phone";
 
   const apps = forensicsAppStats(state.forensicsChats, state.forensicsShowEmpty);
   if (!state.forensicsApp && apps.length) state.forensicsApp = apps[0].name;
@@ -3631,20 +5678,16 @@ function renderForensics() {
 
   return `
     <div class="forensics">
-      ${subnav}
+      <div class="forensics-toolbar">
+        <button type="button" class="forensics-back" id="forensicsBackPhones">← Phones</button>
+        <strong style="color:var(--fg)">${esc(phoneLabel)}</strong>
+        <input type="search" id="forensicsSearch" placeholder="Search name, number, preview…" value="${esc(state.forensicsQuery || "")}" />
+        <label class="chk"><input type="checkbox" id="forensicsShowEmpty" ${state.forensicsShowEmpty ? "checked" : ""} /> Show empty threads</label>
+        <span class="meta">${fmtNum(nonempty)} with messages · ${fmtNum((state.forensicsChats || []).length)} total</span>
+        ${summary.ufedlib === false ? `<span class="err">Install ufedlib-py on the server to parse UFDRs.</span>` : ""}
+        ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
+      </div>
       <div class="forensics-body">
-        <div class="forensics-toolbar">
-          <label class="meta">UFDR
-            <select id="forensicsUfdrSelect" style="margin-left:6px;font:inherit;max-width:18rem">
-              ${sourceOpts}
-            </select>
-          </label>
-          <input type="search" id="forensicsSearch" placeholder="Search name, number, preview…" value="${esc(state.forensicsQuery || "")}" />
-          <label class="chk"><input type="checkbox" id="forensicsShowEmpty" ${state.forensicsShowEmpty ? "checked" : ""} /> Show empty threads</label>
-          <span class="meta">${fmtNum(nonempty)} with messages · ${fmtNum((state.forensicsChats || []).length)} total</span>
-          ${summary.ufedlib === false ? `<span class="err">Install ufedlib-py on the server to parse UFDRs.</span>` : ""}
-          ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
-        </div>
         <div class="forensics-split">
           <div class="forensics-pane">
             <div class="forensics-pane-head"><strong>Apps</strong></div>
@@ -3681,6 +5724,12 @@ function renderCaseShell() {
         : state.module === "forensics"
           ? renderForensics()
           : renderOverview();
+  if (state.popout) {
+    return `
+      <div class="case-shell">
+        <div class="case-content" id="caseContent">${content}</div>
+      </div>`;
+  }
   return `
     <div class="case-shell">
       <aside class="case-nav">
@@ -3946,23 +5995,35 @@ function bindCaseHandlers() {
   if (state.module === "forensics") {
     document.querySelectorAll("[data-forensics-section]").forEach((btn) => {
       btn.onclick = () => {
-        state.forensicsSection = btn.dataset.forensicsSection;
+        const next = btn.dataset.forensicsSection || null;
+        state.forensicsSection = next || null;
         state.forensicsChatId = null;
         state.forensicsChat = null;
+        state.forensicsApp = null;
+        // Entering Cellebrite always starts at the phone picker
+        if (next === "cellebrite") state.forensicsUfdrPath = null;
+        if (state._csliMap) {
+          try { state._csliMap.remove(); } catch {}
+          state._csliMap = null;
+          state._csliMapSig = null;
+        }
+        if (!next) {
+          state.forensicsCsliMap = null;
+          state.forensicsUfdrPath = null;
+        }
         navigate({
           name: "case",
           caseId: state.caseId,
           module: "forensics",
           forensicsSection: state.forensicsSection,
-          forensicsUfdr: state.forensicsUfdrPath,
+          forensicsUfdr: null,
           forensicsChat: null,
         });
       };
     });
-    const sel = document.getElementById("forensicsUfdrSelect");
-    if (sel) {
-      sel.onchange = () => {
-        state.forensicsUfdrPath = sel.value;
+    document.querySelectorAll("[data-forensics-phone]").forEach((btn) => {
+      btn.onclick = () => {
+        state.forensicsUfdrPath = btn.dataset.forensicsPhone;
         state.forensicsChatId = null;
         state.forensicsChat = null;
         state.forensicsApp = null;
@@ -3972,6 +6033,24 @@ function bindCaseHandlers() {
           module: "forensics",
           forensicsSection: "cellebrite",
           forensicsUfdr: state.forensicsUfdrPath,
+          forensicsChat: null,
+        });
+      };
+    });
+    const backPhones = document.getElementById("forensicsBackPhones");
+    if (backPhones) {
+      backPhones.onclick = () => {
+        state.forensicsUfdrPath = null;
+        state.forensicsChatId = null;
+        state.forensicsChat = null;
+        state.forensicsChats = [];
+        state.forensicsApp = null;
+        navigate({
+          name: "case",
+          caseId: state.caseId,
+          module: "forensics",
+          forensicsSection: "cellebrite",
+          forensicsUfdr: null,
           forensicsChat: null,
         });
       };
@@ -4009,6 +6088,101 @@ function bindCaseHandlers() {
         openForensicsChat(li.dataset.forensicsChat).catch((e) => alert(e.message || String(e)));
       };
     });
+    if (state.forensicsSection === "csli") {
+      const phoneEl = document.getElementById("csliPhone");
+      if (phoneEl) {
+        phoneEl.onchange = () => {
+          state.csliPhone = phoneEl.value || null;
+          state.csliSelectedId = null;
+          state.csliSelectedPinId = null;
+          state.csliPoiAddMode = false;
+          const days = csliDaysForPhone(state.forensicsCsliMap, state.csliPhone);
+          state.csliDay = days.includes(state.csliDay) ? state.csliDay : (days[0] || null);
+          csliSyncHash();
+          render();
+          mountCsliMap();
+        };
+      }
+      const dayEl = document.getElementById("csliDay");
+      if (dayEl) {
+        dayEl.onchange = () => {
+          state.csliDay = dayEl.value || null;
+          state.csliSelectedId = null;
+          state.csliSelectedPinId = null;
+          csliSyncHash();
+          render();
+          mountCsliMap();
+        };
+      }
+      const tzEl = document.getElementById("csliTzMode");
+      if (tzEl) {
+        tzEl.onchange = () => {
+          setCsliTzMode(tzEl.value);
+          csliSyncHash();
+          render();
+          mountCsliMap();
+        };
+      }
+      const poiAddBtn = document.getElementById("csliPoiAdd");
+      if (poiAddBtn) {
+        poiAddBtn.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          state.csliPoiAddMode = !state.csliPoiAddMode;
+          if (state.csliPoiAddMode) {
+            state.csliSelectedId = null;
+            state.csliSelectedPinId = null;
+          }
+          syncCsliPinModeUi();
+          // Ensure map exists + click binders; keep current view
+          if (!state._csliMap || !document.getElementById("csliMap")?._leaflet_id) {
+            mountCsliMap();
+          } else {
+            paintCsliPath({ fit: false });
+            paintCsliPois();
+            csliBindPinMapClicks(state._csliMap, document.getElementById("csliMap"));
+          }
+        };
+      }
+      const popOutBtn = document.getElementById("csliPopOut");
+      if (popOutBtn) popOutBtn.onclick = () => popOutCsli();
+      const phoneRenameBtn = document.getElementById("csliPhoneRename");
+      if (phoneRenameBtn) {
+        phoneRenameBtn.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          openCsliPhoneRenameModal();
+        };
+      }
+      document.querySelectorAll("[data-csli-poi-edit]").forEach((btn) => {
+        btn.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const id = btn.dataset.csliPoiEdit;
+          const pin = csliActivePois().find((p) => String(p.id) === String(id))
+            || (state.csliPois || []).find((p) => String(p.id) === String(id));
+          if (pin) openCsliPinEditModal(pin);
+        };
+      });
+      document.querySelectorAll("[data-csli-poi]").forEach((li) => {
+        li.onclick = (ev) => {
+          if (ev.target.closest("[data-csli-poi-edit]")) return;
+          state.csliSelectedPinId = li.dataset.csliPoi;
+          state.csliSelectedId = null;
+          render();
+          mountCsliMap();
+        };
+      });
+      document.querySelectorAll("[data-csli-event]").forEach((li) => {
+        li.onclick = () => {
+          state.csliSelectedId = li.dataset.csliEvent;
+          state.csliSelectedPinId = null;
+          render();
+          mountCsliMap();
+        };
+      });
+      mountCsliMap();
+    }
   }
 
   if (state.module === "notebook") {
@@ -4116,6 +6290,9 @@ function bindCaseHandlers() {
     });
     document.querySelectorAll("[data-open-explorer]").forEach(btn => {
       btn.onclick = () => setModule("explorer");
+    });
+    document.querySelectorAll("[data-open-forensics]").forEach(btn => {
+      btn.onclick = () => openForensicsSection(btn.dataset.openForensics || null);
     });
     document.querySelectorAll("[data-mfilter]").forEach(btn => {
       btn.onclick = (ev) => {
@@ -4358,6 +6535,12 @@ function bindCaseHandlers() {
 }
 
 function render() {
+  document.documentElement.classList.toggle("popout-mode", !!state.popout);
+  try {
+    document.title = state.popout
+      ? `CSLI · ${state.caseMeta?.display_name || state.caseId || "Marshal"}`
+      : "MarshalOSS";
+  } catch {}
   const main = document.getElementById("main");
   if (state.err && state.route.name === "home") {
     main.innerHTML = `<div class="err">${esc(state.err)}</div>`;
@@ -4427,6 +6610,8 @@ window.addEventListener("hashchange", () => {
 
 (async function init() {
   wireCaseRenameModal();
+  wireCsliPinModal();
+  wireCsliPhoneRenameModal();
   state.route = parseHash();
   render();
   await loadForRoute();

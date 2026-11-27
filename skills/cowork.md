@@ -12,7 +12,7 @@ MarshalOSS indexes the production and exposes it over MCP. **You** (Cowork) answ
 ## Hard rules
 
 - **Discovery files are source of truth and read-only.** No create / delete / modify of files under the case root via MCP.
-- **Writable only:** notebook wiki pages, per-file `user_note`, per-file `user_tags`.
+- **Writable only:** notebook wiki pages, per-file `user_note`, per-file `user_tags`, optional forensics map pins.
 - **Cite real paths** from tool results: `[[doc:rel/path|Label]]` in the notebook.
 
 ## Default loop
@@ -25,6 +25,16 @@ MarshalOSS indexes the production and exposes it over MCP. **You** (Cowork) answ
    - Optional `chunk_offset` / `chunk_limit` for ingest chunks
 4. Draft the answer in chat; persist lasting work with `notebook_upsert` and real `[[doc:]]` cites
 5. Optional: `set_file_note` / `set_file_tags` on exhibits you reviewed
+
+## Forensics / CSLI (pull data — you analyze)
+
+Do **not** wait for a specialized “near scene” tool. Pull rows and reason:
+
+1. `forensics_overview` — what CSLI / UFDR sources exist  
+2. `csli_events` — filter by `phone`, `day`, `start`/`end`, page with `offset`  
+3. Optional `forensics_search` for keyword discovery; `map_pin_*` only if you want a map marker  
+
+Respect `source_tz` (AT&T ReportAU is UTC). Coordinates are **serving tower/sector**, not handset GPS. Convert timezones, measure distances, compare to any address yourself.
 
 ## Notebook recipes (optional)
 

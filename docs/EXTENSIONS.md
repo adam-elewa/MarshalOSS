@@ -1,4 +1,4 @@
-# MarshalOSS extension points
+# Marshal extension points
 
 Ingest workers should write into the same SQLite schema (`files`, `chunks`, `embeddings`, `chunks_fts`) so MCP/search/UI stay unchanged.
 

@@ -161,7 +161,7 @@ def as_docling_media(path: Path) -> Iterator[tuple[Path, dict]]:
     if not ffprobe_readable(path):
         raise RuntimeError(f"ffprobe cannot read media: {path.name}")
 
-    tmp = tempfile.TemporaryDirectory(prefix="marshaloss-media-")
+    tmp = tempfile.TemporaryDirectory(prefix="marshal-media-")
     try:
         wav = Path(tmp.name) / "bridge.wav"
         ffmpeg_wav(path, wav)

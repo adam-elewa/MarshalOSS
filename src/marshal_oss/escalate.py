@@ -163,7 +163,7 @@ def ai_ocr_file(
     bates: str | None,
     log: LogFn | None = None,
 ) -> list[dict[str, Any]]:
-    """OCR flagged pages via vision LLM; return MarshalOSS-style chunks."""
+    """OCR flagged pages via vision LLM; return Marshal-style chunks."""
     client = resolve_ai_ocr_client(settings)
     if not client:
         raise RuntimeError(

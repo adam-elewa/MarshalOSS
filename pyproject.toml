@@ -1,7 +1,7 @@
 [project]
-name = "marshaloss"
+name = "marshal"
 version = "0.1.0"
-description = "Docling ingest + hybrid semantic search + MCP for defense discovery (MarshalOSS)"
+description = "Docling ingest + hybrid semantic search + MCP for defense discovery (Marshal)"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -30,7 +30,8 @@ dependencies = [
 ]
 
 [project.scripts]
-marshaloss = "marshal_oss.cli:main"
+marshal = "marshal_oss.cli:main"
+marshaloss = "marshal_oss.cli:main"  # legacy alias
 
 [build-system]
 requires = ["uv_build>=0.13.9,<0.14.0"]

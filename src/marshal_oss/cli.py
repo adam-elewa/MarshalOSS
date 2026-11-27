@@ -327,7 +327,7 @@ def knobs_cmd(
         "hint": (
             f"Edit {user_knobs_path() or (Path.home() / '.marshaloss' / 'knobs.toml')} "
             f"(copy from {packaged_knobs_path()}) or set MARSHALOSS_* env vars. "
-            "Then run: marshaloss estimate /path/to/case"
+            "Then run: marshal estimate /path/to/case"
         ),
     }
     if json_out:

@@ -1,5 +1,5 @@
 # =============================================================================
-# MarshalOSS — cost / quality knobs
+# Marshal — cost / quality knobs
 # =============================================================================
 #
 # PURPOSE
@@ -10,8 +10,8 @@
 #   1. Leave this packaged file alone (defaults).
 #   2. Copy to ~/.marshaloss/knobs.toml and edit, OR set MARSHALOSS_KNOBS_FILE.
 #   3. Environment variables still win: MARSHALOSS_<FIELD> (e.g. MARSHALOSS_ASR_HQ=false).
-#   4. Preview spend first:  marshaloss estimate /path/to/case
-#   5. See effective values: marshaloss knobs
+#   4. Preview spend first:  marshal estimate /path/to/case
+#   5. See effective values: marshal knobs
 #
 # DEFAULT API PROVIDERS (with keys present)
 #   • ASR (audio/video): OpenAI only (Anthropic cannot replace transcription).
@@ -103,7 +103,7 @@ expand_zips = true
 expand_zip_max_depth = 2
 
 # -----------------------------------------------------------------------------
-# [pricing]  Rough USD rates for `marshaloss estimate` only (not billed by us).
+# [pricing]  Rough USD rates for `marshal estimate` only (not billed by us).
 # Update when providers change list prices. Checked against public pages ~2026-11.
 # -----------------------------------------------------------------------------
 [pricing]

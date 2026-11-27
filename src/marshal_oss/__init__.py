@@ -1,4 +1,4 @@
-"""MarshalOSS: Docling ingest + hybrid search + MCP for Claude/Perplexity."""
+"""Marshal: Docling ingest + hybrid search + MCP for Claude/Perplexity."""
 
 __all__ = ["main"]
 

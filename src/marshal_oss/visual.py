@@ -137,7 +137,7 @@ def sample_video_frames(
     if max_frames <= 0:
         max_frames = 1_000_000
     frames: list[tuple[float, bytes]] = []
-    with tempfile.TemporaryDirectory(prefix="marshaloss-frames-") as td:
+    with tempfile.TemporaryDirectory(prefix="marshal-frames-") as td:
         out_pat = Path(td) / "f_%05d.png"
         vf = f"fps=1/{interval:.4f},scale='min({max_width},iw)':-2"
         cmd = [

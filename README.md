@@ -1,8 +1,8 @@
-# MarshalOSS
+# Marshal
 
 Use **Claude Cowork** or **Perplexity Computer** to review and analyze criminal defense discovery: PDFs (including bad or missing OCR), emails, bodycam and surveillance video, radio and call audio, photos, forensic dumps, and similar production material.
 
-MarshalOSS runs on your computer. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions in Cowork or Computer, so query cost stays close to a normal subscription instead of enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
+Marshal runs on your computer. It extracts text, builds a searchable index, and exposes the case over MCP. You ask questions in Cowork or Computer, so query cost stays close to a normal subscription instead of enterprise e-discovery AI rates. It is meant to be usable on **CJA appointments, public defender work, and smaller private cases**.
 
 Ingest runs once on your machine (local OCR first; paid APIs mainly for bodycam/audio and the odd bad PDF). After that, analysis is just the subscription. Simply put: a **medium-size criminal case** can cost about **$20 one time** to ingest, then about **$20/month** for Claude Pro to analyze it with frontier models (Opus-class and the like). See [Benchmarks and projected cost](#benchmarks-and-projected-cost).
 
@@ -14,26 +14,26 @@ No commercial platform today offers serious search over a large, messy discovery
 
 A typical production is a mix of PDFs (often with bad or missing OCR), email, bodycam and surveillance video, radio and call audio, photos, and phone dumps. Even a smaller case can run to hundreds of gigabytes, with file types that ordinary tools skip or charge heavily to process.
 
-MarshalOSS closes that gap: ingest and search on your machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. Local tools first (Docling, ffmpeg, SQLite); paid APIs only when local extraction is wrong or empty.
+Marshal closes that gap: ingest and search on your machine (or a private host), ask questions through Cowork or Computer, and keep lasting notes in a notebook. Local tools first (Docling, ffmpeg, SQLite); paid APIs only when local extraction is wrong or empty.
 
-Cowork (and tools like it) can attach **connectors** beside MarshalOSS MCP so analysis, motions, and legal writing stay grounded in the production *and* in outside sources you already use. A practical defense stack:
+Cowork (and tools like it) can attach **connectors** beside Marshal MCP so analysis, motions, and legal writing stay grounded in the production *and* in outside sources you already use. A practical defense stack:
 
 | Connector | Role |
 |---|---|
-| **MarshalOSS (MCP)** | Search the case dump; cite real files; update the notebook |
+| **Marshal (MCP)** | Search the case dump; cite real files; update the notebook |
 | **Outlook / email** | Pull counsel and discovery email into the same thread |
 | **CourtListener** | Opinions, dockets, and citation check without leaving chat |
 | **PACER / RECAP** | Federal filings and docket pulls when you need the record |
 | **Westlaw / Lexis** (or similar) | Secondary authority and Shepardizing when your firm already has access |
 | **Legal data tools** (e.g. Legal Data Hunter–style research) | Statutes, rules, and targeted research beside the facts |
 
-**Why it matters:** one workspace can draft a motion or theory memo that cites Bates from the dump, quotes the email chain, and checks case law — instead of hopping between Relativity-class review, Word, PACER, and a research terminal. MarshalOSS supplies the discovery ground truth; the connectors supply court record and authority.
+**Why it matters:** one workspace can draft a motion or theory memo that cites Bates from the dump, quotes the email chain, and checks case law — instead of hopping between Relativity-class review, Word, PACER, and a research terminal. Marshal supplies the discovery ground truth; the connectors supply court record and authority.
 
 **Hosting:** run it where you like. Do not put the port on the open internet without auth; prefer **Tailscale** or a **Cloudflare Tunnel**. Helpers are in [`tools/networking/`](tools/networking/README.md).
 
 ## What you get
 
-In plain terms, MarshalOSS does six jobs:
+In plain terms, Marshal does six jobs:
 
 1. **Ingest the dump** — Turn a messy production folder into searchable text (OCR, ASR, captions, entities/tags) with a confidence manifest so you know what worked.
 2. **Ask over MCP** — Connect Claude Cowork or Perplexity Computer; search and cite real files without building a custom chat product.
@@ -46,7 +46,7 @@ In plain terms, MarshalOSS does six jobs:
 
 API spend and wall-clock time depend on **how much audio/video** is in the dump more than raw gigabytes. PDFs and images are mostly local CPU; bodycam, radio, and call audio drive the OpenAI bill and a large share of wait time.
 
-Always run `marshaloss estimate "/path/to/case"` on the actual tree before you spend. Numbers below are **balanced-profile ballparks** (HQ ASR on, OCR escalate on, visual frames on, Voyage embeddings on) for mixed criminal discovery — PDFs, photos, bodycam/surveillance video, and call/radio audio.
+Always run `marshal estimate "/path/to/case"` on the actual tree before you spend. Numbers below are **balanced-profile ballparks** (HQ ASR on, OCR escalate on, visual frames on, Voyage embeddings on) for mixed criminal discovery — PDFs, photos, bodycam/surveillance video, and call/radio audio.
 
 ### Reference workstation
 
@@ -100,9 +100,9 @@ Projected wall-clock for that shape with 4–8 workers: **about 2–5 hours** (D
 ### How to tighten the numbers for your case
 
 ```bash
-uv run marshaloss knobs          # active cost/quality profile
-uv run marshaloss estimate "/path/to/case"
-uv run marshaloss estimate "/path/to/case" --mode retranscribe   # ASR-only redo
+uv run marshal knobs          # active cost/quality profile
+uv run marshal estimate "/path/to/case"
+uv run marshal estimate "/path/to/case" --mode retranscribe   # ASR-only redo
 ```
 
 Economy profile (`asr.hq = false`, fewer visual frames) cuts API spend and often wall-clock; max-quality raises both. Details live in [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml).
@@ -117,7 +117,7 @@ Economy profile (`asr.hq = false`, fewer visual frames) cuts API spend and often
   Production on disk
          │
          ▼
-  MarshalOSS ingest (local)  ──►  SQLite: text chunks + Voyage vectors + keyword index
+  Marshal ingest (local)  ──►  SQLite: text chunks + Voyage vectors + keyword index
                                          │
                 ┌────────────────────────┴─────────────────────────┐
                 ▼                                                  ▼
@@ -129,12 +129,12 @@ Economy profile (`asr.hq = false`, fewer visual frames) cuts API spend and often
 
 | Layer | Role | Cost |
 |---|---|---|
-| MarshalOSS | Ingest, search, file links, MCP, native review UI | Mostly local compute; small API spend (see below) |
+| Marshal | Ingest, search, file links, MCP, native review UI | Mostly local compute; small API spend (see below) |
 | Cowork / Computer | Questions, analysis, drafting, connectors | Subscription usage |
 
-**Cost vs quality before you spend:** edit [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml) (or copy to `~/.marshaloss/knobs.toml`), then run `marshaloss estimate "/path/to/case"` for a **full ingest** ballpark (ASR + OCR escalate + visual frames + entities + Voyage embeddings). Use `marshaloss knobs` to see what is active. ASR-only redos are `estimate --mode retranscribe`.
+**Cost vs quality before you spend:** edit [`src/marshal_oss/knobs.toml`](src/marshal_oss/knobs.toml) (or copy to `~/.marshaloss/knobs.toml`), then run `marshal estimate "/path/to/case"` for a **full ingest** ballpark (ASR + OCR escalate + visual frames + entities + Voyage embeddings). Use `marshal knobs` to see what is active. ASR-only redos are `estimate --mode retranscribe`.
 
-MarshalOSS never answers questions itself. `search` / `ask` return text chunks and file links; Cowork or Computer writes the response.
+Marshal never answers questions itself. `search` / `ask` return text chunks and file links; Cowork or Computer writes the response.
 
 ---
 
@@ -158,7 +158,7 @@ Zips are expanded automatically. If Docling or ffmpeg cannot open a file, conver
 
 ## Ingest pipeline
 
-`marshaloss ingest` turns a folder of discovery into searchable text and vectors, and records what worked. Files run in parallel (`--workers`). There are no file-size limits.
+`marshal ingest` turns a folder of discovery into searchable text and vectors, and records what worked. Files run in parallel (`--workers`). There are no file-size limits.
 
 ```
   1. PREPARE    unzip, hash every file, guess Bates, write manifest      local, $0
@@ -182,7 +182,7 @@ Zips are expanded automatically. If Docling or ffmpeg cannot open a file, conver
 
 **1. Prepare.** Expands zips, hashes every file (SHA-256), guesses Bates numbers from paths, and writes a **production manifest** — a list of everything produced. This is your "did we get everything?" check before any OCR runs.
 
-**2. Extract.** [Docling](https://github.com/docling-project/docling) runs on your machine and turns documents, email, and images into text. Audio and video use the **HQ transcription stack** (ported from legacy Marshal): OpenAI diarize finds speech windows, each window is re-transcribed with `gpt-4o-transcribe` + logprobs and a BWC prompt, and borderline windows are verified with `whisper-1`. **ffmpeg** pulls the audio track. Set `MARSHALOSS_ASR_HQ=false` to fall back to a single `gpt-4o-transcribe-diarize` pass. Without an OpenAI key, or with `ASR_PROVIDER=local`, Docling's local Whisper is used instead. Videos are also classified as bodycam, dashcam, or other, with device, serial, and recording start where the filename or video metadata provides them. Re-run media ASR with `marshaloss retranscribe` (keeps visual frame captions).
+**2. Extract.** [Docling](https://github.com/docling-project/docling) runs on your machine and turns documents, email, and images into text. Audio and video use the **HQ transcription stack** (ported from legacy Marshal): OpenAI diarize finds speech windows, each window is re-transcribed with `gpt-4o-transcribe` + logprobs and a BWC prompt, and borderline windows are verified with `whisper-1`. **ffmpeg** pulls the audio track. Set `MARSHALOSS_ASR_HQ=false` to fall back to a single `gpt-4o-transcribe-diarize` pass. Without an OpenAI key, or with `ASR_PROVIDER=local`, Docling's local Whisper is used instead. Videos are also classified as bodycam, dashcam, or other, with device, serial, and recording start where the filename or video metadata provides them. Re-run media ASR with `marshal retranscribe` (keeps visual frame captions).
 
 **3. Quality gate.** Local checks score the output. Bad document OCR (empty, gibberish, mojibake) goes to an OpenAI or Anthropic vision model, capped at 25 pages per file by default. In local transcription mode, a bad transcript (empty, looping, junk like "thanks for watching") is re-run on OpenAI. If local extraction did fine, no API call is made.
 
@@ -203,7 +203,7 @@ Zips are expanded automatically. If Docling or ffmpeg cannot open a file, conver
 | Entities | OpenAI mini or Anthropic Haiku | Each file with text | Cheap |
 | Index + search | Voyage | Every chunk, every search query | Cents to low dollars per case |
 
-**ASR is usually the largest API line** and scales with audio/video duration (OpenAI’s public estimate is on the order of ~$0.006/min per model pass; HQ is roughly 1.2–2.5× a single diarize pass depending on how much speech is present). Do not guess from another matter — run `marshaloss estimate` on **this** tree. Default `--mode ingest` covers the whole case (docs + images + A/V: ASR, OCR escalate, visual, entities, embeddings). Add `--mode retranscribe` for an ASR-only redo estimate.
+**ASR is usually the largest API line** and scales with audio/video duration (OpenAI’s public estimate is on the order of ~$0.006/min per model pass; HQ is roughly 1.2–2.5× a single diarize pass depending on how much speech is present). Do not guess from another matter — run `marshal estimate` on **this** tree. Default `--mode ingest` covers the whole case (docs + images + A/V: ASR, OCR escalate, visual, entities, embeddings). Add `--mode retranscribe` for an ASR-only redo estimate.
 
 ### Ingest confidence
 
@@ -215,7 +215,7 @@ Each manifest row records `ingest_status` (`ready` / `error` / `skipped` / …),
 
 ### Paid API services (used during ingest and search)
 
-| Service | Key | What it is | Why MarshalOSS needs it | Required? |
+| Service | Key | What it is | Why Marshal needs it | Required? |
 |---|---|---|---|---|
 | [Voyage AI](https://www.voyageai.com/) ([docs](https://docs.voyageai.com/)) | `VOYAGE_API_KEY` | Embedding service. Turns text into vectors that represent meaning. `voyage-law-2` is tuned for legal text. | Semantic search: finding passages by meaning, not just exact words. Called for every text chunk at ingest and for every search query. | Strongly recommended. Without it, search falls back to a weak local method. |
 | [OpenAI API](https://platform.openai.com/) ([keys](https://platform.openai.com/api-keys)) | `OPENAI_API_KEY` | API access to OpenAI models (billed separately from a ChatGPT subscription). | HQ ASR for bodycam (diarize → accurate re-transcribe → verify). `gpt-4o-mini` re-OCRs bad pages, describes photos and video frames, and extracts entities/tags. | Recommended. Without it, audio/video uses the weaker local Whisper model. |
@@ -232,7 +232,7 @@ Keys can be set as environment variables or loaded from `~/.marshal/env.sh`.
 | [Claude](https://claude.ai/) (Cowork / Desktop) | Anthropic's Claude app with agent features and MCP support | Where you ask questions, analyze, and draft against the case |
 | [Perplexity](https://www.perplexity.ai/) (Computer) | Perplexity's agent product | Alternative front end with its own connectors |
 
-MarshalOSS does not need keys for these. They connect to MarshalOSS over MCP.
+Marshal does not need keys for these. They connect to Marshal over MCP.
 
 ### What leaves your machine
 
@@ -254,7 +254,7 @@ Review each provider's data retention and training terms, and your jurisdiction'
 | [Docling](https://github.com/docling-project/docling) | Open-source document conversion: OCR, parsing, speech-to-text | First-pass text extraction for every file |
 | [ffmpeg](https://ffmpeg.org/) | Standard open-source audio/video toolkit | Converts other A/V formats for transcription and samples video frames. Install with your OS package manager and keep it updated. |
 | [SQLite](https://www.sqlite.org/) | Embedded database (built into Python) | Stores text, vectors, and the keyword index |
-| Python 3.12+ and [uv](https://docs.astral.sh/uv/) | Runtime and package manager | Runs MarshalOSS |
+| Python 3.12+ and [uv](https://docs.astral.sh/uv/) | Runtime and package manager | Runs Marshal |
 
 ---
 
@@ -263,28 +263,28 @@ Review each provider's data retention and training terms, and your jurisdiction'
 Install the local tools above and set your API keys first.
 
 ```bash
-cd ~/Projects/MarshalOSS
+cd ~/Projects/Marshal
 uv sync
 
 # Optional: manifest only, before extraction
-uv run marshaloss prepare "/path/to/case" --slug my-case --name "My Case"
+uv run marshal prepare "/path/to/case" --slug my-case --name "My Case"
 
 # Full ingest
-uv run marshaloss ingest "/path/to/case" --slug my-case --name "My Case" --workers 8
+uv run marshal ingest "/path/to/case" --slug my-case --name "My Case" --workers 8
 
 # Cost/quality: knobs, then estimate full ingest (docs + images + A/V)
-uv run marshaloss knobs
-uv run marshaloss estimate "/path/to/case"
+uv run marshal knobs
+uv run marshal estimate "/path/to/case"
 
 # Re-run HQ ASR on selected media (preserves visual captions)
-uv run marshaloss estimate --slug my-case --mode retranscribe --path-contains Body
-uv run marshaloss retranscribe --slug my-case --path-contains Body
+uv run marshal estimate --slug my-case --mode retranscribe --path-contains Body
+uv run marshal retranscribe --slug my-case --path-contains Body
 
 # Serve (local default http://127.0.0.1:7340), or ./tools/networking/serve.sh
-uv run marshaloss serve
+uv run marshal serve
 
 # CLI search
-uv run marshaloss search "bodycam booking" --mode hybrid --top-k 8
+uv run marshal search "bodycam booking" --mode hybrid --top-k 8
 ```
 
 Endpoints: `/` (case review UI), `/health`, `/api/manifest`, `/api/files/categories`, `/mcp`.
@@ -292,7 +292,7 @@ Endpoints: `/` (case review UI), `/health`, `/api/manifest`, `/api/files/categor
 ### Connect Cowork / Claude Desktop
 
 ```json
-"marshaloss": {
+"marshal": {
   "command": "npx",
   "args": ["-y", "mcp-remote", "http://<HOST>:7340/mcp", "--allow-http", "--transport", "http-only"]
 }
@@ -320,7 +320,7 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 
 ## Human review (native web UI)
 
-Case management and document review run in MarshalOSS on `:7340` (`web/app.html`):
+Case management and document review run in Marshal on `:7340` (`web/app.html`):
 
 - **Cases** — pick a matter
 - **Case Overview** — production health (manifest / OCR confidence), plus drillable **entities** and **tags** (letter jumplist, counts, matching docs, in-place preview)
@@ -334,9 +334,9 @@ Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 
 ## Defense tools (custom viewers)
 
-Generic document review is not enough for every discovery problem. MarshalOSS is meant to grow **custom viewers** tuned to defense needs — purpose-built screens on the same case data.
+Generic document review is not enough for every discovery problem. Marshal is meant to grow **custom viewers** tuned to defense needs — purpose-built screens on the same case data.
 
-- **Built and served by MarshalOSS.** The tool reads MarshalOSS's own data (transcripts, frame descriptions, timestamps, file metadata, forensic exports), so it needs no separate processing and also works on its own in a browser.
+- **Built and served by Marshal.** The tool reads Marshal's own data (transcripts, frame descriptions, timestamps, file metadata, forensic exports), so it needs no separate processing and also works on its own in a browser.
 - **Fed by ingest.** Where a tool needs special inputs (bodycam metadata, UFDR chat indexes, CSLI coordinates), ingest detects and stores them automatically.
 
 | Viewer | What it does | Status |
@@ -357,14 +357,14 @@ More forensic views are planned (same Forensics area). Ingest stores timed speec
 
 ```bash
 # What knobs are active right now
-uv run marshaloss knobs
+uv run marshal knobs
 
 # Full ingest estimate: ASR + OCR escalate + visual + entities + Voyage embeddings
-uv run marshaloss estimate "/path/to/case"
-uv run marshaloss estimate --slug my-case
+uv run marshal estimate "/path/to/case"
+uv run marshal estimate --slug my-case
 
 # ASR-only (retranscribe) estimate — not the default
-uv run marshaloss estimate --slug my-case --mode retranscribe --path-contains Body
+uv run marshal estimate --slug my-case --mode retranscribe --path-contains Body
 ```
 
 To tweak: copy the file to `~/.marshaloss/knobs.toml` (or set `MARSHALOSS_KNOBS_FILE`), edit, then re-check with `knobs` / `estimate`. Profiles `economy` and `max_quality` are optional overlays. Environment variables still win.
@@ -375,7 +375,7 @@ Default `estimate` scans the **entire case tree** (or DB case): documents, image
 
 ### Environment variables
 
-Prefix `MARSHALOSS_`:
+Prefix `MARSHALOSS_` (kept for compatibility with existing installs; the product name is **Marshal**). Data still lives under `~/.marshaloss` and case caches under `<root>/.marshaloss` so they do not collide with older `~/.marshal` tooling.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -408,9 +408,9 @@ Bare `VOYAGE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` are also accepted.
 
 ## Note on forensic review
 
-MarshalOSS can **ingest and surface** some phone and location material for counsel review — today mainly **Cellebrite messages** (from `.ufdr`) and **CSLI / tower dumps** on a map. The goal is faster, clearer review of those slices of a production, not a full digital-forensics lab product.
+Marshal can **ingest and surface** some phone and location material for counsel review — today mainly **Cellebrite messages** (from `.ufdr`) and **CSLI / tower dumps** on a map. The goal is faster, clearer review of those slices of a production, not a full digital-forensics lab product.
 
-It will **never** substitute for nuanced forensic analysis of a device. A production UFED/UFDR export is not the whole phone; CSLI records are **serving-sector / tower events**, not GPS tracks of the handset. Hiring a qualified forensic analyst remains advisable when accuracy matters — for example to audit CSLI interpretation, recover artifacts the UFED file never captured, or challenge what the UI shows. Treat MarshalOSS forensics views as a **starting point for review**, not a final expert opinion.
+It will **never** substitute for nuanced forensic analysis of a device. A production UFED/UFDR export is not the whole phone; CSLI records are **serving-sector / tower events**, not GPS tracks of the handset. Hiring a qualified forensic analyst remains advisable when accuracy matters — for example to audit CSLI interpretation, recover artifacts the UFED file never captured, or challenge what the UI shows. Treat Marshal forensics views as a **starting point for review**, not a final expert opinion.
 
 ---
 
@@ -418,7 +418,7 @@ It will **never** substitute for nuanced forensic analysis of a device. A produc
 
 Contributions from practicing criminal defense attorneys are welcome. The most useful additions usually come from something that would have helped on a real case. Design decisions to follow:
 
-**1. Cowork or Computer is the AI engine.** Questions and analysis belong in Claude Cowork or Perplexity Computer, not a custom chat product that spends API tokens on every query. Subscription usage is cheaper than per-query API calls over a large set, and users keep their connectors (Outlook, Word, calendars, CourtListener-style research, browsers) without this project reimplementing them. MarshalOSS stays the ingest, search, and MCP layer.
+**1. Cowork or Computer is the AI engine.** Questions and analysis belong in Claude Cowork or Perplexity Computer, not a custom chat product that spends API tokens on every query. Subscription usage is cheaper than per-query API calls over a large set, and users keep their connectors (Outlook, Word, calendars, CourtListener-style research, browsers) without this project reimplementing them. Marshal stays the ingest, search, and MCP layer.
 
 **2. Wrap open-source tools; don't write parsers.** The project is not designed to maintain dozens of custom format libraries, especially for odd file types.
 
@@ -426,7 +426,7 @@ Contributions from practicing criminal defense attorneys are welcome. The most u
 |---|---|
 | Docling for documents, OCR, transcription | Homegrown PDF/Office/email parsers |
 | ffmpeg for media conversion | Custom demuxers per vendor format |
-| Extending the native MarshalOSS review UI | A Relativity clone or third-party review dependency |
+| Extending the native Marshal review UI | A Relativity clone or third-party review dependency |
 | Thin adapters around mature libraries | Format connectors only this project maintains |
 
 If Docling or ffmpeg can't read a file, convert it upstream or add a thin adapter around an existing open project. Specialized defense viewers belong in this codebase; see [Defense tools](#defense-tools-specialized-viewers).
@@ -439,7 +439,7 @@ If Docling or ffmpeg can't read a file, convert it upstream or add a thin adapte
 
 ## License
 
-MarshalOSS is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-or-later).
+Marshal is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-or-later).
 
 In plain terms:
 

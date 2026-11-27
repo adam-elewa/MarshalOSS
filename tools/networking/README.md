@@ -1,6 +1,6 @@
 # Networking helpers (optional)
 
-MarshalOSS is **hosting-agnostic**. These scripts only help set a public base URL and start the server — they are not part of the core product.
+Marshal is **hosting-agnostic**. These scripts only help set a public base URL and start the server — they are not part of the core product.
 
 ## Recommended for remote access
 
@@ -19,7 +19,7 @@ Set `MARSHALOSS_PUBLIC_BASE` to whatever URL clients (Cowork / Computer / browse
 | Script | Purpose |
 |---|---|
 | [`public_base.sh`](public_base.sh) | Print a suggested base URL (env → Cloudflare → Tailscale → localhost) |
-| [`serve.sh`](serve.sh) | Start `marshaloss serve` with that base URL if unset |
+| [`serve.sh`](serve.sh) | Start `marshal serve` with that base URL if unset |
 
 Examples:
 

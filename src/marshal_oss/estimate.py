@@ -540,7 +540,7 @@ def format_estimate(est: CostEstimate) -> str:
         else "ASR retranscribe only (docs/visual/entities/embed not re-billed)"
     )
     lines = [
-        f"MarshalOSS cost estimate  ({est.mode}) — {scope}",
+        f"Marshal cost estimate  ({est.mode}) — {scope}",
         f"  root:     {est.root or '(db)'}",
         f"  profile:  {est.profile}",
         f"  providers:{est.providers_default}",

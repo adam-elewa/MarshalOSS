@@ -1,4 +1,4 @@
-# Forensics (MarshalOSS)
+# Forensics (Marshal)
 
 Thin, outsourced forensic viewers inside the Marshal web UI. Subsections only appear when a case has matching evidence.
 
@@ -13,7 +13,7 @@ Marshal does **not** reimplement Physical Analyzer. It uses **[ufedlib-py](https
 | Same chats as Reader for this UFDR | `ufedlib-py` (this tab) |
 | Deeper recovery / full forensic suite | [IPED](https://github.com/sepinf-inc/IPED) outside Marshal |
 
-**Ingest:** `marshaloss ingest` discovers `.ufdr` packages under the case root, parses chats + a contact directory (for name resolution), and writes a warm cache under `.marshaloss/forensics/ufdr/`. The Forensics tab then opens without a cold parse. Re-ingest reuses the cache when the UFDR bytes are unchanged.
+**Ingest:** `marshal ingest` discovers `.ufdr` packages under the case root, parses chats + a contact directory (for name resolution), and writes a warm cache under `.marshaloss/forensics/ufdr/`. The Forensics tab then opens without a cold parse. Re-ingest reuses the cache when the UFDR bytes are unchanged.
 
 Parsed chat indexes are also built on first open if ingest has not run yet.
 

@@ -573,7 +573,7 @@ def _fallback_whisper_segments(
     if duration <= _FALLBACK_CHUNK_SEC + 1:
         legacy = _whisper_verbose_segments(client, audio_path, language=language)
     else:
-        with tempfile.TemporaryDirectory(prefix="marshaloss_hq_fb_chunk_") as td:
+        with tempfile.TemporaryDirectory(prefix="marshal_hq_fb_chunk_") as td:
             td_path = Path(td)
             t = 0.0
             part = 0
@@ -592,7 +592,7 @@ def _fallback_whisper_segments(
     accepted: list[HQTranscriptSegment] = []
     rejected: list[HQTranscriptSegment] = []
 
-    with tempfile.TemporaryDirectory(prefix="marshaloss_hq_fb_") as td:
+    with tempfile.TemporaryDirectory(prefix="marshal_hq_fb_") as td:
         td_path = Path(td)
         for idx, (start, end, text) in enumerate(legacy):
             text = (text or "").strip()
@@ -835,7 +835,7 @@ def hq_result_to_chunks(
     *,
     bates: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Convert accepted HQ segments into MarshalOSS ingest chunk dicts."""
+    """Convert accepted HQ segments into Marshal ingest chunk dicts."""
     from .asr_escalate import _chunk_segments
     from .media_info import fmt_clock
 
@@ -880,7 +880,7 @@ def ai_transcribe_file_hq(
     artifact_dir: Path | None = None,
     log: Any = None,
 ) -> list[dict[str, Any]]:
-    """Run HQ stack and return MarshalOSS transcript chunks."""
+    """Run HQ stack and return Marshal transcript chunks."""
     from .asr_escalate import _openai_key
 
     key = _openai_key(settings)

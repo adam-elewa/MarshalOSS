@@ -6811,7 +6811,7 @@ function render() {
   try {
     document.title = state.popout
       ? `CSLI · ${state.caseMeta?.display_name || state.caseId || "Marshal"}`
-      : "MarshalOSS";
+      : "Marshal";
   } catch {}
   const main = document.getElementById("main");
   if (state.err && state.route.name === "home") {

@@ -31,7 +31,7 @@ def load_cowork_playbook(*, strip_frontmatter: bool = True) -> str:
     path = cowork_playbook_path()
     if not path.is_file():
         return (
-            "# MarshalOSS Cowork\n\n"
+            "# Marshal Cowork\n\n"
             "search / ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
             "Discovery is read-only; writable: notebook, user_note, user_tags.\n"
         )
@@ -134,9 +134,9 @@ def load_notebook_skill_recipe(name: str, *, strip_frontmatter: bool = True) -> 
     """Load one skill by stem, alias, or frontmatter name from ``skills/``."""
     root = notebook_skills_dir()
     needle = name.strip().lower().replace(" ", "-")
-    # Allow marshaloss-cowork → cowork
-    if needle.startswith("marshaloss-"):
-        needle = needle[len("marshaloss-") :]
+    # Allow marshal-cowork → cowork
+    if needle.startswith("marshal-"):
+        needle = needle[len("marshal-") :]
     if not root.is_dir():
         raise FileNotFoundError(f"skills directory missing: {root}")
     for path in root.glob("*.md"):
@@ -169,7 +169,7 @@ def load_notebook_skill_text(*, strip_frontmatter: bool = True) -> str:
     path = notebook_skill_path()
     if not path.is_file():
         return (
-            "# MarshalOSS Notebook\n\n"
+            "# Marshal Notebook\n\n"
             "Dynamic case wiki. Use notebook_list / notebook_get / notebook_upsert.\n"
             "Load recipes with notebook_skill(name). Link docs with [[doc:path|label]].\n"
         )
@@ -207,7 +207,7 @@ def sync_skill_wiki_pages(db: Database, case_id: int) -> list[str]:
     index = [
         "# Skills",
         "",
-        "All MarshalOSS skills from repo folder **`skills/`** "
+        "All Marshal skills from repo folder **`skills/`** "
         "(Cowork playbook + notebook recipes). "
         "Load the same text via MCP `notebook_skill` (lists skills when called with no name). "
         "These pages refresh from git when the notebook opens — edit the repo files, not these mirrors.",

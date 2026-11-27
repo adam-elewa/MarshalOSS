@@ -152,7 +152,7 @@ def ai_transcribe_file(
     dur = duration_sec if duration_sec is not None else media_duration_sec(path)
 
     windows: list[tuple[float, float, list[dict[str, Any]] | str]] = []
-    with tempfile.TemporaryDirectory(prefix="marshaloss-asr-") as td:
+    with tempfile.TemporaryDirectory(prefix="marshal-asr-") as td:
         for start, end, wav in _audio_windows(path, Path(td), dur, settings.asr_max_windows, _log):
             if diarize:
                 windows.append((start, end, _transcribe_diarized(client, model, wav)))

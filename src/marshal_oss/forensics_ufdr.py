@@ -1905,7 +1905,7 @@ def ingest_ufdr_forensics(
 ) -> dict[str, Any]:
     """Discover UFDRs under a case root and warm the Forensics chat cache.
 
-    Runs during ``marshaloss ingest`` so Cellebrite chats + contact directory
+    Runs during ``marshal ingest`` so Cellebrite chats + contact directory
     resolution are ready before anyone opens the Forensics tab. Safe to re-run:
     unchanged packages reuse the on-disk cache unless ``force`` is set.
     """

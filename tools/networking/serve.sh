@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Optional: start MarshalOSS with a resolved PUBLIC_BASE.
+# Optional: start Marshal with a resolved PUBLIC_BASE.
 # Networking/VPN/tunnel setup is outside this repo — see README.md in this folder.
 set -euo pipefail
 
@@ -21,4 +21,4 @@ fi
 
 echo "PUBLIC_BASE=${MARSHALOSS_PUBLIC_BASE}"
 echo "Listening on ${HOST}:${PORT}"
-exec uv run marshaloss serve --host "${HOST}" --port "${PORT}"
+exec uv run marshal serve --host "${HOST}" --port "${PORT}"

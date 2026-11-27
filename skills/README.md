@@ -1,4 +1,4 @@
-# MarshalOSS skills
+# Marshal skills
 
 Single git folder for Cowork / MCP playbooks and notebook recipes.
 

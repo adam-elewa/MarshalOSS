@@ -1,13 +1,13 @@
 ---
-name: marshaloss-cowork
+name: marshal-cowork
 description: >-
-  How Claude Cowork / Computer should use MarshalOSS MCP for defense discovery:
+  How Claude Cowork / Computer should use Marshal MCP for defense discovery:
   search, pull text, cite, notebook, annotations. Discovery dump is read-only.
 ---
 
-# MarshalOSS × Cowork / Computer
+# Marshal × Cowork / Computer
 
-MarshalOSS indexes the production and exposes it over MCP. **You** (Cowork) answer and draft. Do not invent Bates, paths, quotes, or times.
+Marshal indexes the production and exposes it over MCP. **You** (Cowork) answer and draft. Do not invent Bates, paths, quotes, or times.
 
 ## Hard rules
 

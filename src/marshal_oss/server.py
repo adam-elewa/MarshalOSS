@@ -42,7 +42,7 @@ def create_app(
     db = db or Database(settings.database_path)
     embedder = embedder or Embedder(settings)
 
-    app = FastAPI(title="MarshalOSS", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Marshal", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.db = db
     app.state.embedder = embedder
@@ -772,7 +772,7 @@ def create_app(
         html_path = WEB_DIR / "app.html"
         if not html_path.exists():
             return HTMLResponse(
-                "<h1>MarshalOSS</h1><p><a href=/browser>Legacy browser</a></p>",
+                "<h1>Marshal</h1><p><a href=/browser>Legacy browser</a></p>",
                 status_code=500,
             )
         return HTMLResponse(html_path.read_text(encoding="utf-8"))
@@ -947,7 +947,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
     """
     from mcp.server.mcpserver import MCPServer
 
-    mcp = MCPServer("marshaloss")
+    mcp = MCPServer("marshal")
 
     def active_or(case_id: int | None = None):
         if case_id is not None:
@@ -967,7 +967,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     @mcp.tool()
     def list_cases() -> dict[str, Any]:
-        """List MarshalOSS cases."""
+        """List Marshal cases."""
         return {"cases": [c.__dict__ for c in db.list_cases()], "active": getattr(db.get_active_case(), "__dict__", None)}
 
     @mcp.tool()
@@ -1174,7 +1174,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
 
     @mcp.tool()
     def open_file_browser(case_id: int | None = None, path: str = "") -> dict[str, Any]:
-        """Read-only: URL to the MarshalOSS Document Explorer for this path."""
+        """Read-only: URL to the Marshal Document Explorer for this path."""
         c = active_or(case_id)
         base = settings.public_base.rstrip("/")
         if path:

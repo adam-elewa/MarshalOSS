@@ -1,7 +1,7 @@
 ---
 name: marshal-notebook
 description: >-
-  MarshalOSS notebook + Cowork skills. Use when working the case wiki, search,
+  Marshal notebook + Cowork skills. Use when working the case wiki, search,
   or MCP tools. Prefer stock top-level roots (Home, Timeline, Witnesses,
   People, Cross, Theory, Motions, Discovery, Meta) so sidebar icons show.
   Call notebook_skill (no name) for the skill list under skills/; with name
@@ -9,7 +9,7 @@ description: >-
 disable-model-invocation: false
 ---
 
-# MarshalOSS skills
+# Marshal skills
 
 All playbooks live in the repo folder **`skills/`** (one place).
 

@@ -27,11 +27,11 @@ class _KnobsTomlSource(PydanticBaseSettingsSource):
 
 class Settings(BaseSettings):
     """
-    Runtime settings for MarshalOSS.
+    Runtime settings for Marshal.
 
     Cost/quality knobs are documented in ``marshal_oss/knobs.toml``.
     Copy that file to ``~/.marshaloss/knobs.toml`` to tweak; ``MARSHALOSS_*``
-    env vars still override. Run ``marshaloss knobs`` / ``marshaloss estimate``.
+    env vars still override. Run ``marshal knobs`` / ``marshal estimate``.
     """
 
     model_config = SettingsConfigDict(

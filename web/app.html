@@ -48,6 +48,7 @@
   }
   button { cursor: pointer }
   button.primary { background: var(--ink); color: #fff; border-color: var(--ink) }
+  button.primary:disabled { opacity: 0.45; cursor: not-allowed }
   button.ghost { background: transparent }
   button.ghost.danger { color: #b91c1c }
   button.ghost.danger:hover { background: #fef2f2; color: #991b1b }
@@ -266,6 +267,28 @@
     display: flex; align-items: center; justify-content: center;
     padding: 32px 24px 48px;
   }
+  .forensics-landing.pick {
+    align-items: stretch; justify-content: flex-start;
+    padding: 20px 24px 32px;
+  }
+  .forensics-pick-wrap {
+    width: 100%; max-width: 1100px; margin: 0;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .forensics-pick-head h2 {
+    margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg);
+  }
+  .forensics-pick-head p {
+    margin: 6px 0 0; font-size: 13px; color: var(--muted-strong); line-height: 1.4;
+  }
+  .forensics-pick-actions {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding-top: 4px;
+  }
+  .forensics-pick-actions .spacer { flex: 1 }
+  .forensics-pick-actions .meta {
+    font-size: 12px; color: var(--muted-strong); font-weight: 600;
+  }
   .forensics-heroes {
     display: grid; gap: 28px;
     grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
@@ -302,26 +325,52 @@
     text-transform: uppercase; letter-spacing: 0.04em;
   }
   .forensics-phone-list {
-    display: flex; flex-direction: column; gap: 10px;
-    width: min(420px, 100%); margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    width: 100%;
+    margin: 0;
+    align-content: start;
   }
   .forensics-phone-card {
     appearance: none; width: 100%; text-align: left; cursor: pointer;
     border: 1px solid var(--border); background: #fff; border-radius: 14px;
-    padding: 16px 16px 14px; display: grid; grid-template-columns: 48px 1fr; gap: 14px;
-    align-items: center;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    padding: 14px 14px 12px; display: grid; grid-template-columns: 44px 1fr; gap: 12px;
+    align-items: start;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   }
   .forensics-phone-card:hover {
     border-color: #94a3b8; box-shadow: 0 6px 18px rgba(15,23,42,0.07);
   }
+  .forensics-phone-card.selected {
+    border-color: #0f172a; background: #f8fafc;
+    box-shadow: 0 0 0 1px #0f172a;
+  }
   .forensics-phone-card .pico {
-    width: 48px; height: 48px; border-radius: 12px; background: #e8eef7;
+    width: 44px; height: 44px; border-radius: 12px; background: #e8eef7;
     display: grid; place-items: center; color: var(--ink);
   }
-  .forensics-phone-card .pico svg { width: 26px; height: 26px }
-  .forensics-phone-card .pt { font-size: 15px; font-weight: 700; letter-spacing: -0.02em }
-  .forensics-phone-card .ps { margin-top: 3px; font-size: 12px; color: var(--muted-strong); line-height: 1.35 }
+  .forensics-phone-card.csli .pico { background: #eef6f0 }
+  .forensics-phone-card .pico svg { width: 24px; height: 24px }
+  .forensics-phone-card .pt {
+    font-size: 14px; font-weight: 750; letter-spacing: -0.02em; color: var(--fg);
+    display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  }
+  .forensics-phone-card .pt .badge {
+    font-size: 10px; font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0;
+    border-radius: 999px; padding: 1px 7px;
+  }
+  .forensics-phone-card .pn {
+    margin-top: 3px; font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em; color: var(--ink);
+  }
+  .forensics-phone-card .ps { margin-top: 4px; font-size: 12px; color: var(--muted-strong); line-height: 1.35 }
+  .forensics-phone-card .check {
+    grid-column: 1 / -1; margin-top: 2px;
+    font-size: 11.5px; font-weight: 650; color: var(--muted-strong);
+  }
+  .forensics-phone-card.selected .check { color: #0f172a }
   .forensics-back {
     border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px;
     font-weight: 650; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 4px;
@@ -1517,6 +1566,7 @@ const state = {
   csliTzMode: (typeof localStorage !== "undefined" && localStorage.getItem("marshaloss.csliTzMode")) || "eastern",
   csliPois: [], // user pins [{id,label,lat,lon,note,event_when}]
   csliPhoneLabels: {}, // { digits: displayName }
+  csliPhonesChosen: null, // null = phone picker; string[] = phones included on map
   csliPoiAddMode: false,
   csliPoiDraft: null, // {lat, lon} create, or {id, lat, lon, ...} edit
   popout: false, // fullscreen CSLI (or other) window without case chrome
@@ -1837,7 +1887,13 @@ async function loadForRoute() {
       state.csliTzMode = state.route.csliTz;
       try { localStorage.setItem("marshaloss.csliTzMode", state.csliTzMode); } catch {}
     }
-    if (state.route.csliPhone) state.csliPhone = state.route.csliPhone;
+    if (state.route.csliPhone) {
+      state.csliPhone = state.route.csliPhone;
+      // Deep link / pop-out skips the CSLI phone picker
+      if (!Array.isArray(state.csliPhonesChosen) || !state.csliPhonesChosen.length) {
+        state.csliPhonesChosen = [state.route.csliPhone];
+      }
+    }
     if (state.route.csliDay) state.csliDay = state.route.csliDay;
 
     const casesData = await api("/api/cases");
@@ -2064,6 +2120,12 @@ function openForensicsSection(section) {
   state.forensicsChat = null;
   state.forensicsApp = null;
   state.forensicsCsliMap = null;
+  state.csliPhonesChosen = null;
+  state._csliPickDraft = null;
+  state.csliPhone = null;
+  state.csliDay = null;
+  state.csliSelectedId = null;
+  state.csliSelectedPinId = null;
   if (state._csliMap) {
     try { state._csliMap.remove(); } catch {}
     state._csliMap = null;
@@ -2083,6 +2145,43 @@ function openForensicsSection(section) {
     forensicsUfdr: null,
     forensicsChat: null,
   });
+}
+
+function csliBackToPhonePicker() {
+  state.csliPhonesChosen = null;
+  state._csliPickDraft = state.csliPhone ? [state.csliPhone] : state._csliPickDraft;
+  state.csliSelectedId = null;
+  state.csliSelectedPinId = null;
+  state.csliPoiAddMode = false;
+  if (state._csliMap) {
+    try { state._csliMap.remove(); } catch {}
+    state._csliMap = null;
+  }
+  state._csliPathLayer = null;
+  state._csliPoiLayer = null;
+  state._csliFitSig = null;
+  csliSyncHash();
+  render();
+}
+
+function csliOpenMapWithPhones(phones) {
+  const list = (phones || []).map(String).filter(Boolean);
+  if (!list.length) return;
+  state.csliPhonesChosen = list;
+  const rows = csliPhoneList(state.forensicsCsliMap);
+  const preferred = rows.find((p) => list.includes(p.phone) && p.is_target)
+    || rows.find((p) => list.includes(p.phone) && p.count > 0)
+    || rows.find((p) => list.includes(p.phone))
+    || { phone: list[0] };
+  state.csliPhone = preferred.phone;
+  const days = csliDaysForPhone(state.forensicsCsliMap, state.csliPhone);
+  state.csliDay = days.includes(state.csliDay) ? state.csliDay : (days[0] || null);
+  state.csliSelectedId = null;
+  state.csliSelectedPinId = null;
+  state._csliFitSig = null;
+  csliSyncHash();
+  render();
+  mountCsliMap();
 }
 
 async function loadForensicsCsli(push) {
@@ -2370,16 +2469,27 @@ function csliDaysForPhone(data, phone) {
 function initCsliTimeFilter(data) {
   if (!data) return;
   const phones = csliPhoneList(data);
-  const primary = String(data.primary_phone || "").trim();
-  const preferred = phones.find((p) => p.phone === primary && p.count > 0)
-    || phones.find((p) => p.is_target && p.count > 0)
-    || phones.find((p) => p.count > 0)
-    || phones[0];
-  if (!state.csliPhone || !phones.some((p) => p.phone === state.csliPhone)) {
-    state.csliPhone = preferred?.phone || null;
+  // Deep link / popout: phone in route skips the picker
+  const routePhone = state.route?.csliPhone || null;
+  if (routePhone && phones.some((p) => p.phone === routePhone)) {
+    state.csliPhone = routePhone;
+    if (!Array.isArray(state.csliPhonesChosen) || !state.csliPhonesChosen.length) {
+      state.csliPhonesChosen = [routePhone];
+    }
+  }
+  if (Array.isArray(state.csliPhonesChosen) && state.csliPhonesChosen.length) {
+    const set = new Set(state.csliPhonesChosen);
+    if (!state.csliPhone || !set.has(state.csliPhone)) {
+      state.csliPhone = state.csliPhonesChosen[0];
+    }
+  } else {
+    // Stay on picker until the user chooses phones
+    state.csliPhone = state.csliPhone && phones.some((p) => p.phone === state.csliPhone)
+      ? state.csliPhone
+      : null;
   }
   const days = csliDaysForPhone(data, state.csliPhone);
-  if (!state.csliDay || !days.includes(state.csliDay)) {
+  if (state.csliPhone && (!state.csliDay || !days.includes(state.csliDay))) {
     state.csliDay = days[0] || null;
   }
   state.csliSelectedId = null;
@@ -2533,6 +2643,25 @@ const CSLI_SCENE_MARKERS = [
 
 function csliPhoneDigits(phone) {
   return String(phone || "").replace(/\D/g, "");
+}
+
+/** Pretty US-ish number for picker cards; otherwise raw. */
+function csliFmtPhonePretty(phone) {
+  const dig = csliPhoneDigits(phone);
+  if (dig.length === 10) return `(${dig.slice(0, 3)}) ${dig.slice(3, 6)}-${dig.slice(6)}`;
+  if (dig.length === 11 && dig.startsWith("1")) {
+    return `+1 (${dig.slice(1, 4)}) ${dig.slice(4, 7)}-${dig.slice(7)}`;
+  }
+  return String(phone || "").trim() || "—";
+}
+
+function csliChosenPhones() {
+  const all = csliPhoneList(state.forensicsCsliMap);
+  const chosen = state.csliPhonesChosen;
+  if (!Array.isArray(chosen) || !chosen.length) return all;
+  const set = new Set(chosen.map(csliPhoneDigits));
+  const filtered = all.filter((p) => set.has(csliPhoneDigits(p.phone)));
+  return filtered.length ? filtered : all;
 }
 
 function csliPoiStorageKey() {
@@ -5434,7 +5563,72 @@ function renderForensics() {
 
   if (section === "csli") {
     const mapData = state.forensicsCsliMap;
-    const phones = mapData ? csliPhoneList(mapData) : [];
+    const allPhones = mapData ? csliPhoneList(mapData) : [];
+    const showPicker = !Array.isArray(state.csliPhonesChosen) || !state.csliPhonesChosen.length;
+
+    if (showPicker) {
+      if (!Array.isArray(state._csliPickDraft)) {
+        const seed = allPhones.filter((p) => p.is_target).map((p) => p.phone);
+        state._csliPickDraft = seed.length
+          ? seed
+          : (allPhones.length === 1 ? [allPhones[0].phone] : []);
+      }
+      const draft = new Set(state._csliPickDraft);
+      const cards = allPhones.map((p) => {
+        const selected = draft.has(p.phone);
+        const alias = csliPhoneDisplayName(p.phone, p.name);
+        const title = alias || (p.is_target ? "Target phone" : "Phone");
+        const meta = [
+          p.carrier || null,
+          p.device && csliDeviceUseful(p.device) ? csliDeviceUseful(p.device) : null,
+          `${fmtNum(p.count)} event${p.count === 1 ? "" : "s"}`,
+        ].filter(Boolean).join(" · ");
+        return `
+          <button type="button" class="forensics-phone-card csli${selected ? " selected" : ""}" data-csli-pick-phone="${esc(p.phone)}" aria-pressed="${selected ? "true" : "false"}">
+            <div class="pico">${icoHeroTower()}</div>
+            <div>
+              <div class="pt">
+                <span>${esc(title)}</span>
+                ${p.is_target ? `<span class="badge">Target</span>` : ""}
+              </div>
+              <div class="pn">${esc(csliFmtPhonePretty(p.phone))}</div>
+              <div class="ps">${esc(meta || p.phone)}</div>
+              <div class="check">${selected ? "Selected for map" : "Click to include"}</div>
+            </div>
+          </button>`;
+      }).join("");
+      const nSel = draft.size;
+      return `<div class="forensics">
+        <div class="forensics-toolbar">
+          <button type="button" class="forensics-back" data-forensics-section="">← Forensics</button>
+          <strong style="color:var(--fg)">CSLI</strong>
+          <span class="meta">Select phones</span>
+          ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
+        </div>
+        <div class="forensics-landing pick">
+          <div class="forensics-pick-wrap">
+            <div class="forensics-pick-head">
+              <h2>Which phones on the map?</h2>
+              <p>Select one or more numbers. Each card shows the display name and the raw number so you can tell them apart.</p>
+            </div>
+            ${state.forensicsLoading && !allPhones.length
+              ? `<div class="forensics-empty" style="min-height:12rem">Loading phones…</div>`
+              : (cards
+                ? `<div class="forensics-phone-list" id="csliPhonePickList">${cards}</div>`
+                : `<div class="forensics-empty" style="min-height:12rem">No phones with coordinates found.</div>`)}
+            <div class="forensics-pick-actions">
+              <button type="button" class="ghost" id="csliPhoneSelectAll" ${allPhones.length ? "" : "disabled"}>Select all</button>
+              <button type="button" class="ghost" id="csliPhoneSelectNone" ${allPhones.length ? "" : "disabled"}>Clear</button>
+              <span class="spacer"></span>
+              <span class="meta" id="csliPhonePickCount">${fmtNum(nSel)} selected</span>
+              <button type="button" class="primary" id="csliPhoneOpenMap" ${nSel ? "" : "disabled"}>Open map</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const phones = csliChosenPhones();
     const days = mapData ? csliDaysForPhone(mapData, state.csliPhone) : [];
     const dayEvents = mapData ? csliDayEvents() : [];
     const stops = csliMovementStops(dayEvents);
@@ -5507,7 +5701,7 @@ function renderForensics() {
       </li>`;
     }).join("") || `<li class="placeholder" style="display:block;padding:16px;color:var(--muted-strong)">${state.forensicsLoading ? "Loading…" : "No locations for this day."}</li>`;
     const timelineSub = [
-      activePhone?.name ? state.csliPhone : null,
+      csliFmtPhonePretty(state.csliPhone),
       csliFmtDay(state.csliDay) || null,
       csliTzLabel(),
       spanLabel || null,
@@ -5516,7 +5710,7 @@ function renderForensics() {
     ].filter(Boolean).join(" · ");
     return `<div class="forensics">
       <div class="forensics-toolbar">
-        <button type="button" class="forensics-back" data-forensics-section="">← Forensics</button>
+        <button type="button" class="forensics-back" id="csliBackToPhones">← Phones</button>
         <strong style="color:var(--fg)">CSLI</strong>
         ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
       </div>
@@ -5578,12 +5772,14 @@ function renderForensics() {
   if (!state.forensicsUfdrPath) {
     const phones = sources.map((s) => {
       const label = String(s.name || "").replace(/\.ufdr$/i, "").replace(/[-_]+/g, " ");
+      const title = prettyLabel(label) || s.name || "Phone";
       return `
         <button type="button" class="forensics-phone-card" data-forensics-phone="${esc(s.rel_path)}">
           <div class="pico">${icoHeroPhone()}</div>
           <div>
-            <div class="pt">${esc(prettyLabel(label) || s.name)}</div>
-            <div class="ps">${esc(s.name)} · ${fmtSize(s.size)}</div>
+            <div class="pt">${esc(title)}</div>
+            <div class="pn">${esc(s.name || "")}</div>
+            <div class="ps">${fmtSize(s.size)}</div>
           </div>
         </button>`;
     }).join("");
@@ -5593,8 +5789,14 @@ function renderForensics() {
         <strong style="color:var(--fg)">Cellebrite</strong>
         <span class="meta">Select a phone</span>
       </div>
-      <div class="forensics-landing">
-        <div class="forensics-phone-list">${phones}</div>
+      <div class="forensics-landing pick">
+        <div class="forensics-pick-wrap">
+          <div class="forensics-pick-head">
+            <h2>Select a phone</h2>
+            <p>Open one Cellebrite extraction to browse chats.</p>
+          </div>
+          <div class="forensics-phone-list">${phones}</div>
+        </div>
       </div>
     </div>`;
   }
@@ -6089,99 +6291,134 @@ function bindCaseHandlers() {
       };
     });
     if (state.forensicsSection === "csli") {
-      const phoneEl = document.getElementById("csliPhone");
-      if (phoneEl) {
-        phoneEl.onchange = () => {
-          state.csliPhone = phoneEl.value || null;
-          state.csliSelectedId = null;
-          state.csliSelectedPinId = null;
-          state.csliPoiAddMode = false;
-          const days = csliDaysForPhone(state.forensicsCsliMap, state.csliPhone);
-          state.csliDay = days.includes(state.csliDay) ? state.csliDay : (days[0] || null);
-          csliSyncHash();
-          render();
-          mountCsliMap();
-        };
-      }
-      const dayEl = document.getElementById("csliDay");
-      if (dayEl) {
-        dayEl.onchange = () => {
-          state.csliDay = dayEl.value || null;
-          state.csliSelectedId = null;
-          state.csliSelectedPinId = null;
-          csliSyncHash();
-          render();
-          mountCsliMap();
-        };
-      }
-      const tzEl = document.getElementById("csliTzMode");
-      if (tzEl) {
-        tzEl.onchange = () => {
-          setCsliTzMode(tzEl.value);
-          csliSyncHash();
-          render();
-          mountCsliMap();
-        };
-      }
-      const poiAddBtn = document.getElementById("csliPoiAdd");
-      if (poiAddBtn) {
-        poiAddBtn.onclick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          state.csliPoiAddMode = !state.csliPoiAddMode;
-          if (state.csliPoiAddMode) {
+      const onPicker = !Array.isArray(state.csliPhonesChosen) || !state.csliPhonesChosen.length;
+      if (onPicker) {
+        document.querySelectorAll("[data-csli-pick-phone]").forEach((btn) => {
+          btn.onclick = () => {
+            const phone = btn.dataset.csliPickPhone;
+            const set = new Set(state._csliPickDraft || []);
+            if (set.has(phone)) set.delete(phone);
+            else set.add(phone);
+            state._csliPickDraft = [...set];
+            render();
+          };
+        });
+        const selAll = document.getElementById("csliPhoneSelectAll");
+        if (selAll) {
+          selAll.onclick = () => {
+            state._csliPickDraft = csliPhoneList(state.forensicsCsliMap).map((p) => p.phone);
+            render();
+          };
+        }
+        const selNone = document.getElementById("csliPhoneSelectNone");
+        if (selNone) {
+          selNone.onclick = () => {
+            state._csliPickDraft = [];
+            render();
+          };
+        }
+        const openMap = document.getElementById("csliPhoneOpenMap");
+        if (openMap) {
+          openMap.onclick = () => {
+            csliOpenMapWithPhones(state._csliPickDraft || []);
+          };
+        }
+      } else {
+        const backPhones = document.getElementById("csliBackToPhones");
+        if (backPhones) backPhones.onclick = () => csliBackToPhonePicker();
+        const phoneEl = document.getElementById("csliPhone");
+        if (phoneEl) {
+          phoneEl.onchange = () => {
+            state.csliPhone = phoneEl.value || null;
             state.csliSelectedId = null;
             state.csliSelectedPinId = null;
-          }
-          syncCsliPinModeUi();
-          // Ensure map exists + click binders; keep current view
-          if (!state._csliMap || !document.getElementById("csliMap")?._leaflet_id) {
+            state.csliPoiAddMode = false;
+            const days = csliDaysForPhone(state.forensicsCsliMap, state.csliPhone);
+            state.csliDay = days.includes(state.csliDay) ? state.csliDay : (days[0] || null);
+            csliSyncHash();
+            render();
             mountCsliMap();
-          } else {
-            paintCsliPath({ fit: false });
-            paintCsliPois();
-            csliBindPinMapClicks(state._csliMap, document.getElementById("csliMap"));
-          }
-        };
+          };
+        }
+        const dayEl = document.getElementById("csliDay");
+        if (dayEl) {
+          dayEl.onchange = () => {
+            state.csliDay = dayEl.value || null;
+            state.csliSelectedId = null;
+            state.csliSelectedPinId = null;
+            csliSyncHash();
+            render();
+            mountCsliMap();
+          };
+        }
+        const tzEl = document.getElementById("csliTzMode");
+        if (tzEl) {
+          tzEl.onchange = () => {
+            setCsliTzMode(tzEl.value);
+            csliSyncHash();
+            render();
+            mountCsliMap();
+          };
+        }
+        const poiAddBtn = document.getElementById("csliPoiAdd");
+        if (poiAddBtn) {
+          poiAddBtn.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            state.csliPoiAddMode = !state.csliPoiAddMode;
+            if (state.csliPoiAddMode) {
+              state.csliSelectedId = null;
+              state.csliSelectedPinId = null;
+            }
+            syncCsliPinModeUi();
+            if (!state._csliMap || !document.getElementById("csliMap")?._leaflet_id) {
+              mountCsliMap();
+            } else {
+              paintCsliPath({ fit: false });
+              paintCsliPois();
+              csliBindPinMapClicks(state._csliMap, document.getElementById("csliMap"));
+            }
+          };
+        }
+        const popOutBtn = document.getElementById("csliPopOut");
+        if (popOutBtn) popOutBtn.onclick = () => popOutCsli();
+        const phoneRenameBtn = document.getElementById("csliPhoneRename");
+        if (phoneRenameBtn) {
+          phoneRenameBtn.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openCsliPhoneRenameModal();
+          };
+        }
+        document.querySelectorAll("[data-csli-poi-edit]").forEach((btn) => {
+          btn.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const id = btn.dataset.csliPoiEdit;
+            const pin = csliActivePois().find((p) => String(p.id) === String(id))
+              || (state.csliPois || []).find((p) => String(p.id) === String(id));
+            if (pin) openCsliPinEditModal(pin);
+          };
+        });
+        document.querySelectorAll("[data-csli-poi]").forEach((li) => {
+          li.onclick = (ev) => {
+            if (ev.target.closest("[data-csli-poi-edit]")) return;
+            state.csliSelectedPinId = li.dataset.csliPoi;
+            state.csliSelectedId = null;
+            render();
+            mountCsliMap();
+          };
+        });
+        document.querySelectorAll("[data-csli-event]").forEach((li) => {
+          li.onclick = () => {
+            state.csliSelectedId = li.dataset.csliEvent;
+            state.csliSelectedPinId = null;
+            render();
+            mountCsliMap();
+          };
+        });
+        mountCsliMap();
       }
-      const popOutBtn = document.getElementById("csliPopOut");
-      if (popOutBtn) popOutBtn.onclick = () => popOutCsli();
-      const phoneRenameBtn = document.getElementById("csliPhoneRename");
-      if (phoneRenameBtn) {
-        phoneRenameBtn.onclick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          openCsliPhoneRenameModal();
-        };
-      }
-      document.querySelectorAll("[data-csli-poi-edit]").forEach((btn) => {
-        btn.onclick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const id = btn.dataset.csliPoiEdit;
-          const pin = csliActivePois().find((p) => String(p.id) === String(id))
-            || (state.csliPois || []).find((p) => String(p.id) === String(id));
-          if (pin) openCsliPinEditModal(pin);
-        };
-      });
-      document.querySelectorAll("[data-csli-poi]").forEach((li) => {
-        li.onclick = (ev) => {
-          if (ev.target.closest("[data-csli-poi-edit]")) return;
-          state.csliSelectedPinId = li.dataset.csliPoi;
-          state.csliSelectedId = null;
-          render();
-          mountCsliMap();
-        };
-      });
-      document.querySelectorAll("[data-csli-event]").forEach((li) => {
-        li.onclick = () => {
-          state.csliSelectedId = li.dataset.csliEvent;
-          state.csliSelectedPinId = null;
-          render();
-          mountCsliMap();
-        };
-      });
-      mountCsliMap();
     }
   }
 

@@ -38,7 +38,7 @@ In plain terms, Marshal does six jobs:
 1. **Ingest the dump** — Turn a messy production folder into searchable text (OCR, ASR, captions, entities/tags) with a confidence manifest so you know what worked.
 2. **Ask over MCP** — Connect Claude Cowork or Perplexity Computer; search and cite real files without building a custom chat product.
 3. **Review in the browser** — Case Overview and Document Explorer (categories / folders, hybrid search, side preview).
-4. **Build defense viewers** — Purpose-built screens for discovery problems generic review tools ignore. Live today: a multi-camera **bodycam** viewer (synced video, transcript, and timeline), plus **forensics** tools to view and understand phone/CSLI material — starting with **Cellebrite messages** and **CSLI** maps, with more forensic views planned.
+4. **Build defense viewers** — Purpose-built screens for discovery problems generic review tools ignore. Live today: a multi-camera **Cameras** viewer (synced bodycam/dashcam video, transcript, and timeline), plus **forensics** tools to view and understand phone/CSLI material — starting with **Cellebrite messages** and **CSLI** maps, with more forensic views planned.
 5. **Write lasting notes** — Keep timelines, people, cross outlines, and theory in a blank Markdown notebook (not chat). Link pages to each other and to discovery files that open beside the note.
 6. **Reuse defense skills** — Short playbooks in [`skills/`](skills/) (timeline, cross-examination, and the like) tell the AI how to build those notes the same way each time. The idea is repeatable structure, ideally improved over time by practicing defense attorneys — not one-off chat prompts.
 
@@ -326,7 +326,7 @@ Case management and document review run in Marshal on `:7340` (`web/app.html`):
 - **Case Overview** — production health (manifest / OCR confidence), plus drillable **entities** and **tags** (letter jumplist, counts, matching docs, in-place preview)
 - **Document Explorer** — **Categories** or **Native folders**; large hybrid search (matching files only, side preview, yellow hit highlights); Back + breadcrumbs when drilling; open a file’s entities/tags to jump to every doc that shares them
 - **Notebook** — blank Markdown wiki with sidebar tree, Back + breadcrumbs, and stock top-level areas AI should prefer (`Home`, `Timeline`, `Witnesses`, `People`, `Cross`, `Theory`, `Motions`, `Discovery`, `Meta`). Git-backed recipes live in [`skills/`](skills/) (`cowork`, `cross-examination`, `timeline`, …), mirrored at `Meta/Skills/*`. MCP `notebook_skill` lists or loads them. `[[doc:]]` cites open a **side viewer** beside the page
-- **Custom viewers** — defense-attuned tools in the case nav (**Bodycam**, **Forensics**; see below)
+- **Custom viewers** — defense-attuned tools in the case nav (**Cameras**, **Forensics**; see below)
 
 Stack layout: [docs/DUAL_STACK.md](docs/DUAL_STACK.md).
 
@@ -341,7 +341,7 @@ Generic document review is not enough for every discovery problem. Marshal is me
 
 | Viewer | What it does | Status |
 |---|---|---|
-| **Bodycam** | Multi-camera video with synced, clickable transcript and frame descriptions; cameras grouped by device/serial (or renamed officer filenames); timeline aligned by recording time, with per-camera clock offsets; transcript search | Live — case nav **Bodycam** (`/api/bwc/index`) |
+| **Cameras** | Officer video (bodycam, dashcam, and related) with synced, clickable transcript and frame descriptions; cameras grouped by device/serial (or renamed officer filenames); timeline aligned by recording time, with per-camera clock offsets; transcript search | Live — case nav **Cameras** (`/api/bwc/index`) |
 | **Forensics · Cellebrite** | Browse chats from Cellebrite `.ufdr` phone extractions (pick a phone, app, thread) | Live — case nav **Forensics** |
 | **Forensics · CSLI** | Map of cell-site / CDR location events by phone and day (sectors, timeline, pins) | Live — case nav **Forensics** |
 

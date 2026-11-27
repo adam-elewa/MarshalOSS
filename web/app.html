@@ -269,21 +269,41 @@
   }
   .forensics-landing.pick {
     align-items: stretch; justify-content: flex-start;
-    padding: 20px 24px 32px;
+    padding: 14px 24px 16px;
+    overflow: hidden;
   }
   .forensics-pick-wrap {
-    width: 100%; max-width: 1100px; margin: 0;
-    display: flex; flex-direction: column; gap: 16px;
+    width: 100%; max-width: 640px; margin: 0;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .forensics-pick-head { flex-shrink: 0 }
+  .forensics-pick-search {
+    flex-shrink: 0; width: 100%; font: inherit; font-size: 13px;
+    padding: 7px 11px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  }
+  .forensics-pick-search:focus {
+    outline: none; border-color: #94a3b8; box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.25);
+  }
+  .forensics-pick-pager {
+    flex-shrink: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 12px; font-weight: 600; color: var(--muted-strong);
+  }
+  .forensics-pick-pager .pager-btns {
+    display: inline-flex; gap: 6px; margin-left: auto;
+  }
+  .forensics-pick-pager button {
+    font-size: 12px; font-weight: 650; padding: 5px 10px;
   }
   .forensics-pick-head h2 {
-    margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg);
+    margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg);
   }
   .forensics-pick-head p {
-    margin: 6px 0 0; font-size: 13px; color: var(--muted-strong); line-height: 1.4;
+    margin: 4px 0 0; font-size: 12.5px; color: var(--muted-strong); line-height: 1.35;
   }
   .forensics-pick-actions {
+    flex-shrink: 0;
     display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-    padding-top: 4px;
+    padding-top: 2px;
   }
   .forensics-pick-actions .spacer { flex: 1 }
   .forensics-pick-actions .meta {
@@ -297,32 +317,22 @@
   }
   .forensics-hero {
     appearance: none; border: 1px solid var(--border); background: #fff;
-    border-radius: 18px; padding: 28px 22px 22px; cursor: pointer; text-align: center;
+    border-radius: 14px; padding: 22px 20px; cursor: pointer; text-align: left;
     box-shadow: 0 1px 0 rgba(15,23,42,0.04);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease;
   }
   .forensics-hero:hover {
-    border-color: #94a3b8; box-shadow: 0 8px 24px rgba(15,23,42,0.08);
-    transform: translateY(-2px);
+    border-color: #94a3b8; background: #f8fafc;
   }
-  .forensics-hero .hero-ico {
-    width: 88px; height: 88px; margin: 0 auto 16px;
-    display: grid; place-items: center;
-    border-radius: 22px; background: #f1f5f9; color: var(--ink);
-  }
-  .forensics-hero .hero-ico svg { width: 52px; height: 52px }
-  .forensics-hero.cellebrite .hero-ico { background: #e8eef7 }
-  .forensics-hero.csli .hero-ico { background: #eef6f0 }
   .forensics-hero .hero-title {
-    margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg);
+    margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg);
   }
   .forensics-hero .hero-sub {
-    margin: 8px 0 0; font-size: 13px; line-height: 1.4; color: var(--muted-strong);
+    margin: 6px 0 0; font-size: 13px; line-height: 1.4; color: var(--muted-strong);
     word-break: break-word;
   }
   .forensics-hero .hero-meta {
-    margin: 12px 0 0; font-size: 11px; font-weight: 650; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.04em;
+    margin: 12px 0 0; font-size: 12px; font-weight: 650; color: var(--ink);
   }
   .forensics-phone-list {
     display: grid;
@@ -372,10 +382,63 @@
   }
   .forensics-phone-card.selected .check { color: #0f172a }
   .forensics-back {
-    border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px;
-    font-weight: 650; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 4px;
+    border: 1px solid var(--border); background: #fff; color: var(--ink); font: inherit; font-size: 13px;
+    font-weight: 650; cursor: pointer; padding: 6px 12px; border-radius: 8px;
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  .forensics-back:hover { text-decoration: underline }
+  .forensics-back:hover { background: #f1f5f9; border-color: #94a3b8 }
+  .forensics-toolbar .toolbar-title {
+    font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--fg);
+  }
+  .forensics-toolbar .toolbar-sub {
+    font-size: 12px; font-weight: 600; color: var(--muted-strong);
+  }
+  .forensics-phone-rows {
+    display: flex; flex-direction: column; gap: 0;
+    width: 100%; flex: 0 0 auto;
+    border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; background: #fff;
+  }
+  .forensics-phone-row {
+    appearance: none; width: 100%; text-align: left; cursor: pointer;
+    border: 0; border-bottom: 1px solid var(--border); background: #fff;
+    padding: 8px 12px; display: flex; align-items: center; gap: 10px;
+    font: inherit; color: inherit;
+  }
+  .forensics-phone-row:last-child { border-bottom: 0 }
+  .forensics-phone-row:hover { background: #f8fafc }
+  .forensics-phone-row.selected { background: #f1f5f9 }
+  .forensics-phone-row .tick {
+    flex: 0 0 16px; width: 16px; height: 16px; border-radius: 4px;
+    border: 1.5px solid #94a3b8; display: grid; place-items: center;
+    font-size: 10px; font-weight: 800; color: transparent; background: #fff;
+  }
+  .forensics-phone-row.selected .tick {
+    border-color: #0f172a; background: #0f172a; color: #fff;
+  }
+  .forensics-phone-row .row-main {
+    flex: 1; min-width: 0;
+    display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap;
+  }
+  .forensics-phone-row .row-title {
+    font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: var(--fg);
+    display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  }
+  .forensics-phone-row .row-title .badge {
+    font-size: 9px; font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0;
+    border-radius: 999px; padding: 0 6px;
+  }
+  .forensics-phone-row .row-num {
+    margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+  .forensics-phone-row .row-meta {
+    margin: 0 0 0 auto; font-size: 11.5px; color: var(--muted-strong);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46%;
+  }
+  .forensics-phone-row.simple .row-chev {
+    flex: 0 0 auto; color: var(--muted); font-size: 15px; font-weight: 600;
+  }
   .csli-map-host {
     flex: 1; min-height: 0; display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
@@ -672,14 +735,6 @@
   .forensics-overview-sub:hover {
     border-color: #94a3b8; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
   }
-  .forensics-overview-sub .fos-ico {
-    width: 36px; height: 36px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .forensics-overview-sub .fos-ico svg { width: 20px; height: 20px }
-  .forensics-overview-sub.phones .fos-ico { background: #e8eef7; color: #1e3a8a }
-  .forensics-overview-sub.csli .fos-ico { background: #eef6f0; color: #166534 }
-  .forensics-overview-sub.bodycam .fos-ico { background: #f1f5f9; color: #0f172a }
   .forensics-overview-sub .fos-title {
     font-size: 14px; font-weight: 700; letter-spacing: -0.02em;
   }
@@ -1268,27 +1323,84 @@
     flex: 1; min-height: 0; display: flex; flex-direction: column;
     background: var(--panel); overflow: hidden; position: relative; z-index: 0;
   }
-  .file-list { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1 }
-  .file-list li {
-    display: block; padding: 12px 18px; border-bottom: 1px solid var(--border); cursor: pointer;
+  .explorer-list-foot {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; padding: 8px 2px 0;
+    font-size: 12px; font-weight: 600; color: var(--ink);
   }
-  .file-list li:hover { background: var(--hover) }
+  .explorer-list-foot .manifest-pager button {
+    border: 1px solid var(--border); background: #fff; color: var(--ink);
+    border-radius: 8px; padding: 6px 12px; font-weight: 650;
+  }
+  .explorer-list-foot .manifest-pager button:hover:not(:disabled) {
+    background: #e2e8f0;
+  }
+  .explorer-list-foot .manifest-pager button:disabled {
+    opacity: 0.4; cursor: not-allowed;
+  }
+  .explorer-list-body {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px;
+    padding: 12px 16px 12px; overflow: hidden;
+  }
+  .file-list {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: 0;
+    width: 100%; flex: 0 0 auto; max-height: 100%;
+    border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; background: #fff;
+  }
+  .file-list li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer;
+    background: #fff;
+  }
+  .file-list li:last-child { border-bottom: 0 }
+  .file-list li:hover { background: #f8fafc }
   .file-list li.active {
-    background: #e8eef7;
+    background: #f1f5f9;
     box-shadow: inset 3px 0 0 var(--ink);
   }
-  .file-list .file-name {
-    font-size: 14px; font-weight: 600; color: var(--fg);
+  .file-list li.placeholder {
+    display: block; padding: 16px 12px; color: var(--muted-strong);
+    cursor: default; text-align: center;
+  }
+  .file-list li.placeholder:hover { background: #fff }
+  .file-list .row-main {
+    flex: 1; min-width: 0;
+    display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap;
+  }
+  .file-list .file-name,
+  .file-list .row-title {
+    font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: var(--fg);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .file-list .file-path {
-    margin-top: 2px; font-size: 12px; color: var(--muted-strong);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  .file-list .file-path,
+  .file-list .row-meta {
+    margin: 0 0 0 auto; font-size: 11.5px; color: var(--muted-strong);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48%;
+  }
+  .file-list .row-chev {
+    flex: 0 0 auto; color: var(--muted); font-size: 15px; font-weight: 600;
   }
   .file-list .file-snip {
-    margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted-strong);
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    flex: 1 1 100%; margin: 2px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted-strong);
+    display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
   }
+  .explorer-list.density-compact .file-list li { padding: 6px 10px }
+  .explorer-list.density-compact .file-list .file-name,
+  .explorer-list.density-compact .file-list .row-title { font-size: 12.5px }
+  .explorer-list.density-compact .file-list .file-path,
+  .explorer-list.density-compact .file-list .row-meta { font-size: 11px }
+  .explorer-list.density-compact .file-list .file-snip { display: none }
+  .explorer-list.density-compact .explorer-list-foot { padding: 7px 12px; font-size: 11.5px }
+  .explorer-list.density-tight .file-list li { padding: 5px 10px }
+  .explorer-list.density-tight .file-list .file-name,
+  .explorer-list.density-tight .file-list .row-title { font-size: 12px }
+  .explorer-list.density-tight .file-list .file-path,
+  .explorer-list.density-tight .file-list .row-meta { font-size: 10.5px }
+  .explorer-list.density-tight .file-list .file-snip { display: none }
+  .explorer-list.density-tight .explorer-list-foot { padding: 6px 10px; font-size: 11px }
+  .explorer-list.density-tight .explorer-list-foot .manifest-pager button { padding: 4px 9px }
   .badge {
     font-size: 10px; text-transform: uppercase; color: var(--muted-strong);
     font-weight: 700; margin-right: 6px;
@@ -1522,7 +1634,7 @@ const state = {
   tagPage: 1,
   tagDocPage: 1,
   tagLetter: null, // null = all | "A".."Z" | "#"
-  overviewFocus: "files", // null | attention | entities | tags | files | forensics | bodycam
+  overviewFocus: "files", // null | attention | entities | tags | files | forensics | cameras
   overviewDocPath: null,
   overviewDoc: null,
   overviewOpen: {}, // section id -> bool; default collapsed
@@ -1530,6 +1642,9 @@ const state = {
   category: null, // category id when drilling in
   path: "",
   entries: [],
+  explorerPage: 1,
+  explorerPageSize: 10,
+  explorerDensity: "", // "" | density-compact | density-tight
   breadcrumbs: [],
   selectedPath: null,
   doc: null,
@@ -1568,6 +1683,8 @@ const state = {
   csliPois: [], // user pins [{id,label,lat,lon,note,event_when}]
   csliPhoneLabels: {}, // { digits: displayName }
   csliPhonesChosen: null, // null = phone picker; string[] = phones included on map
+  csliPickPage: 1,
+  csliPickQuery: "",
   csliPoiAddMode: false,
   csliPoiDraft: null, // {lat, lon} create, or {id, lat, lon, ...} edit
   popout: false, // fullscreen CSLI (or other) window without case chrome
@@ -1628,6 +1745,7 @@ function searchResultEntries() {
 function clearSearchResults() {
   state.hits = null;
   state.searchQuery = "";
+  state.explorerPage = 1;
   state.selectedPath = null;
   state.doc = null;
   render();
@@ -1944,12 +2062,14 @@ async function loadForRoute() {
       if (state.facet.entity_type) params.set("entity_type", state.facet.entity_type);
       const data = await api(`/api/files/by-facet?${params}`);
       state.entries = data.entries || [];
+      state.explorerPage = 1;
       state.breadcrumbs = [];
       if (!state.caseMeta) state.caseMeta = data.case;
     } else if (state.browseMode === "folders") {
       const dir = await api(`/api/files/list?case_id=${state.caseId}&path=${encodeURIComponent(state.path)}`);
       if (!state.caseMeta) state.caseMeta = dir.case || null;
       state.entries = dir.entries || [];
+      state.explorerPage = 1;
       state.breadcrumbs = dir.breadcrumbs || [];
       state.path = dir.path || state.path;
     } else {
@@ -1958,6 +2078,7 @@ async function loadForRoute() {
       const data = await api(`/api/files/categories?${params}`);
       if (!state.caseMeta) state.caseMeta = data.case;
       state.entries = data.entries || [];
+      state.explorerPage = 1;
       state.breadcrumbs = state.category
         ? [{ name: data.category_label || state.category, path: state.category }]
         : [];
@@ -2065,6 +2186,7 @@ async function runSearch() {
     );
     state.searchQuery = q;
     state.hits = data.hits || [];
+    state.explorerPage = 1;
     state.selectedPath = null;
     state.doc = null;
     render();
@@ -2123,6 +2245,8 @@ function openForensicsSection(section) {
   state.forensicsCsliMap = null;
   state.csliPhonesChosen = null;
   state._csliPickDraft = null;
+  state.csliPickPage = 1;
+  state.csliPickQuery = "";
   state.csliPhone = null;
   state.csliDay = null;
   state.csliSelectedId = null;
@@ -2148,8 +2272,27 @@ function openForensicsSection(section) {
   });
 }
 
+function csliPhoneMatchesQuery(p, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const digitsQ = q.replace(/\D+/g, "");
+  const phone = String(p.phone || "");
+  const dig = csliPhoneDigits(phone);
+  const pretty = csliFmtPhonePretty(phone).toLowerCase();
+  const name = csliPhoneDisplayName(phone, p.name).toLowerCase();
+  const carrier = String(p.carrier || "").toLowerCase();
+  const device = String(csliDeviceUseful(p.device) || p.device || "").toLowerCase();
+  if (digitsQ && dig.includes(digitsQ)) return true;
+  if (pretty.includes(q) || phone.toLowerCase().includes(q)) return true;
+  if (name && name.includes(q)) return true;
+  if (carrier && carrier.includes(q)) return true;
+  if (device && device.includes(q)) return true;
+  return false;
+}
+
 function csliBackToPhonePicker() {
   state.csliPhonesChosen = null;
+  state.csliPickPage = 1;
   state._csliPickDraft = state.csliPhone ? [state.csliPhone] : state._csliPickDraft;
   state.csliSelectedId = null;
   state.csliSelectedPinId = null;
@@ -4917,28 +5060,21 @@ function renderOverview() {
     },
   ];
   if (bwcClipCount > 0) {
-    const bits = [];
-    if (bwcBodyCount) bits.push(`${bwcBodyCount} bodycam`);
-    if (bwcDashCount) bits.push(`${bwcDashCount} dashcam`);
-    if (bwcCameraCount) bits.push(`${bwcCameraCount} camera${bwcCameraCount === 1 ? "" : "s"}`);
     tiles.push({
-      id: "bodycam",
-      label: "Bodycam",
+      id: "cameras",
+      label: "Cameras",
       value: fmtNum(bwcClipCount),
-      blurb: bits.join(" · ") || "Body-worn and dashcam clips with timeline.",
+      blurb: "Officer video with a synced transcript and timeline.",
       warn: false,
     });
   }
   const forensicsTotal = phoneDumpCount + csliCount;
   if (forensicsTotal > 0) {
-    const bits = [];
-    if (phoneDumpCount) bits.push(`${phoneDumpCount} phone dump${phoneDumpCount === 1 ? "" : "s"}`);
-    if (csliCount) bits.push(`${csliCount} CSLI source${csliCount === 1 ? "" : "s"}`);
     tiles.push({
       id: "forensics",
       label: "Forensics",
       value: fmtNum(forensicsTotal),
-      blurb: bits.join(" · ") || "Phone dumps and cell-site maps.",
+      blurb: "Phone dumps and cell-site location maps.",
       warn: false,
     });
   }
@@ -4957,16 +5093,16 @@ function renderOverview() {
           </div>
         </div>
       </div>`;
-  } else if (focus === "bodycam") {
+  } else if (focus === "cameras" || focus === "bodycam") {
     detail = `
       <div class="overview-detail" style="padding:12px">
         <div class="files-detail">
           <button type="button" class="files-detail-cta" data-open-bodycam="1">
             <svg class="cta-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="14" height="12" rx="2"/><path d="M17 11l4-2v8l-4-2"/><circle cx="10" cy="13" r="2.5"/></svg>
-            <span class="cta-label">Open Bodycam</span>
+            <span class="cta-label">Open Cameras</span>
           </button>
           <div class="files-detail-copy">
-            <p>Synced multi-camera video, transcript, and timeline for body-worn and dashcam clips.</p>
+            <p>Synced multi-camera video, transcript, and timeline for body-worn, dashcam, and related officer video.</p>
           </div>
         </div>
       </div>`;
@@ -4975,7 +5111,6 @@ function renderOverview() {
     if (phoneDumpCount > 0) {
       subs.push(`
         <button type="button" class="forensics-overview-sub phones" data-open-forensics="cellebrite">
-          <div class="fos-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></div>
           <div class="fos-title">Phone dumps</div>
           <div class="fos-meta">${fmtNum(phoneDumpCount)} Cellebrite extraction${phoneDumpCount === 1 ? "" : "s"} — pick a phone, then apps and chats.</div>
           <div class="fos-cta">Open phones →</div>
@@ -4984,7 +5119,6 @@ function renderOverview() {
     if (csliCount > 0) {
       subs.push(`
         <button type="button" class="forensics-overview-sub csli" data-open-forensics="csli">
-          <div class="fos-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22V8"/><path d="M5 10l7-7 7 7"/><path d="M4 22h16"/><circle cx="12" cy="14" r="2"/></svg></div>
           <div class="fos-title">CSLI maps</div>
           <div class="fos-meta">${fmtNum(csliCount)} tower / location source${csliCount === 1 ? "" : "s"} — call pings and nearby cell sites.</div>
           <div class="fos-cta">Open map →</div>
@@ -5115,6 +5249,52 @@ function renderTrailParts(parts) {
     out.push(`<a data-path="${esc(p.path || "")}" title="${esc(p.name)}">${esc(p.name)}</a>`);
   });
   return out.join("");
+}
+
+function explorerDensityForHeight(h) {
+  if (h < 300) return "density-tight";
+  if (h < 460) return "density-compact";
+  return "";
+}
+
+function syncExplorerListFit() {
+  if (state.module !== "explorer" || state.popout || state._explorerFitBusy) return;
+  const wrap = document.getElementById("explorerList");
+  if (!wrap) return;
+
+  const dens = explorerDensityForHeight(wrap.clientHeight);
+  wrap.classList.toggle("density-tight", dens === "density-tight");
+  wrap.classList.toggle("density-compact", dens === "density-compact");
+  if (dens === (state.explorerDensity || "")) return;
+
+  state.explorerDensity = dens;
+  state.explorerPageSize = 10;
+  state._explorerFitBusy = true;
+  try {
+    render();
+  } finally {
+    requestAnimationFrame(() => { state._explorerFitBusy = false; });
+  }
+}
+
+function ensureExplorerListObserver() {
+  const wrap = document.getElementById("explorerList");
+  if (!wrap) {
+    if (state._explorerRo) {
+      try { state._explorerRo.disconnect(); } catch {}
+      state._explorerRo = null;
+    }
+    return;
+  }
+  if (!state._explorerRo) {
+    state._explorerRo = new ResizeObserver(() => {
+      if (state._explorerFitTimer) clearTimeout(state._explorerFitTimer);
+      state._explorerFitTimer = setTimeout(() => syncExplorerListFit(), 40);
+    });
+  }
+  try { state._explorerRo.disconnect(); } catch {}
+  state._explorerRo.observe(wrap);
+  requestAnimationFrame(() => syncExplorerListFit());
 }
 
 function explorerTrailHtml() {
@@ -5420,31 +5600,70 @@ function renderExplorer() {
     ? "No matching files."
     : (state.facet ? "No matching documents." : (state.browseMode === "categories" ? "No categorized documents." : "Empty folder."));
 
-  const listHtml = listEntries.map((e) => {
+  const pageSize = 10;
+  const total = listEntries.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+  let page = Number(state.explorerPage) || 1;
+  if (page < 1) page = 1;
+  if (page > totalPages) page = totalPages;
+  // Keep the open file's page visible when possible.
+  if (state.selectedPath) {
+    const selIdx = listEntries.findIndex((e) => (e.path || e.rel_path) === state.selectedPath);
+    if (selIdx >= 0) {
+      const need = Math.floor(selIdx / pageSize) + 1;
+      const pageStart = (page - 1) * pageSize;
+      if (selIdx < pageStart || selIdx >= pageStart + pageSize) page = need;
+    }
+  }
+  state.explorerPage = page;
+  const start = (page - 1) * pageSize;
+  const pageEntries = listEntries.slice(start, start + pageSize);
+  const end = start + pageEntries.length;
+
+  const listHtml = pageEntries.map((e) => {
     const p = e.path || e.rel_path || e.id;
     const typ = e.type || "file";
     if (typ === "category") {
       return `<li data-type="category" data-path="${esc(e.id || p)}">
-        <div class="file-name">${esc(e.name)}</div>
-        <div class="file-path">${fmtNum(e.count)} document(s)</div>
+        <span class="row-main">
+          <span class="row-title">${esc(e.name)}</span>
+          <span class="row-meta">${fmtNum(e.count)} document${e.count === 1 ? "" : "s"}</span>
+        </span>
+        <span class="row-chev" aria-hidden="true">→</span>
       </li>`;
     }
     if (typ === "dir") {
       return `<li data-type="dir" data-path="${esc(p)}">
-        <div class="file-name">${esc(e.name)}</div>
-        <div class="file-path">Folder</div>
+        <span class="row-main">
+          <span class="row-title">${esc(e.name)}</span>
+          <span class="row-meta">Folder</span>
+        </span>
+        <span class="row-chev" aria-hidden="true">→</span>
       </li>`;
     }
     const sub = e.bates || e.rel_path || p || "";
     const snip = searching && e.snippet
-      ? `<p class="file-snip">${highlightSearchHtml(String(e.snippet).slice(0, 220), state.searchQuery)}</p>`
+      ? `<span class="file-snip">${highlightSearchHtml(String(e.snippet).slice(0, 160), state.searchQuery)}</span>`
       : "";
     return `<li class="${p === state.selectedPath ? "active" : ""}" data-type="file" data-path="${esc(p)}">
-      <div class="file-name">${esc(e.name)}</div>
-      ${sub ? `<div class="file-path">${esc(sub)}</div>` : ""}
-      ${snip}
+      <span class="row-main">
+        <span class="row-title">${esc(e.name)}</span>
+        ${sub ? `<span class="row-meta">${esc(sub)}</span>` : ""}
+        ${snip}
+      </span>
     </li>`;
   }).join("") || `<li class="placeholder">${emptyMsg}</li>`;
+
+  const listFoot = total
+    ? `<div class="explorer-list-foot">
+        <span>${fmtNum(start + 1)}–${fmtNum(end)} of ${fmtNum(total)}${totalPages > 1 ? " · use Next for more" : ""}</span>
+        <div class="manifest-pager">
+          <button type="button" id="explorerPrevPage" ${page <= 1 ? "disabled" : ""}>Previous</button>
+          <span>Page ${fmtNum(page)} / ${fmtNum(totalPages)}</span>
+          <button type="button" id="explorerNextPage" ${page >= totalPages ? "disabled" : ""}>Next</button>
+        </div>
+      </div>`
+    : "";
 
   return `
     <div class="explorer-stage">
@@ -5456,8 +5675,11 @@ function renderExplorer() {
             ${searchRow}
           </div>
           ${trailRow ? `<div class="explorer-nav">${trailRow}</div>` : ""}
-          <div class="explorer-list">
-            <ul class="file-list">${listHtml}</ul>
+          <div class="explorer-list ${esc(state.explorerDensity || "")}" id="explorerList">
+            <div class="explorer-list-body">
+              <ul class="file-list" id="explorerFileList">${listHtml}</ul>
+              ${listFoot}
+            </div>
           </div>
         </div>
         ${showPreview ? `<section class="doc-pane" id="docPane">${renderDocTabs()}</section>` : ""}
@@ -5561,19 +5783,17 @@ function renderForensics() {
     if (showCellebrite) {
       cards.push(`
         <button type="button" class="forensics-hero cellebrite" data-forensics-section="cellebrite">
-          <div class="hero-ico">${icoHeroPhone()}</div>
           <h2 class="hero-title">Cellebrite</h2>
-          <p class="hero-sub">Phone extractions &amp; chats</p>
-          <div class="hero-meta">${fmtNum(ufdrSources.length)} phone${ufdrSources.length === 1 ? "" : "s"}</div>
+          <p class="hero-sub">Phone extractions and chats</p>
+          <div class="hero-meta">${fmtNum(ufdrSources.length)} phone${ufdrSources.length === 1 ? "" : "s"} →</div>
         </button>`);
     }
     if (showCsli) {
       cards.push(`
         <button type="button" class="forensics-hero csli" data-forensics-section="csli">
-          <div class="hero-ico">${icoHeroTower()}</div>
           <h2 class="hero-title">CSLI</h2>
           <p class="hero-sub">Call location movement by day</p>
-          <div class="hero-meta">${fmtNum(csliSources.length)} source${csliSources.length === 1 ? "" : "s"}</div>
+          <div class="hero-meta">${fmtNum(csliSources.length)} source${csliSources.length === 1 ? "" : "s"} →</div>
         </button>`);
     }
     if (!cards.length) {
@@ -5588,8 +5808,8 @@ function renderForensics() {
 
   const backBar = `
     <div class="forensics-toolbar">
-      <button type="button" class="forensics-back" data-forensics-section="">← Forensics</button>
-      <strong style="color:var(--fg)">${section === "csli" ? "CSLI" : "Cellebrite"}</strong>
+      <button type="button" class="forensics-back" data-forensics-section="">All forensics</button>
+      <span class="toolbar-title">${section === "csli" ? "CSLI" : "Cellebrite"}</span>
       ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
     </div>`;
 
@@ -5606,7 +5826,18 @@ function renderForensics() {
           : (allPhones.length === 1 ? [allPhones[0].phone] : []);
       }
       const draft = new Set(state._csliPickDraft);
-      const cards = allPhones.map((p) => {
+      const query = String(state.csliPickQuery || "");
+      const filtered = allPhones.filter((p) => csliPhoneMatchesQuery(p, query));
+      const pageSize = 10;
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize) || 1);
+      let page = Number(state.csliPickPage) || 1;
+      if (page < 1) page = 1;
+      if (page > totalPages) page = totalPages;
+      state.csliPickPage = page;
+      const start = (page - 1) * pageSize;
+      const pagePhones = filtered.slice(start, start + pageSize);
+      const end = start + pagePhones.length;
+      const rows = pagePhones.map((p) => {
         const selected = draft.has(p.phone);
         const alias = csliPhoneDisplayName(p.phone, p.name);
         const title = alias || (p.is_target ? "Target phone" : "Phone");
@@ -5616,40 +5847,53 @@ function renderForensics() {
           `${fmtNum(p.count)} event${p.count === 1 ? "" : "s"}`,
         ].filter(Boolean).join(" · ");
         return `
-          <button type="button" class="forensics-phone-card csli${selected ? " selected" : ""}" data-csli-pick-phone="${esc(p.phone)}" aria-pressed="${selected ? "true" : "false"}">
-            <div class="pico">${icoHeroTower()}</div>
-            <div>
-              <div class="pt">
+          <button type="button" class="forensics-phone-row${selected ? " selected" : ""}" data-csli-pick-phone="${esc(p.phone)}" aria-pressed="${selected ? "true" : "false"}">
+            <span class="tick" aria-hidden="true">${selected ? "✓" : ""}</span>
+            <span class="row-main">
+              <span class="row-title">
                 <span>${esc(title)}</span>
                 ${p.is_target ? `<span class="badge">Target</span>` : ""}
-              </div>
-              <div class="pn">${esc(csliFmtPhonePretty(p.phone))}</div>
-              <div class="ps">${esc(meta || p.phone)}</div>
-              <div class="check">${selected ? "Selected for map" : "Click to include"}</div>
-            </div>
+              </span>
+              <span class="row-num">${esc(csliFmtPhonePretty(p.phone))}</span>
+              ${meta ? `<span class="row-meta">${esc(meta)}</span>` : ""}
+            </span>
           </button>`;
       }).join("");
       const nSel = draft.size;
+      const pager = filtered.length
+        ? `<div class="forensics-pick-pager">
+            <span>${fmtNum(start + 1)}–${fmtNum(end)} of ${fmtNum(filtered.length)}${query.trim() ? ` match${filtered.length === 1 ? "" : "es"}` : ""}</span>
+            <span class="pager-btns">
+              <button type="button" class="ghost" id="csliPhonePrevPage" ${page <= 1 ? "disabled" : ""}>Previous</button>
+              <button type="button" class="ghost" id="csliPhoneNextPage" ${page >= totalPages ? "disabled" : ""}>Next</button>
+            </span>
+          </div>`
+        : "";
+      const emptyMsg = state.forensicsLoading && !allPhones.length
+        ? "Loading phones…"
+        : (query.trim()
+          ? `No phones match “${query.trim()}”.`
+          : "No phones with coordinates found.");
       return `<div class="forensics">
         <div class="forensics-toolbar">
-          <button type="button" class="forensics-back" data-forensics-section="">← Forensics</button>
-          <strong style="color:var(--fg)">CSLI</strong>
-          <span class="meta">Select phones</span>
+          <button type="button" class="forensics-back" data-forensics-section="">All forensics</button>
+          <span class="toolbar-title">CSLI</span>
+          <span class="toolbar-sub">Choose phones for the map</span>
           ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
         </div>
         <div class="forensics-landing pick">
           <div class="forensics-pick-wrap">
             <div class="forensics-pick-head">
-              <h2>Which phones on the map?</h2>
-              <p>Select one or more numbers. Each card shows the display name and the raw number so you can tell them apart.</p>
+              <h2>Phones on the map</h2>
+              <p>${fmtNum(allPhones.length)} phone${allPhones.length === 1 ? "" : "s"} — search, check, then open.</p>
             </div>
-            ${state.forensicsLoading && !allPhones.length
-              ? `<div class="forensics-empty" style="min-height:12rem">Loading phones…</div>`
-              : (cards
-                ? `<div class="forensics-phone-list" id="csliPhonePickList">${cards}</div>`
-                : `<div class="forensics-empty" style="min-height:12rem">No phones with coordinates found.</div>`)}
+            <input type="search" class="forensics-pick-search" id="csliPhoneSearch" placeholder="Filter by phone number or name…" value="${esc(query)}" autocomplete="off" />
+            ${pager}
+            ${rows
+              ? `<div class="forensics-phone-rows" id="csliPhonePickList">${rows}</div>`
+              : `<div class="forensics-empty" style="min-height:12rem">${esc(emptyMsg)}</div>`}
             <div class="forensics-pick-actions">
-              <button type="button" class="ghost" id="csliPhoneSelectAll" ${allPhones.length ? "" : "disabled"}>Select all</button>
+              <button type="button" class="ghost" id="csliPhoneSelectAll" ${filtered.length ? "" : "disabled"}>${query.trim() ? "Select matches" : "Select all"}</button>
               <button type="button" class="ghost" id="csliPhoneSelectNone" ${allPhones.length ? "" : "disabled"}>Clear</button>
               <span class="spacer"></span>
               <span class="meta" id="csliPhonePickCount">${fmtNum(nSel)} selected</span>
@@ -5742,8 +5986,8 @@ function renderForensics() {
     ].filter(Boolean).join(" · ");
     return `<div class="forensics">
       <div class="forensics-toolbar">
-        <button type="button" class="forensics-back" id="csliBackToPhones">← Phones</button>
-        <strong style="color:var(--fg)">CSLI</strong>
+        <button type="button" class="forensics-back" id="csliBackToPhones">Change phones</button>
+        <span class="toolbar-title">CSLI map</span>
         ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
       </div>
       <div class="forensics-body">
@@ -5806,20 +6050,20 @@ function renderForensics() {
       const label = String(s.name || "").replace(/\.ufdr$/i, "").replace(/[-_]+/g, " ");
       const title = prettyLabel(label) || s.name || "Phone";
       return `
-        <button type="button" class="forensics-phone-card" data-forensics-phone="${esc(s.rel_path)}">
-          <div class="pico">${icoHeroPhone()}</div>
-          <div>
-            <div class="pt">${esc(title)}</div>
-            <div class="pn">${esc(s.name || "")}</div>
-            <div class="ps">${fmtSize(s.size)}</div>
-          </div>
+        <button type="button" class="forensics-phone-row simple" data-forensics-phone="${esc(s.rel_path)}">
+          <span class="row-main">
+            <span class="row-title"><span>${esc(title)}</span></span>
+            <span class="row-num">${esc(s.name || "")}</span>
+            <span class="row-meta">${fmtSize(s.size)}</span>
+          </span>
+          <span class="row-chev" aria-hidden="true">→</span>
         </button>`;
     }).join("");
     return `<div class="forensics">
       <div class="forensics-toolbar">
-        <button type="button" class="forensics-back" data-forensics-section="">← Forensics</button>
-        <strong style="color:var(--fg)">Cellebrite</strong>
-        <span class="meta">Select a phone</span>
+        <button type="button" class="forensics-back" data-forensics-section="">All forensics</button>
+        <span class="toolbar-title">Cellebrite</span>
+        <span class="toolbar-sub">Choose a phone</span>
       </div>
       <div class="forensics-landing pick">
         <div class="forensics-pick-wrap">
@@ -5827,7 +6071,7 @@ function renderForensics() {
             <h2>Select a phone</h2>
             <p>Open one Cellebrite extraction to browse chats.</p>
           </div>
-          <div class="forensics-phone-list">${phones}</div>
+          <div class="forensics-phone-rows">${phones}</div>
         </div>
       </div>
     </div>`;
@@ -5913,8 +6157,8 @@ function renderForensics() {
   return `
     <div class="forensics">
       <div class="forensics-toolbar">
-        <button type="button" class="forensics-back" id="forensicsBackPhones">← Phones</button>
-        <strong style="color:var(--fg)">${esc(phoneLabel)}</strong>
+        <button type="button" class="forensics-back" id="forensicsBackPhones">Change phone</button>
+        <span class="toolbar-title">${esc(phoneLabel)}</span>
         <input type="search" id="forensicsSearch" placeholder="Search name, number, preview…" value="${esc(state.forensicsQuery || "")}" />
         <label class="chk"><input type="checkbox" id="forensicsShowEmpty" ${state.forensicsShowEmpty ? "checked" : ""} /> Show empty threads</label>
         <span class="meta">${fmtNum(nonempty)} with messages · ${fmtNum((state.forensicsChats || []).length)} total</span>
@@ -5979,7 +6223,7 @@ function renderCaseShell() {
             ${icoExplorer()}<span>Document Explorer</span>
           </button>
           <button type="button" class="${state.module === "bwc" ? "active" : ""}" data-module="bwc">
-            ${icoBwc()}<span>Bodycam</span>
+            ${icoBwc()}<span>Cameras</span>
           </button>
           ${showForensics ? `<button type="button" class="${state.module === "forensics" ? "active" : ""}" data-module="forensics">
             ${icoForensics()}<span>Forensics</span>
@@ -5996,7 +6240,7 @@ function renderCaseShell() {
 
 function renderBwc() {
   const id = state.caseId;
-  return `<div class="bwc-host"><iframe title="Bodycam viewer" src="/bwc/index.html?case_id=${encodeURIComponent(id)}"></iframe></div>`;
+  return `<div class="bwc-host"><iframe title="Cameras viewer" src="/bwc/index.html?case_id=${encodeURIComponent(id)}"></iframe></div>`;
 }
 
 function notebookRootIcon(name) {
@@ -6335,10 +6579,32 @@ function bindCaseHandlers() {
             render();
           };
         });
+        const searchEl = document.getElementById("csliPhoneSearch");
+        if (searchEl) {
+          searchEl.oninput = () => {
+            state.csliPickQuery = searchEl.value || "";
+            state.csliPickPage = 1;
+            state._csliSearchCaret = searchEl.selectionStart;
+            state._csliSearchFocus = true;
+            render();
+          };
+          if (state._csliSearchFocus) {
+            searchEl.focus();
+            const caret = state._csliSearchCaret;
+            if (typeof caret === "number") {
+              try { searchEl.setSelectionRange(caret, caret); } catch {}
+            }
+            state._csliSearchFocus = false;
+          }
+        }
         const selAll = document.getElementById("csliPhoneSelectAll");
         if (selAll) {
           selAll.onclick = () => {
-            state._csliPickDraft = csliPhoneList(state.forensicsCsliMap).map((p) => p.phone);
+            const all = csliPhoneList(state.forensicsCsliMap);
+            const matches = all.filter((p) => csliPhoneMatchesQuery(p, state.csliPickQuery));
+            const set = new Set(state._csliPickDraft || []);
+            matches.forEach((p) => set.add(p.phone));
+            state._csliPickDraft = [...set];
             render();
           };
         }
@@ -6346,6 +6612,20 @@ function bindCaseHandlers() {
         if (selNone) {
           selNone.onclick = () => {
             state._csliPickDraft = [];
+            render();
+          };
+        }
+        const prevPage = document.getElementById("csliPhonePrevPage");
+        if (prevPage) {
+          prevPage.onclick = () => {
+            state.csliPickPage = Math.max(1, (Number(state.csliPickPage) || 1) - 1);
+            render();
+          };
+        }
+        const nextPage = document.getElementById("csliPhoneNextPage");
+        if (nextPage) {
+          nextPage.onclick = () => {
+            state.csliPickPage = (Number(state.csliPickPage) || 1) + 1;
             render();
           };
         }
@@ -6722,6 +7002,21 @@ function bindCaseHandlers() {
     btn.onclick = () => setBrowseMode(btn.dataset.browse);
   });
 
+  const explorerPrev = document.getElementById("explorerPrevPage");
+  if (explorerPrev) {
+    explorerPrev.onclick = () => {
+      state.explorerPage = Math.max(1, (Number(state.explorerPage) || 1) - 1);
+      render();
+    };
+  }
+  const explorerNext = document.getElementById("explorerNextPage");
+  if (explorerNext) {
+    explorerNext.onclick = () => {
+      state.explorerPage = (Number(state.explorerPage) || 1) + 1;
+      render();
+    };
+  }
+
   const btnSearch = document.getElementById("btnSearch");
   if (btnSearch) btnSearch.onclick = runSearch;
   const q = document.getElementById("q");
@@ -6804,6 +7099,8 @@ function bindCaseHandlers() {
       requestAnimationFrame(() => firstHit.scrollIntoView({ block: "center", behavior: "smooth" }));
     }
   }
+
+  ensureExplorerListObserver();
 }
 
 function render() {

@@ -923,12 +923,16 @@ def parse_att_report_au(path: Path, *, rel_path: str = "") -> list[dict[str, Any
         line = line.strip()
         if not line or not re.match(r"^\d+,", line):
             continue
-        cell_m = _ATT_CELL_RE.search(line)
-        if not cell_m:
-            continue
-        parts = cell_m.group("body").split(":")
+        # The row can hold several [...] groups: Feature codes ([VCORR], [NIOP:CFNA:VM])
+        # come before CellLocation, so take the last group shaped like a location.
+        parts = None
+        for cell_m in reversed(list(_ATT_CELL_RE.finditer(line))):
+            cand = cell_m.group("body").split(":")
+            if len(cand) >= 4:
+                parts = cand
+                break
         # AT&T: ECGI:ENB-ID:LONG:LAT:Sector(azimuth):Beamwidth  — coords are the tower
-        if len(parts) < 4:
+        if parts is None:
             continue
         try:
             lon = float(parts[2])
@@ -1365,7 +1369,7 @@ def parse_csli_map_for_case(
             cache_key_parts.append(f"{s['rel_path']}|{st.st_size}|{int(st.st_mtime)}")
         except OSError:
             cache_key_parts.append(s["rel_path"])
-    raw = "v9|" + "|".join(cache_key_parts)  # v9: untagged sheets use case tz
+    raw = "v10|" + "|".join(cache_key_parts)  # v10: AT&T rows with Feature codes keep CellLocation
     digest = hashlib.sha256(raw.encode()).hexdigest()[:24]
     cache_file = cache_dir / f"map-{digest}.json"
     if use_cache and cache_file.is_file():

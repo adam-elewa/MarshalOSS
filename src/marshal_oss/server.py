@@ -1051,15 +1051,47 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
     per-file hot_doc, per-file user_tags, forensics map pins. Ingest remains a
     separate CLI/ops path.
     """
+    import functools
+    import inspect
+
     from mcp.server.mcpserver import MCPServer
+    from mcp.server.mcpserver.exceptions import ToolError
 
     mcp = MCPServer("marshal")
+
+    # The MCP SDK hides the text of any exception other than ToolError
+    # ("Error executing tool get_file"). Our tools signal expected failures
+    # (file not found, path escapes root, bad mode, ...) with ValueError & co, so
+    # re-raise those as ToolError for the client to read. Real crashes stay masked.
+    _expected_errors = (ValueError, FileNotFoundError, KeyError, PermissionError, LookupError)
+    _register_tool = mcp.tool
+
+    def _tool_with_readable_errors(*dargs: Any, **dkwargs: Any):
+        def deco(fn):
+            @functools.wraps(fn)
+            def wrapper(*args: Any, **kwargs: Any):
+                try:
+                    return fn(*args, **kwargs)
+                except ToolError:
+                    raise
+                except _expected_errors as e:
+                    msg = e.args[0] if isinstance(e, KeyError) and e.args else str(e)
+                    raise ToolError(str(msg) or type(e).__name__) from e
+
+            wrapper.__signature__ = inspect.signature(fn)  # type: ignore[attr-defined]
+            return _register_tool(*dargs, **dkwargs)(wrapper)
+
+        return deco
+
+    mcp.tool = _tool_with_readable_errors  # type: ignore[method-assign]
 
     def active_or(case_id: int | None = None):
         if case_id is not None:
             c = db.get_case_by_id(case_id)
-        else:
-            c = db.get_active_case()
+            if not c:
+                raise ValueError(f"case not found: {case_id} (see list_cases)")
+            return c
+        c = db.get_active_case()
         if not c:
             raise ValueError("No active case. Ingest a case first.")
         return c

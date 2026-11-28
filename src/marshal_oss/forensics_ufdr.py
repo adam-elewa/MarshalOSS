@@ -7,7 +7,7 @@ import json
 import logging
 import re
 from dataclasses import asdict, is_dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -666,6 +666,31 @@ def _message_day_keys(messages: list[dict[str, Any]] | None) -> list[str]:
     return sorted(days)
 
 
+def _message_epochs(messages: list[dict[str, Any]] | None) -> list[int]:
+    """Sorted epoch seconds, one per timestamped message (duplicates kept so counts are exact).
+
+    The browser converts the user's picked dates to local-midnight bounds and
+    compares against these, so the chat list, the thread view and the date
+    labels all agree on one clock (the viewer's local time).
+    """
+    out: list[int] = []
+    for m in messages or []:
+        s = str(m.get("timestamp") or m.get("time") or "").strip()
+        if not s:
+            continue
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(s)
+        except Exception:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        out.append(int(dt.timestamp()))
+    out.sort()
+    return out
+
+
 def chat_summaries(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Strip message bodies for list endpoints."""
     out = []
@@ -684,6 +709,7 @@ def chat_summaries(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "message_count": c.get("message_count") or 0,
                 "preview": c.get("preview") or "",
                 "message_days": _message_day_keys(c.get("messages") or []),
+                "message_epochs": _message_epochs(c.get("messages") or []),
             }
         )
     return out

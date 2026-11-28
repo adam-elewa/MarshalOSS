@@ -108,13 +108,21 @@ def check_case(api: Api, slug: str) -> dict | None:
 def check_manifest(api: Api, cid: int) -> list[dict]:
     m = api.get("/api/manifest", case_id=cid, limit=10000)
     recs, s = m["records"], m["summary"]
+    not_covered = int(s.get("not_covered_count") or 0)
+    ufdrs = [r for r in recs if str(r.get("ext") or "").lower() == ".ufdr"]
     record("manifest", s["file_count"] > 0, "production manifest built",
            f"{s['file_count']} files, {s['ingestible_count']} ingestible, {s['ready_count']} ready, "
-           f"{s['error_count']} errors, {s['pending_count']} pending")
+           f"{s['error_count']} errors, {s['pending_count']} pending"
+           + (f", {not_covered} unsupported types" if not_covered else "")
+           + (f", {len(ufdrs)} UFDR chats-only" if ufdrs else ""))
     ing = [r for r in recs if r.get("ingestible")]
-    bad = [r for r in ing if r.get("ingest_status") != "ready"]
+    # UFDRs are not document-ingestible; chats are handled under Forensics.
+    bad = [r for r in ing if r.get("ingest_status") not in ("ready", "partial_ufdr")]
     record("manifest", not bad, "every ingestible file reached 'ready'",
            "; ".join(f"{r['rel_path']}: {r.get('ingest_status')} {r.get('error') or ''}".strip() for r in bad[:6]))
+    if ufdrs:
+        record("manifest", True, "UFDRs treated as chats-only (not document errors)",
+               ", ".join(r.get("name") or r.get("rel_path") or "?" for r in ufdrs[:6]))
     empty = [r for r in ing if r.get("ingest_status") == "ready" and not r.get("chunk_count")
              and r.get("size", 0) > 20_000]
     record("manifest", not empty, "ready files produced text/chunks",
@@ -378,7 +386,7 @@ def check_forensics(api: Api, cid: int, root: Path) -> None:
 def check_viewer(api: Api) -> None:
     html = api.get("/")
     record("viewer", isinstance(html, str) and "<html" in html.lower(), "web app served", f"{len(html):,} bytes")
-    record("viewer", ("renderForensicsDateFilter" in html or "forensicsDateFrom" in html), "forensics date filter present in app.html", warn_only=True)
+    record("viewer", "renderForensicsDateFilter" in html, "forensics date filter present in app.html", warn_only=True)
 
 
 # ----------------------------------------------------------------------------- main

@@ -4731,6 +4731,53 @@ function isLowConfidence(r) {
   return r && r.processed && r.quality_score != null && Number(r.quality_score) < 0.72;
 }
 
+/** Turn quality reason codes into short plain-English notes for the overview table. */
+function plainQualityWhy(raw) {
+  const parts = String(raw || "")
+    .split(/[;|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!parts.length) return "Score below 72%";
+  const out = [];
+  const seen = new Set();
+  const push = (s) => {
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  };
+  for (const p of parts) {
+    const [key, val] = p.includes("=") ? p.split(/=(.*)/s) : [p, ""];
+    const k = key.trim();
+    const v = String(val || "").trim();
+    if (k === "near_empty_text" || k === "empty") push("Almost no text was extracted");
+    else if (k === "near_empty_transcript") push("Almost no speech was transcribed");
+    else if (k === "photo_no_text") push("Photo has little or no readable text");
+    else if (k === "junk_only_transcript") push("Transcript looks empty or punctuation-only");
+    else if (k === "looped_ngram") push("Transcript repeats the same phrase");
+    else if (k === "fair_but_text_ok") continue;
+    else if (k === "docling_mean_grade" || k === "docling_low_grade") {
+      if (v === "poor") push("OCR graded the page as poor");
+      else if (v === "fair") push("OCR graded the page as only fair");
+      else if (v) push(`OCR grade: ${v}`);
+    } else if (k === "docling_ocr_score") push(`OCR confidence was low (${v})`);
+    else if (k === "bad_pages") {
+      const n = Number(v) || 0;
+      push(n === 1 ? "One page looked poorly scanned" : `${n} pages looked poorly scanned`);
+    } else if (k === "weird_symbols") push("Extracted text has many garbled characters");
+    else if (k === "mojibake") push("Text encoding looks corrupted");
+    else if (k === "low_letter_ratio") push("Little readable letter text");
+    else if (k === "garbage_tokens") push("Many nonsense tokens in the text");
+    else if (k === "control_chars") push("Hidden control characters in the text");
+    else if (k === "sparse_chars_per_page") push("Very little text per page");
+    else if (k === "sparse_vs_filesize") push("File is large but little text came out");
+    else if (k === "sparse_vs_duration") push("Little transcript for the length of the recording");
+    else if (k === "repetitive_transcript") push("Transcript looks stuck or repetitive");
+    else if (k.startsWith("hallucination_phrase")) push("Transcript may include filler / hallucinated speech");
+    else if (k && !seen.has(k)) push(k.replace(/_/g, " "));
+  }
+  return out.join(". ") || "Score below 72%";
+}
+
 function canInlinePreview(doc) {
   if (!doc) return false;
   if (doc.kind === "pdf" || doc.kind === "image" || doc.kind === "video" || doc.kind === "audio") {
@@ -5269,7 +5316,7 @@ function renderOverview() {
     if (!note && unmet) note = "Not processed";
     if (lowMode) {
       const score = r.quality_score;
-      const why = r.quality_reasons || "Score below 72%";
+      const why = plainQualityWhy(r.quality_reasons);
       return `<tr class="${flag}" data-path="${esc(r.rel_path)}">
         <td class="file-cell" title="${esc(r.rel_path)}">
           <div class="file-main">

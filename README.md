@@ -307,7 +307,9 @@ Set `MARSHALOSS_PUBLIC_BASE` to the same base URL so file open/download links wo
 | `browse_case_files` | Read-only directory listing with Bates and links |
 | `search` | Read-only hybrid/keyword/semantic hits (structured chunks to cite) |
 | `ask` | Same hybrid retrieval as `search`, plus a packed `context` string for the host LLM to answer |
-| `get_file` | Read-only: metadata + extracted text window (page with `offset_chars` / `has_more`, or `max_chars=0` for remainder; optional chunk paging) |
+| `get_file` | Read-only: metadata + extracted text, max 40,000 chars per call; `truncated` / `notice` / `next_offset_chars` say how to keep reading; optional chunk paging |
+| `forensics_overview` / `csli_events` / `forensics_search` | Forensic sources in the case; CSLI rows (max 100 per call, paged); keyword search over CSLI + forensic file names |
+| `cellebrite_chats` / `cellebrite_messages` / `cellebrite_search` | Read-only phone chats from `.ufdr` extractions: list threads, read one (paged), search message text across phones |
 | `get_file_link` / `open_file_browser` | Read-only file / UI links |
 | `set_file_note` / `set_file_hot_doc` / `list_flagged_files` / `set_file_tags` | **Writable annotations only** (SQLite meta — not the dump on disk). Notes + hot docs show in Explorer → Notes |
 | `notebook_list` / `notebook_get` / `notebook_upsert` / `notebook_delete` | **Writable** case wiki pages |

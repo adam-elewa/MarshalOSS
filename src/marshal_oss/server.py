@@ -904,7 +904,9 @@ def create_app(
                 "ok": True,
                 "summary": (
                     "search/ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
-                    "Forensics: forensics_overview / csli_events / forensics_search "
+                    "Forensics: forensics_overview / csli_events / forensics_search; phone chats: "
+                    "cellebrite_chats / cellebrite_messages / cellebrite_search (search does not cover chats). "
+                    "Big results are paged: follow notice / next_offset when truncated=true. "
                     "(pull data; you analyze). Optional map_pin_*. "
                     "Discovery read-only; writable: notebook, user_note, hot_doc, user_tags, map pins."
                 ),
@@ -947,6 +949,9 @@ def create_app(
                 "forensics_overview",
                 "csli_events",
                 "forensics_search",
+                "cellebrite_chats",
+                "cellebrite_messages",
+                "cellebrite_search",
                 "map_pin_list",
                 "map_pin_add",
                 "map_pin_update",
@@ -1103,6 +1108,51 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             raise ValueError("path escapes case root")
         return target
 
+    GET_FILE_MAX_CHARS = 40_000
+    GET_FILE_MAX_CHUNKS = 50
+
+    def explain_unindexed(case: Any, path: str) -> str:
+        """Why get_file has no text for `path`, and what to call instead."""
+        target = resolve_under_root(case, path)
+        on_disk = target.is_file()
+        rows = db.list_production_manifest(case.id, limit=20000)
+        row = next((r for r in rows if r.get("rel_path") == path), None)
+        ext = target.suffix.lower()
+        if not on_disk and not row:
+            if target.is_dir():
+                return f"{path} is a folder, not a file. List it with browse_case_files(path={path!r})."
+            return f"file not found: {path} (use browse_case_files or search to find the right path)"
+        if ext == ".ufdr":
+            return (
+                f"{path} is a Cellebrite phone extraction (UFDR). Its chats and messages are not in the "
+                "document index, so get_file has no text for it. Use cellebrite_chats(path=...) to list its "
+                "conversations, cellebrite_messages(path, chat_id) to read one, and cellebrite_search(query) "
+                "to search message text across phones."
+            )
+        if ext == ".zip":
+            members = [r["rel_path"] for r in rows if r.get("parent_zip") == path]
+            if not members:
+                return (
+                    f"{path} is a zip archive and no files were extracted from it (empty, encrypted or not "
+                    "readable). get_file_link gives the original archive."
+                )
+            shown = members[:25]
+            more = f" … and {len(members) - len(shown)} more" if len(members) > len(shown) else ""
+            folder = str(Path(members[0]).parent)
+            return (
+                f"{path} is a zip archive, so it has no text of its own. Marshal unzipped it into "
+                f"{folder!r} ({len(members)} file{'s' if len(members) != 1 else ''}). Read those with get_file: "
+                + "; ".join(shown) + more
+            )
+        status = (row or {}).get("ingest_status") or "not ingested"
+        why = {
+            "skipped_not_covered": "Marshal does not extract text from this file type",
+            "skipped": "it was skipped at ingest",
+            "error": f"ingest failed: {(row or {}).get('error') or 'unknown error'}",
+            "pending": "it has not been ingested yet",
+        }.get(status, f"ingest status is {status}")
+        return f"{path} exists but has no indexed text ({why}). get_file_link gives a download URL for the original."
+
     @mcp.tool()
     def list_cases() -> dict[str, Any]:
         """List Marshal cases."""
@@ -1136,7 +1186,9 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
                 "ok": True,
                 "summary": (
                     "search/ask → get_file (page if needed) → notebook_upsert with [[doc:]]. "
-                    "Forensics: forensics_overview / csli_events / forensics_search "
+                    "Forensics: forensics_overview / csli_events / forensics_search; phone chats: "
+                    "cellebrite_chats / cellebrite_messages / cellebrite_search (search does not cover chats). "
+                    "Big results are paged: follow notice / next_offset when truncated=true. "
                     "(pull data; you analyze). Optional map_pin_*. "
                     "Discovery read-only; writable: notebook, user_note, hot_doc, user_tags, map pins."
                 ),
@@ -1165,7 +1217,7 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         mode: str = "hybrid",
         top_k: int = 12,
     ) -> dict[str, Any]:
-        """Read-only: hybrid/keyword/semantic search. Returns structured hits (Bates, snippet, rel_path, open_url). Prefer this when you need individual chunks to cite or push into the notebook."""
+        """Read-only: hybrid/keyword/semantic search over indexed documents, photos and audio/video transcripts (not Cellebrite phone chats; use cellebrite_search). Returns structured hits (Bates, snippet, rel_path, open_url). Prefer this when you need individual chunks to cite or push into the notebook."""
         from .notebook import playbook_pointer
 
         c = active_or(case_id)
@@ -1215,41 +1267,65 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         """
         Read-only: metadata + extracted text for a discovery file (never dumps the binary).
 
-        Defaults return a modest text window so you do not load a whole exhibit at once.
-        To walk the full extracted text, loop with offset_chars += max_chars while has_more
-        is true (or set max_chars=0 for one shot). Optional chunk_offset/chunk_limit pages
-        ingest chunks (page/time metadata) instead of a flat string.
+        Returns at most 40,000 characters per call (max_chars above that, or 0, is capped).
+        When the text is cut short, truncated=true and `notice` says exactly how to continue:
+        call again with offset_chars=next_offset_chars while has_more is true. For big files
+        prefer search to find the relevant part first. Optional chunk_offset/chunk_limit
+        (max 50) pages ingest chunks with page / time metadata instead of a flat string.
+        Cellebrite .ufdr files and .zip archives have no text here; the error says what to use.
         """
         c = active_or(case_id)
         resolve_under_root(c, path)  # path-traversal guard; file may be DB-only if missing on disk
         detail = db.get_file_detail(c.id, path)
         if not detail:
-            raise ValueError(f"file not found: {path}")
+            raise ValueError(explain_unindexed(c, path))
         full = detail.get("text") or ""
         total = len(full)
         start = max(0, int(offset_chars or 0))
         if max_chars is None or int(max_chars) < 0:
-            raise ValueError("max_chars must be >= 0 (0 = remainder from offset)")
-        limit = int(max_chars)
-        if limit == 0:
-            text = full[start:]
-            next_off = None
-            has_more = False
-        else:
-            text = full[start : start + limit]
-            nxt = start + len(text)
-            has_more = nxt < total
-            next_off = nxt if has_more else None
+            raise ValueError("max_chars must be >= 0")
+        asked = int(max_chars)
+        limit = GET_FILE_MAX_CHARS if asked == 0 or asked > GET_FILE_MAX_CHARS else asked
+        capped = limit < (asked or total)
+        text = full[start : start + limit]
+        nxt = start + len(text)
+        has_more = nxt < total
+        next_off = nxt if has_more else None
+        notice = None
+        if has_more:
+            remaining_calls = -(-(total - nxt) // limit)
+            notice = (
+                f"TRUNCATED: showing characters {start:,}–{nxt:,} of {total:,} ({100 * nxt / max(total, 1):.0f}% read)"
+                + (f"; max_chars is capped at {GET_FILE_MAX_CHARS:,}" if capped else "")
+                + f". To continue call get_file(path={path!r}, offset_chars={nxt})"
+                + f" — about {remaining_calls} more call{'s' if remaining_calls != 1 else ''} for the rest."
+                + (" Consider search(query) to jump to the part you need." if remaining_calls > 3 else "")
+            )
+        elif start >= total and total:
+            notice = f"offset_chars={start:,} is past the end of the text ({total:,} chars)."
+        elif not total:
+            notice = "This file has no extracted text (blank page, silent audio, or text extraction failed)."
 
         chunks_out: list[dict[str, Any]] | None = None
         chunks_has_more = False
         chunks_next: int | None = None
         all_chunks = detail.get("chunks") or []
         n_chunks = len(all_chunks)
+        chunk_notice = None
         if int(chunk_limit or 0) > 0:
             c0 = max(0, int(chunk_offset or 0))
-            c1 = c0 + int(chunk_limit)
-            page = all_chunks[c0:c1]
+            c1 = c0 + min(int(chunk_limit), GET_FILE_MAX_CHUNKS)
+            page = []
+            budget_hit = False
+            used = 0
+            for ch in all_chunks[c0:c1]:
+                n = len(ch.get("text") or "")
+                if page and used + n > GET_FILE_MAX_CHARS:
+                    budget_hit = True
+                    break
+                page.append(ch)
+                used += n
+            c1 = c0 + len(page)
             chunks_out = [
                 {
                     "chunk_index": ch.get("chunk_index"),
@@ -1264,6 +1340,13 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             ]
             chunks_has_more = c1 < n_chunks
             chunks_next = c1 if chunks_has_more else None
+            if chunks_has_more:
+                chunk_notice = (
+                    f"TRUNCATED: chunks {c0}–{min(c1, n_chunks)} of {n_chunks}"
+                    + (f" (chunk_limit is capped at {GET_FILE_MAX_CHUNKS})" if int(chunk_limit) > GET_FILE_MAX_CHUNKS and not budget_hit else "")
+                    + (f" (stopped at {GET_FILE_MAX_CHARS:,} chars of chunk text)" if budget_hit else "")
+                    + f". Continue with chunk_offset={c1}."
+                )
 
         return {
             "ok": True,
@@ -1273,7 +1356,8 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             "bates": detail.get("bates"),
             "mime": detail.get("mime"),
             "status": detail.get("status"),
-            "entities": detail.get("entities") or [],
+            "entities": (detail.get("entities") or [])[:100],
+            "entity_count": len(detail.get("entities") or []),
             "tags": detail.get("tags") or [],
             "user_note": detail.get("user_note") or "",
             "user_tags": detail.get("user_tags") or [],
@@ -1284,12 +1368,15 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             "max_chars": limit,
             "next_offset_chars": next_off,
             "has_more": has_more,
+            "truncated": has_more,
+            "notice": notice,
             "chunk_count": n_chunks,
             "chunks": chunks_out,
             "chunk_offset": int(chunk_offset or 0) if chunks_out is not None else None,
             "chunk_limit": int(chunk_limit or 0) if chunks_out is not None else None,
             "chunks_next_offset": chunks_next,
             "chunks_has_more": chunks_has_more if chunks_out is not None else None,
+            "chunks_notice": chunk_notice,
             "wiki_doc_link": f"[[doc:{path}|{detail.get('bates') or detail.get('name') or path}]]",
             **file_urls(settings, c, path),
         }
@@ -1448,7 +1535,8 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             **summary,
             "instructions": (
                 "Pull CSLI rows with csli_events (filter by phone/day/start/end as needed). "
-                "Search loosely with forensics_search. You analyze — Marshal only supplies data."
+                "Search loosely with forensics_search. Phone chats from UFDRs: cellebrite_chats, "
+                "cellebrite_messages, cellebrite_search. You analyze — Marshal only supplies data."
             ),
         }
 
@@ -1460,12 +1548,14 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         start: str | None = None,
         end: str | None = None,
         source_path: str | None = None,
-        limit: int = 200,
+        limit: int = 100,
         offset: int = 0,
         refresh: bool = False,
     ) -> dict[str, Any]:
-        """Pull CSLI / cell-site events for analysis. Filter optionally by phone, day (YYYY-MM-DD), start/end (as-recorded timestamps), source_path substring. Page with offset while has_more. Times include source_tz (AT&T is UTC). Tower lat/lon — not handset GPS. Analyze arbitrarily in Cowork."""
+        """Pull CSLI / cell-site events for analysis (max 100 per call). Filter optionally by phone, day (YYYY-MM-DD), start/end (as-recorded timestamps), source_path substring. Page with offset=next_offset while has_more; truncated/notice say when rows were cut. Times include source_tz (AT&T is UTC). Tower lat/lon — not handset GPS. Analyze arbitrarily in Cowork."""
         c = active_or(case_id)
+        cap = 100
+        asked = int(limit or 100)
         result = query_csli_events(
             c.files_root,
             phone=phone,
@@ -1473,10 +1563,18 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
             start=start,
             end=end,
             source_path=source_path,
-            limit=limit,
+            limit=min(max(1, asked), cap),
             offset=offset,
             use_cache=not refresh,
         )
+        result["truncated"] = bool(result.get("has_more"))
+        if result.get("has_more"):
+            result["notice"] = (
+                f"TRUNCATED: showing events {result['offset'] + 1}–{result['offset'] + result['returned']} "
+                f"of {result['event_count']}" + (f" (limit is capped at {cap})" if asked > cap else "")
+                + f". Call csli_events again with offset={result['next_offset']} (same filters) to continue, "
+                "or narrow with phone/day/start/end."
+            )
         return {"case": c.__dict__, **result}
 
     @mcp.tool()
@@ -1485,11 +1583,102 @@ def build_mcp_server(settings: Settings, db: Database, embedder: Embedder):
         case_id: int | None = None,
         top_k: int = 25,
     ) -> dict[str, Any]:
-        """Keyword search over forensic file names and CSLI events. For bulk pull + your own analysis prefer csli_events. pin_ready hits can be passed to map_pin_add."""
+        """Keyword search over forensic file names and CSLI events (not chat messages; use cellebrite_search). For bulk pull + your own analysis prefer csli_events. pin_ready hits can be passed to map_pin_add."""
         c = active_or(case_id)
         pins = db.list_map_pins(c.id)
         result = search_forensics(c.files_root, query, top_k=top_k, map_pins=pins)
         return {"case": c.__dict__, **result}
+
+    def _ufdr_payloads(c: Any, path: str | None) -> list[dict[str, Any]]:
+        from .forensics_ufdr import find_ufdr_files
+
+        if not ufedlib_available():
+            raise ValueError("ufedlib-py is not installed on the Marshal server, so UFDR chats cannot be read.")
+        if path:
+            target = resolve_under_root(c, path)
+            if target.suffix.lower() != ".ufdr":
+                raise ValueError(f"{path} is not a .ufdr file. List phone extractions with forensics_overview.")
+            if not target.is_file():
+                raise ValueError(f"UFDR not found: {path} (see forensics_overview for the case's UFDRs)")
+            paths = [path]
+        else:
+            paths = [u["rel_path"] for u in find_ufdr_files(c.files_root)]
+            if not paths:
+                raise ValueError("This case has no Cellebrite .ufdr extractions.")
+        return [parse_ufdr_chats_for_case(c.files_root, p, use_cache=True) for p in paths]
+
+    @mcp.tool()
+    def cellebrite_chats(
+        path: str | None = None,
+        case_id: int | None = None,
+        app: str | None = None,
+        query: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tz: str | None = None,
+        sort: str = "recent",
+        include_empty: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Read-only: list conversations decoded from Cellebrite phone extractions (.ufdr). path = one UFDR (from forensics_overview); omit for every phone in the case. Filter by app (e.g. 'WhatsApp', 'Native Messages', 'Instagram'), query (name / number / preview), and date_from/date_to (YYYY-MM-DD, whole days in the case timezone or tz). sort = recent|messages|oldest. Max 200 per call; page with offset=next_offset while has_more. Then read a thread with cellebrite_messages."""
+        c = active_or(case_id)
+        from .mcp_chats import list_chats
+
+        out = list_chats(
+            _ufdr_payloads(c, path), app=app, query=query, date_from=date_from, date_to=date_to,
+            tz=tz, case_tz=db.get_case_timezone(c.id), include_empty=include_empty, sort=sort,
+            limit=limit, offset=offset,
+        )
+        return {"case": c.__dict__, **out}
+
+    @mcp.tool()
+    def cellebrite_messages(
+        path: str,
+        chat_id: str,
+        case_id: int | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tz: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Read-only: messages in one Cellebrite chat thread, oldest first, with sender, UTC and local time. Optional date_from/date_to (YYYY-MM-DD, inclusive, case timezone or tz). Max 300 per call; page with offset=next_offset while has_more (truncated/notice say when cut). Each message has a stable index; to read around a cellebrite_search hit use offset=max(0, index-10) with no date filter."""
+        from .forensics_ufdr import get_chat
+        from .mcp_chats import read_messages
+
+        c = active_or(case_id)
+        payload = _ufdr_payloads(c, path)[0]
+        chat = get_chat(payload, chat_id)
+        if not chat:
+            raise ValueError(f"chat not found: {chat_id} in {path} (list ids with cellebrite_chats(path={path!r}))")
+        out = read_messages(
+            payload, chat, date_from=date_from, date_to=date_to, tz=tz,
+            case_tz=db.get_case_timezone(c.id), limit=limit, offset=offset,
+        )
+        return {"case": c.__dict__, **out}
+
+    @mcp.tool()
+    def cellebrite_search(
+        query: str,
+        case_id: int | None = None,
+        path: str | None = None,
+        app: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        tz: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Read-only: search message text (and sender) across Cellebrite phone extractions. Plain words = all must appear (case-insensitive); "quoted" = exact phrase; a phone number matches by digits. Optional path (one UFDR), app, date_from/date_to. Hits are oldest first with chat_id + index; max 100 per call, page with offset. Open context with cellebrite_messages(path, chat_id, offset=max(0, index-10), limit=25). The document search tool does NOT cover phone messages; use this."""
+        from .mcp_chats import search_messages
+
+        c = active_or(case_id)
+        out = search_messages(
+            _ufdr_payloads(c, path), query, app=app, date_from=date_from, date_to=date_to, tz=tz,
+            case_tz=db.get_case_timezone(c.id), limit=limit, offset=offset,
+        )
+        return {"case": c.__dict__, **out}
 
     @mcp.tool()
     def map_pin_list(case_id: int | None = None, phone: str | None = None) -> dict[str, Any]:

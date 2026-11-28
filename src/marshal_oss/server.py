@@ -121,6 +121,10 @@ def create_app(
             else:
                 reasons_s = ""
             status = r.get("ingest_status") or "unknown"
+            if status == "skipped_not_covered" and str(r.get("ext") or "").lower() == ".ufdr":
+                # Not document-indexed, but Forensics → Cellebrite reads its
+                # chats/messages. Say "partial", not "not supported".
+                status = "partial_ufdr"
             processed = status == "ready"
             manifest.append(
                 {

@@ -15,12 +15,12 @@ def test_fmt_clock():
 
 
 def test_axon_filenames(tmp_path: Path):
-    body = tmp_path / "Axon_Body_3_Video_2024-08-09_1505_X60AE180D.mp4"
+    body = tmp_path / "Axon_Body_3_Video_2024-08-09_1505_X60AA001A.mp4"
     body.write_bytes(b"")
     info = describe_media(body, body.name)
     assert info["kind"] == "bodycam"
     assert info["device"] == "Axon Body 3"
-    assert info["device_serial"] == "X60AE180D"
+    assert info["device_serial"] == "X60AA001A"
     assert info["recorded_start"] == "2024-08-09T15:05"
 
     fleet = tmp_path / "AXON_Fleet_2_IR_Video_2024-08-09_2118.mp4"

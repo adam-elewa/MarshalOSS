@@ -159,6 +159,11 @@ def retranscribe_case_media(
             meta["source"] = "hq:gpt-4o-transcribe" if settings.asr_hq else settings.asr_model
             meta["asr_hq"] = bool(settings.asr_hq)
             meta["retranscribed"] = True
+            # The HQ pass succeeded: drop the old fallback's errors so the file
+            # stops reporting a failure it no longer has.
+            for stale in ("asr_error", "escalate_error", "docling_error"):
+                if stale in meta:
+                    meta.setdefault("previous_errors", {})[stale] = meta.pop(stale)
             row = db.get_file(case.id, rel)
             sha = row["sha256"] if row else None
             size = int((row["size"] if row else None) or f.get("size") or path.stat().st_size)

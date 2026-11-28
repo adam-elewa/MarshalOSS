@@ -25,7 +25,7 @@ _ENTITY_NOISE_RULE = (
     "Substantive-only rules (critical — keep the case index SMALL):\n"
     "- Entities allowed types ONLY: person, officer, org, location.\n"
     "- Do NOT emit date, time, bates, or other. Bates/dates live elsewhere.\n"
-    "- People/officers: real proper names only (e.g. \"David Eli Jones\", \"Trooper Baca\").\n"
+    "- People/officers: real proper names only (e.g. \"Jane Quinn Doe\", \"Trooper Ruiz\").\n"
     "  NEVER: Speaker A/B, badge numbers alone (\"7867\"), clothing descriptions\n"
     "  (\"man in green shirt\"), camera products (\"Axon Body 3\").\n"
     "- Orgs: named agencies/courts/firms (\"Springfield Police Department\", \"U.S. District Court for the District of Oregon\"), not generic roles.\n"
@@ -243,7 +243,7 @@ def person_match_key(value: str) -> tuple[str, ...] | None:
     """
     Match key for collapsing name variants.
 
-    David Jones / David E. Jones / David Eli Jones → ('david', 'jones')
+    Jane Doe / Jane Q. Doe / Jane Quinn Doe → ('jane', 'doe')
     Single-token names stay as themselves; not merged into others.
     """
     tokens = person_name_tokens(value)
@@ -282,7 +282,7 @@ def person_names_compatible(a: str, b: str) -> bool:
 def prefer_person_canonical(a: str, b: str) -> str:
     """Prefer the more complete display form (middle name > initial > none)."""
     ta, tb = person_name_tokens(a), person_name_tokens(b)
-    # More tokens wins (David Eli Jones over David Jones / David E Jones).
+    # More tokens wins (Jane Quinn Doe over Jane Doe / Jane Q Doe).
     if len(ta) != len(tb):
         return a if len(ta) > len(tb) else b
     # Prefer forms without single-letter middle initials when same length... 
@@ -379,7 +379,7 @@ def collapse_person_counts(
 ) -> dict[tuple[str, str], int]:
     """
     Collapse (person|officer, label) counters across a case so
-    David Jones / David E. Jones / David Eli Jones share one row.
+    Jane Doe / Jane Q. Doe / Jane Quinn Doe share one row.
     """
     # items: list of {type, canonical, count, aliases}
     people: list[dict[str, Any]] = []
@@ -413,10 +413,10 @@ def collapse_person_counts(
 _PERSON_MERGE_RULE = (
     "Person merge rules (critical):\n"
     "- Middle initials / middle names are the SAME person: "
-    '"David Jones", "David E. Jones", "David E Jones", "David Eli Jones" → '
-    'ONE entity, canonical the most complete form (prefer "David Eli Jones"), '
+    '"Jane Doe", "Jane Q. Doe", "Jane Q Doe", "Jane Quinn Doe" → '
+    'ONE entity, canonical the most complete form (prefer "Jane Quinn Doe"), '
     "others in aliases.\n"
-    "- Titles do not create a new person: \"Trooper Baca\" / \"Baca\" when clearly "
+    "- Titles do not create a new person: \"Trooper Ruiz\" / \"Ruiz\" when clearly "
     "the same referent → merge.\n"
     "- Do NOT invent merges across different surnames.\n"
 )

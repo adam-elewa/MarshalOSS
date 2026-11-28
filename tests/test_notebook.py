@@ -20,9 +20,9 @@ def test_wiki_links():
 
 def test_dedupe_persons():
     people = [
-        {"canonical": "David Jones", "count": 16},
-        {"canonical": "David E. Jones", "count": 4},
-        {"canonical": "David Eli Jones", "count": 10},
+        {"canonical": "Jane Doe", "count": 16},
+        {"canonical": "Jane Q. Doe", "count": 4},
+        {"canonical": "Jane Quinn Doe", "count": 10},
         {"canonical": "Diane Carl", "count": 3},
         {"canonical": "Speaker A", "count": 9},
         {"canonical": "Tracy", "count": 5},
@@ -30,9 +30,9 @@ def test_dedupe_persons():
     ]
     out = dedupe_person_entities(people, min_count=2)
     names = [p["canonical"] for p in out]
-    assert "David Jones" in names
-    assert "David E. Jones" not in names
-    assert "David Eli Jones" not in names
+    assert "Jane Doe" in names
+    assert "Jane Q. Doe" not in names
+    assert "Jane Quinn Doe" not in names
     assert "Diane Carl" in names
     assert "Speaker A" not in names
     assert "Tracy" not in names
@@ -77,7 +77,9 @@ def test_notebook_crud(tmp_path):
     (tmp_path / "files").mkdir()
     home = db.ensure_notebook_home(case.id, "Demo")
     assert home["path"] == "Home"
-    assert "skills/" in home["body"]
+    # Home links the Skills playbooks (Meta/Skills/*) rather than the repo folder.
+    assert "notebook_skill" in home["body"]
+    assert "[[page:Meta/Skills/" in home["body"]
     meta = db.get_notebook_page(case.id, "Meta")
     assert meta and "how-to" in meta["body"].lower()
     assert "Meta/Skills" in meta["body"]

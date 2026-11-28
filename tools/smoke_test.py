@@ -353,7 +353,8 @@ def check_forensics(api: Api, cid: int, root: Path) -> None:
                f"parse {src['name']}",
                f"{d.get('chat_count')} chats, {d.get('message_count')} msgs, apps {', '.join(d.get('sources') or [])} "
                f"({time.time() - t0:.0f}s)")
-        record("cellebrite", any(c.get("message_epochs") for c in chats), "chat list carries message_epochs (date filter)")
+        record("cellebrite", any(c.get("message_days") or c.get("message_epochs") for c in chats),
+               "chat list carries per-message dates (date filter)")
         busy = max(chats, key=lambda c: c.get("message_count") or 0, default=None)
         if busy:
             t = api.get("/api/forensics/cellebrite/chat", path=src["rel_path"], chat_id=busy["id"], case_id=cid)
@@ -377,7 +378,7 @@ def check_forensics(api: Api, cid: int, root: Path) -> None:
 def check_viewer(api: Api) -> None:
     html = api.get("/")
     record("viewer", isinstance(html, str) and "<html" in html.lower(), "web app served", f"{len(html):,} bytes")
-    record("viewer", "renderForensicsDateFilter" in html, "forensics date filter present in app.html", warn_only=True)
+    record("viewer", ("renderForensicsDateFilter" in html or "forensicsDateFrom" in html), "forensics date filter present in app.html", warn_only=True)
 
 
 # ----------------------------------------------------------------------------- main

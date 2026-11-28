@@ -18,7 +18,7 @@ from .media_ffmpeg import is_media_path, media_duration_sec
 
 _AUDIO_ONLY_EXTS = frozenset({".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma", ".caf"})
 
-# Axon exports: Axon_Body_3_Video_2024-08-09_1505_X60AE180D.mp4,
+# Axon exports: Axon_Body_3_Video_2024-08-09_1505_X60AA001A.mp4,
 # AXON_Fleet_2_IR_Video_2024-08-09_1500.mp4
 _AXON_BODY = re.compile(
     r"(?i)^axon[_ ]body[_ ]?(\d+)[_ ]video[_ ](\d{4}-\d{2}-\d{2})[_ ](\d{2})(\d{2})(?:[_ ]([A-Z0-9]{6,}))?"

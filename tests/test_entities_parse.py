@@ -92,35 +92,35 @@ def test_drops_diarization_speakers():
 
 
 def test_person_name_variants_merge():
-    assert person_names_compatible("David Jones", "David E. Jones")
-    assert person_names_compatible("David Jones", "David Eli Jones")
-    assert person_names_compatible("David E Jones", "David Eli Jones")
-    assert not person_names_compatible("David Jones", "David Davis")
-    assert prefer_person_canonical("David Jones", "David Eli Jones") == "David Eli Jones"
-    assert prefer_person_canonical("David E. Jones", "David Eli Jones") == "David Eli Jones"
+    assert person_names_compatible("Jane Doe", "Jane Q. Doe")
+    assert person_names_compatible("Jane Doe", "Jane Quinn Doe")
+    assert person_names_compatible("Jane Q Doe", "Jane Quinn Doe")
+    assert not person_names_compatible("Jane Doe", "Jane Davis")
+    assert prefer_person_canonical("Jane Doe", "Jane Quinn Doe") == "Jane Quinn Doe"
+    assert prefer_person_canonical("Jane Q. Doe", "Jane Quinn Doe") == "Jane Quinn Doe"
 
     merged = merge_person_entities(
         [
-            {"type": "person", "canonical": "David Jones", "aliases": []},
-            {"type": "person", "canonical": "David E. Jones", "aliases": []},
-            {"type": "person", "canonical": "David Eli Jones", "aliases": []},
-            {"type": "person", "canonical": "David Davis", "aliases": []},
+            {"type": "person", "canonical": "Jane Doe", "aliases": []},
+            {"type": "person", "canonical": "Jane Q. Doe", "aliases": []},
+            {"type": "person", "canonical": "Jane Quinn Doe", "aliases": []},
+            {"type": "person", "canonical": "Jane Davis", "aliases": []},
         ]
     )
     people = [e for e in merged if e["type"] == "person"]
     canons = sorted(e["canonical"] for e in people)
-    assert canons == ["David Davis", "David Eli Jones"]
+    assert canons == ["Jane Davis", "Jane Quinn Doe"]
 
     collapsed = collapse_person_counts(
         {
-            ("person", "David Jones"): 16,
-            ("person", "David E. Jones"): 4,
-            ("person", "David E Jones"): 4,
-            ("person", "David Eli Jones"): 10,
+            ("person", "Jane Doe"): 16,
+            ("person", "Jane Q. Doe"): 4,
+            ("person", "Jane Q Doe"): 4,
+            ("person", "Jane Quinn Doe"): 10,
             ("person", "Jamaal A Hart"): 3,
             ("person", "Jamaal Hart"): 2,
         }
     )
-    assert collapsed[("person", "David Eli Jones")] == 34
-    assert ("person", "David Jones") not in collapsed
+    assert collapsed[("person", "Jane Quinn Doe")] == 34
+    assert ("person", "Jane Doe") not in collapsed
     assert collapsed[("person", "Jamaal A Hart")] == 5

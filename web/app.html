@@ -1032,6 +1032,15 @@
   .status-pill.ready { background: #dcfce7; color: var(--ok) }
   .status-pill.skipped, .status-pill.skipped_not_covered { background: #ffedd5; color: var(--warn) }
   .status-pill.error { background: #fee2e2; color: var(--danger) }
+  .status-pill.partial_ufdr { background: #e0f2fe; color: #075985 }
+  .ufdr-info-inline {
+    appearance: none; border: 0; background: transparent; color: var(--muted-strong);
+    padding: 0; margin-left: 4px; width: 18px; height: 18px; vertical-align: middle; cursor: pointer;
+    display: inline-grid; place-items: center; border-radius: 5px;
+  }
+  .ufdr-info-inline svg { width: 15px; height: 15px }
+  .ufdr-info-inline:hover, .ufdr-info-inline.active { color: var(--ink); background: var(--hover) }
+  .csli-info-box.manifest { margin: 0 0 10px }
   .status-pill.pending, .status-pill.unknown { background: #e2e8f0; color: var(--muted-strong) }
   .conf {
     font-variant-numeric: tabular-nums; font-weight: 600;
@@ -1693,7 +1702,7 @@
     <div class="case-rename-body">
       <p class="pin-meta" id="csliPinCoords"></p>
       <label for="csliPinLabel">Label</label>
-      <input id="csliPinLabel" type="text" autocomplete="off" placeholder="e.g. Hope Manor shooting" />
+      <input id="csliPinLabel" type="text" autocomplete="off" placeholder="e.g. Scene — 100 Main St" />
       <label for="csliPinNote">Note</label>
       <textarea id="csliPinNote" placeholder="Address, report #, source…"></textarea>
       <div class="pin-when-row">
@@ -1728,7 +1737,7 @@
     <div class="case-rename-body">
       <p class="pin-meta" id="csliPhoneRenameMeta"></p>
       <label for="csliPhoneRenameInput">Display name</label>
-      <input id="csliPhoneRenameInput" type="text" autocomplete="off" placeholder="e.g. Gede" />
+      <input id="csliPhoneRenameInput" type="text" autocomplete="off" placeholder="e.g. Defendant’s phone" />
       <p class="pin-meta">Clears back to the number if left blank.</p>
       <p class="case-rename-status" id="csliPhoneRenameStatus" hidden></p>
     </div>
@@ -1850,6 +1859,7 @@ const state = {
   forensicsChatId: null,
   forensicsChat: null,
   csliInfoOpen: false,
+  ufdrInfoOpen: false,
   forensicsCsliMap: null,
   csliDay: null,
   csliPhone: null,
@@ -2988,19 +2998,11 @@ function csliCastColor(i, n) {
   return palette[i % palette.length];
 }
 
-/** Built-in scene markers — only on matching phone + event day/time. */
-const CSLI_SCENE_MARKERS = [
-  {
-    id: "scene-hope-manor-shooting",
-    label: "Hope Manor shooting",
-    lat: 40.490502,
-    lon: -74.442727,
-    note: "3 Hope Manor Drive, New Brunswick · 8/1/2020 01:14 EDT · NBPD 20NB04410",
-    phones: ["7329972985"],
-    event_when: "2020-08-01 01:14:00",
-    kind: "scene",
-  },
-];
+/** Built-in scene markers — only on matching phone + event day/time.
+ *  Keep this empty in the repo: case-specific scenes live in each case's map
+ *  pins (kind "scene"), never in source. Shape:
+ *  { id, label, lat, lon, note, phones: ["digits"], event_when: "YYYY-MM-DD HH:MM:SS", kind: "scene" } */
+const CSLI_SCENE_MARKERS = [];
 
 function csliPhoneDigits(phone) {
   return String(phone || "").replace(/\D/g, "");
@@ -4617,11 +4619,26 @@ function statusLabel(status) {
   if (key === "skipped_not_covered" || key === "skipped-not-covered") {
     return "File Type Not Supported";
   }
+  if (key === "partial_ufdr") return "Chats only";
   if (key === "skipped") return "Skipped";
   if (key === "ready") return "Ready";
   if (key === "pending") return "Pending";
   if (key === "error") return "Error";
   return raw.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Cellebrite scope note, shared by the manifest and the Cellebrite pages.
+function ufdrInfoButton(cls = "toolbar-info") {
+  const open = !!state.ufdrInfoOpen;
+  return `<button type="button" class="${cls} ${open ? "active" : ""}" data-ufdr-info title="What Marshal reads from a UFDR" aria-label="What Marshal reads from a UFDR" aria-expanded="${open ? "true" : "false"}">${icoInfo()}</button>`;
+}
+function ufdrInfoBox(extraCls = "toolbar") {
+  if (!state.ufdrInfoOpen) return "";
+  return `<div class="csli-info-box ${extraCls}">
+    <strong>Cellebrite UFDRs: chats and messages only</strong>
+    <p>Marshal reads the decoded chat threads and messages (SMS/iMessage and messaging apps) from each .ufdr, and uses the phone’s contacts only to put names on numbers. Those are browsable under Forensics → Cellebrite; the .ufdr itself is not text-indexed with the other documents.</p>
+    <p>Not parsed: call logs, photos/videos and other media, locations, web history, emails, app data, deleted-data carving, and everything else in the extraction. Use Cellebrite Reader or Physical Analyzer for those, and have a forensic examiner confirm anything you rely on.</p>
+  </div>`;
 }
 
 function statusPill(status) {
@@ -5217,12 +5234,16 @@ function renderOverview() {
   const colCount = 3 + (showStatus ? 1 : 0) + (showNotes ? 1 : 0);
   const selectedPath = state.overviewDocPath;
   const manifestRows = shown.map(r => {
-    const unmet = !r.processed;
+    const partialUfdr = r.ingest_status === "partial_ufdr";
+    const unmet = !r.processed && !partialUfdr;
     const low = isLowConfidence(r);
     const active = r.rel_path === selectedPath;
     const flag = [unmet || low ? "flag-unprocessed" : "", active ? "active" : ""].filter(Boolean).join(" ");
     let note = r.error || r.quality_reasons || "";
     if (!note && unmet) note = "Not processed";
+    const noteHtml = partialUfdr && !note
+      ? `Chats &amp; messages only — see Forensics → Cellebrite${ufdrInfoButton("ufdr-info-inline")}`
+      : esc(note);
     return `<tr class="${flag}" data-path="${esc(r.rel_path)}">
       <td class="file-cell" title="${esc(r.rel_path)}">
         <div class="file-main">
@@ -5233,7 +5254,7 @@ function renderOverview() {
       <td>${esc(r.ext || "")}</td>
       ${showStatus ? `<td>${statusPill(r.ingest_status)}</td>` : ""}
       <td>${fmtSize(r.size)}</td>
-      ${showNotes ? `<td class="meta">${esc(note)}</td>` : ""}
+      ${showNotes ? `<td class="meta">${noteHtml}</td>` : ""}
     </tr>`;
   }).join("") || `<tr><td colspan="${colCount}" class="placeholder">${emptyMsg}</td></tr>`;
 
@@ -5370,6 +5391,7 @@ function renderOverview() {
     const listBlock = `
       <div class="attention-list">
         <div class="manifest-wrap" style="flex:1">
+          ${shown.some((r) => r.ingest_status === "partial_ufdr") ? ufdrInfoBox("manifest") : ""}
           <table class="manifest-table">
             <thead>
               <tr>
@@ -6049,7 +6071,7 @@ function forensicsMsgDay(ts) {
   return m ? m[1] : "";
 }
 
-/** Parse typed dates: 2020-07-31, 7/31/2020, 07-31-20, etc. → YYYY-MM-DD or "". */
+/** Parse typed dates: 2024-01-15, 1/15/2024, 01-15-24, etc. → YYYY-MM-DD or "". */
 function forensicsParseDateInput(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
@@ -6494,13 +6516,15 @@ function renderForensics() {
       <div class="forensics-toolbar">
         <button type="button" class="forensics-back" data-forensics-section="">All forensics</button>
         <span class="toolbar-title">Cellebrite</span>
+        ${ufdrInfoButton()}
         <span class="toolbar-sub">Choose a phone</span>
       </div>
+      ${ufdrInfoBox()}
       <div class="forensics-landing pick">
         <div class="forensics-pick-wrap">
           <div class="forensics-pick-head">
             <h2>Select a phone</h2>
-            <p>Open one Cellebrite extraction to browse chats.</p>
+            <p>Open one Cellebrite extraction to browse its chats and messages. Other extraction data (calls, media, locations) isn’t parsed.</p>
           </div>
           <div class="forensics-phone-rows">${phones}</div>
         </div>
@@ -6595,17 +6619,18 @@ function renderForensics() {
       <div class="forensics-toolbar">
         <button type="button" class="forensics-back" id="forensicsBackPhones">Change phone</button>
         <span class="toolbar-title">${esc(phoneLabel)}</span>
+        ${ufdrInfoButton()}
         <input type="search" id="forensicsSearch" placeholder="Search name, number, preview…" value="${esc(state.forensicsQuery || "")}" />
         <div class="chk date-range" title="Filter messages by date — type MM/DD/YYYY, then Apply or Enter">
           <span>From</span>
           <input type="text" id="forensicsDateFrom" inputmode="numeric" autocomplete="off" spellcheck="false"
-            placeholder="7/31/2020"
+            placeholder="1/1/2024"
             value="${esc(state.forensicsDateFromText != null
               ? state.forensicsDateFromText
               : (forensicsFmtDateInput(state.forensicsDateFrom) || ""))}" />
           <span>to</span>
           <input type="text" id="forensicsDateTo" inputmode="numeric" autocomplete="off" spellcheck="false"
-            placeholder="8/1/2020"
+            placeholder="1/31/2024"
             value="${esc(state.forensicsDateToText != null
               ? state.forensicsDateToText
               : (forensicsFmtDateInput(state.forensicsDateTo) || ""))}" />
@@ -6624,6 +6649,7 @@ function renderForensics() {
         ${summary.ufedlib === false ? `<span class="err">Install ufedlib-py on the server to parse UFDRs.</span>` : ""}
         ${state.forensicsErr ? `<span class="err">${esc(state.forensicsErr)}</span>` : ""}
       </div>
+      ${ufdrInfoBox()}
       <div class="forensics-body">
         <div class="forensics-split">
           <div class="forensics-pane">
@@ -8084,6 +8110,16 @@ window.addEventListener("hashchange", () => {
   render();
   await loadForRoute();
 })();
+
+// ⓘ "chats only" note on UFDR rows and Cellebrite toolbars (delegated; survives re-render)
+document.addEventListener("click", (ev) => {
+  const btn = ev.target.closest && ev.target.closest("[data-ufdr-info]");
+  if (!btn) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  state.ufdrInfoOpen = !state.ufdrInfoOpen;
+  render();
+}, true);
 </script>
 </body>
 </html>

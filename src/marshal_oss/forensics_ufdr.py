@@ -1081,7 +1081,7 @@ def extract_subscribers_from_file(path: Path) -> list[dict[str, Any]]:
 
 
 def infer_target_phones_from_paths(sources: list[dict[str, Any]]) -> list[str]:
-    """Phones embedded in CDW/folder/file names (e.g. '…732-997-2985')."""
+    """Phones embedded in CDW/folder/file names (e.g. '…555-010-1234')."""
     found: list[str] = []
     seen: set[str] = set()
     for s in sources:

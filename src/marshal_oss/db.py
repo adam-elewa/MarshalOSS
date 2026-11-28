@@ -1093,7 +1093,7 @@ class Database:
             for label in cleaned_tags:
                 tag_counts[normalize_tag(label)] += 1
 
-        # Collapse David Jones / David E. Jones / David Eli Jones etc.
+        # Collapse Jane Doe / Jane Q. Doe / Jane Quinn Doe etc.
         entity_counts = Counter(collapse_person_counts(entity_counts))
         # Drop one-off locations (incidental places) and one-off tags from overview.
         entity_counts = Counter(

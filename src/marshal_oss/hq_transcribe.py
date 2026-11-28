@@ -888,12 +888,19 @@ def ai_transcribe_file_hq(
     if not key:
         raise RuntimeError("OPENAI_API_KEY required for HQ transcription")
     prompt = getattr(settings, "asr_hq_prompt", None) or _DEFAULT_PROMPT
-    result = transcribe_audio_hq(
-        path,
-        key,
-        language=getattr(settings, "asr_language", None) or "en",
-        prompt=prompt,
-        artifact_dir=artifact_dir,
-        progress_print=log,
-    )
+    # The stack expects the caller to hand it 16 kHz mono audio (step 1 above).
+    # Passing the source video directly uploads the whole MP4 to the diarize
+    # endpoint for clips under DIARIZE_MAX_SEC, which OpenAI rejects
+    # ("Audio file might be corrupted or unsupported").
+    with tempfile.TemporaryDirectory(prefix="marshal_hq_src_") as td:
+        audio = Path(td) / f"{Path(path).stem}.mp3"
+        _cut_audio_chunk(Path(path), audio, 0.0, _probe_duration_sec(Path(path)) + 1.0)
+        result = transcribe_audio_hq(
+            audio,
+            key,
+            language=getattr(settings, "asr_language", None) or "en",
+            prompt=prompt,
+            artifact_dir=artifact_dir,
+            progress_print=log,
+        )
     return hq_result_to_chunks(result, bates=bates)

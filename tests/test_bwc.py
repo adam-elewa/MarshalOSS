@@ -23,11 +23,11 @@ def test_camera_label_uses_serial_not_axon_filename():
     media = {
         "kind": "bodycam",
         "device": "Axon Body 3",
-        "device_serial": "X60AE180D",
+        "device_serial": "X60AA001A",
     }
     assert (
-        camera_officer_label("Axon_Body_3_Video_2024-08-09_1505_X60AE180D.mp4", media)
-        == "Axon Body 3 · X60AE180D"
+        camera_officer_label("Axon_Body_3_Video_2024-08-09_1505_X60AA001A.mp4", media)
+        == "Axon Body 3 · X60AA001A"
     )
 
 
@@ -44,17 +44,17 @@ def test_camera_label_parses_officer_named_renames():
 
 def test_build_bwc_index_maps_segments(tmp_path):
     db = Database(tmp_path / "t.db")
-    case = db.upsert_case("jones", "David Jones", str(tmp_path / "files"))
+    case = db.upsert_case("doe", "Jane Doe", str(tmp_path / "files"))
     meta = {
         "media": {
             "kind": "bodycam",
             "device": "Axon Body 3",
-            "device_serial": "X60AE180D",
+            "device_serial": "X60AA001A",
             "recorded_start": "2024-08-09T15:05",
             "duration_sec": 120.0,
         }
     }
-    path = "Axon_Body_3_Video_2024-08-09_1505_X60AE180D.mp4"
+    path = "Axon_Body_3_Video_2024-08-09_1505_X60AA001A.mp4"
     fid = db.upsert_file(
         case.id, path, path, None, "video/mp4", 10, None, "x", status="ready", meta=meta
     )
@@ -72,16 +72,16 @@ def test_build_bwc_index_maps_segments(tmp_path):
     assert idx["video_count"] == 1
     assert idx["total_segments"] == 2
     v = idx["videos"][0]
-    assert v["officer"] == "Axon Body 3 · X60AE180D"
+    assert v["officer"] == "Axon Body 3 · X60AA001A"
     assert v["recorded_start"] == "2024-08-09T15:05:00"
-    assert v["media"].startswith("/files/jones/")
+    assert v["media"].startswith("/files/doe/")
     types = {s["type"] for s in v["segments"]}
     assert types == {"transcript", "scene"}
 
 
 def test_generic_video_without_time_cue_excluded(tmp_path):
     db = Database(tmp_path / "t.db")
-    case = db.upsert_case("jones", "David Jones", str(tmp_path / "files"))
+    case = db.upsert_case("doe", "Jane Doe", str(tmp_path / "files"))
     # Unclassified video with timed segments but no recorded_start → excluded
     fid = db.upsert_file(
         case.id,
@@ -105,8 +105,8 @@ def test_generic_video_without_time_cue_excluded(tmp_path):
     # Bodycam missing recorded_start → excluded
     db.upsert_file(
         case.id,
-        "Axon_Body_3_Video_no_time_X60AE180D.mp4",
-        "Axon_Body_3_Video_no_time_X60AE180D.mp4",
+        "Axon_Body_3_Video_no_time_X60AA001A.mp4",
+        "Axon_Body_3_Video_no_time_X60AA001A.mp4",
         None,
         "video/mp4",
         10,
@@ -117,7 +117,7 @@ def test_generic_video_without_time_cue_excluded(tmp_path):
             "media": {
                 "kind": "bodycam",
                 "device": "Axon Body 3",
-                "device_serial": "X60AE180D",
+                "device_serial": "X60AA001A",
                 "duration_sec": 60.0,
             }
         },
@@ -130,15 +130,15 @@ def test_generic_video_without_time_cue_excluded(tmp_path):
 
 def test_apply_camera_label_by_serial(tmp_path):
     db = Database(tmp_path / "t.db")
-    case = db.upsert_case("jones", "David Jones", str(tmp_path / "files"))
+    case = db.upsert_case("doe", "Jane Doe", str(tmp_path / "files"))
     ids = []
     for i, start in enumerate(("1505", "2117")):
-        path = f"Axon_Body_3_Video_2024-08-09_{start}_X60AE180D.mp4"
+        path = f"Axon_Body_3_Video_2024-08-09_{start}_X60AA001A.mp4"
         meta = {
             "media": {
                 "kind": "bodycam",
                 "device": "Axon Body 3",
-                "device_serial": "X60AE180D",
+                "device_serial": "X60AA001A",
                 "recorded_start": f"2024-08-09T{start[:2]}:{start[2:]}",
                 "duration_sec": 10.0,
             }
@@ -150,8 +150,8 @@ def test_apply_camera_label_by_serial(tmp_path):
         )
     other = db.upsert_file(
         case.id,
-        "Axon_Body_3_Video_2024-08-09_1519_X60AE888R.mp4",
-        "Axon_Body_3_Video_2024-08-09_1519_X60AE888R.mp4",
+        "Axon_Body_3_Video_2024-08-09_1519_X60AB002B.mp4",
+        "Axon_Body_3_Video_2024-08-09_1519_X60AB002B.mp4",
         None,
         "video/mp4",
         10,
@@ -162,7 +162,7 @@ def test_apply_camera_label_by_serial(tmp_path):
             "media": {
                 "kind": "bodycam",
                 "device": "Axon Body 3",
-                "device_serial": "X60AE888R",
+                "device_serial": "X60AB002B",
                 "recorded_start": "2024-08-09T15:19",
                 "duration_sec": 10.0,
             }
@@ -174,13 +174,13 @@ def test_apply_camera_label_by_serial(tmp_path):
     by_id = {v["file_id"]: v["officer"] for v in idx["videos"]}
     assert by_id[ids[0]] == "Tpr. Baka"
     assert by_id[ids[1]] == "Tpr. Baka"
-    assert by_id[other] == "Axon Body 3 · X60AE888R"
+    assert by_id[other] == "Axon Body 3 · X60AB002B"
 
     cleared = apply_camera_label(db, case, file_id=ids[0], label=None, scope="camera")
     assert cleared["updated"] == 2
     idx2 = build_bwc_index(db, case)
     assert {v["officer"] for v in idx2["videos"] if v["file_id"] in ids} == {
-        "Axon Body 3 · X60AE180D"
+        "Axon Body 3 · X60AA001A"
     }
 
     # suggestions include person entities when present
@@ -188,7 +188,7 @@ def test_apply_camera_label_by_serial(tmp_path):
         "UPDATE files SET meta=? WHERE id=?",
         (
             '{"entities":[{"type":"officer","canonical":"Jamaal Hart"}],'
-            '"media":{"kind":"bodycam","device":"Axon Body 3","device_serial":"X60AE888R",'
+            '"media":{"kind":"bodycam","device":"Axon Body 3","device_serial":"X60AB002B",'
             '"recorded_start":"2024-08-09T15:19","duration_sec":10}}',
             other,
         ),

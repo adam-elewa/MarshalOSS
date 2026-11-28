@@ -1032,7 +1032,8 @@
   .status-pill.ready { background: #dcfce7; color: var(--ok) }
   .status-pill.skipped, .status-pill.skipped_not_covered { background: #ffedd5; color: var(--warn) }
   .status-pill.error { background: #fee2e2; color: var(--danger) }
-  .status-pill.partial_ufdr { background: #e0f2fe; color: #075985 }
+  .status-pill.partial_ufdr, .status-pill.unzipped, .status-pill.unzipped_partial { background: #e0f2fe; color: #075985 }
+  .status-pill.zip_empty { background: #ffedd5; color: var(--warn) }
   .ufdr-info-inline {
     appearance: none; border: 0; background: transparent; color: var(--muted-strong);
     padding: 0; margin-left: 4px; width: 18px; height: 18px; vertical-align: middle; cursor: pointer;
@@ -4620,6 +4621,9 @@ function statusLabel(status) {
     return "File Type Not Supported";
   }
   if (key === "partial_ufdr") return "Chats only";
+  if (key === "unzipped") return "Unzipped";
+  if (key === "unzipped_partial") return "Unzipped (partial)";
+  if (key === "zip_empty") return "Empty archive";
   if (key === "skipped") return "Skipped";
   if (key === "ready") return "Ready";
   if (key === "pending") return "Pending";

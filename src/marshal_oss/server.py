@@ -110,6 +110,11 @@ def create_app(
         summary = db.production_manifest_summary(c.id)
         entities = db.case_entity_tag_stats(c.id, top_n=500)
         records = db.list_production_manifest(c.id, limit=10000, offset=0)
+        # Archive members, so a .zip row can report on what came out of it.
+        zip_members: dict[str, list[str]] = {}
+        for r in records:
+            if r.get("parent_zip"):
+                zip_members.setdefault(r["parent_zip"], []).append(r.get("ingest_status") or "")
         # Compact rows for the overview table
         manifest = []
         for r in records:
@@ -125,7 +130,21 @@ def create_app(
                 # Not document-indexed, but Forensics → Cellebrite reads its
                 # chats/messages. Say "partial", not "not supported".
                 status = "partial_ufdr"
-            processed = status == "ready"
+            zip_note = None
+            if status == "skipped_not_covered" and str(r.get("ext") or "").lower() == ".zip":
+                # Ingest expands archives and indexes the members; the zip itself
+                # is a container, not an unsupported file.
+                members = zip_members.get(r.get("rel_path") or "", [])
+                ready = sum(1 for m in members if m == "ready")
+                if not members:
+                    status, zip_note = "zip_empty", "No files extracted from this archive"
+                elif ready == len(members):
+                    status = "unzipped"
+                    zip_note = f"Unzipped: {len(members)} file{'s' if len(members) != 1 else ''} inside, all processed"
+                else:
+                    status = "unzipped_partial"
+                    zip_note = f"Unzipped: {ready} of {len(members)} files inside processed"
+            processed = status in ("ready", "unzipped")
             manifest.append(
                 {
                     "rel_path": r.get("rel_path"),
@@ -141,7 +160,7 @@ def create_app(
                     "chunk_count": r.get("chunk_count") or 0,
                     "escalated": bool(r.get("escalated")),
                     "ingestible": bool(r.get("ingestible")),
-                    "error": r.get("error"),
+                    "error": r.get("error") or zip_note,
                     "entity_count": len(r.get("entities") or [])
                     if isinstance(r.get("entities"), list)
                     else 0,

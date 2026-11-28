@@ -81,6 +81,82 @@ def _chunk_plain_text(text: str, bates: str | None, max_chars: int = 1800) -> li
     return [c for c in chunks if c["text"]]
 
 
+# Docling's HybridChunker re-tokenizes an oversize table while splitting it,
+# which is effectively quadratic and never finishes on sheets with thousands
+# of rows. Spreadsheets, and any doc whose tables are this large, get chunked
+# by row group here instead, with the header row repeated.
+_SPREADSHEET_SUFFIXES = {".xlsx", ".xls", ".xlsm", ".csv", ".tsv", ".ods"}
+_BIG_TABLE_CELLS = 5000
+_SPREADSHEET_ENTITY_CHARS = 28000
+
+
+def _table_rows(table: Any) -> list[list[str]]:
+    grid = getattr(getattr(table, "data", None), "grid", None) or []
+    rows = []
+    for row in grid:
+        cells = [" ".join(str(getattr(c, "text", "") or "").split()) for c in row]
+        if any(cells):
+            rows.append(cells)
+    return rows
+
+
+def _table_cell_count(doc: Any) -> int:
+    n = 0
+    for tb in getattr(doc, "tables", None) or []:
+        data = getattr(tb, "data", None)
+        n += int(getattr(data, "num_rows", 0) or 0) * int(getattr(data, "num_cols", 0) or 0)
+    return n
+
+
+def _chunk_tables(doc: Any, max_chars: int = 1800) -> list[dict[str, Any]]:
+    """One chunk per group of rows; each chunk repeats the header row."""
+    chunks: list[dict[str, Any]] = []
+    tables = getattr(doc, "tables", None) or []
+    for ti, tb in enumerate(tables, 1):
+        rows = _table_rows(tb)
+        if not rows:
+            continue
+        header, body = rows[0], rows[1:] or []
+        head_line = " | ".join(header)
+        label = f"Table {ti}" if len(tables) > 1 else "Table"
+        page = None
+        for prov in getattr(tb, "prov", None) or []:
+            page = getattr(prov, "page_no", None)
+            break
+
+        def flush(lines: list[str], first: int, last: int) -> None:
+            chunks.append(
+                {
+                    "text": head_line + "\n" + "\n".join(lines),
+                    "page_start": page,
+                    "page_end": page,
+                    "heading": f"{label} rows {first}–{last}",
+                    "bates": None,
+                }
+            )
+
+        if not body:
+            flush([], 1, 1)
+            continue
+        lines: list[str] = []
+        size = len(head_line)
+        first = 2  # spreadsheet-style row numbers; row 1 is the header
+        for i, row in enumerate(body, 2):
+            line = " | ".join(row)
+            if lines and size + len(line) + 1 > max_chars:
+                flush(lines, first, i - 1)
+                lines, size, first = [], len(head_line), i
+            lines.append(line)
+            size += len(line) + 1
+        if lines:
+            flush(lines, first, first + len(lines) - 1)
+    # Any non-table text in the doc (titles, notes) as plain chunks.
+    other = "\n\n".join(
+        (getattr(t, "text", "") or "").strip() for t in getattr(doc, "texts", None) or []
+    )
+    return _chunk_plain_text(other, None, max_chars) + chunks
+
+
 def docling_extract(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Use Docling to convert a file into text chunks + confidence metadata."""
     from docling.chunking import HybridChunker
@@ -103,6 +179,10 @@ def docling_extract(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if page_count is None and confidence.get("pages"):
         page_count = len(confidence["pages"])
     confidence["page_count"] = page_count
+
+    # Big spreadsheets / huge tables: skip HybridChunker (hangs) and chunk by rows.
+    if path.suffix.lower() in _SPREADSHEET_SUFFIXES or _table_cell_count(doc) > _BIG_TABLE_CELLS:
+        return [c for c in _chunk_tables(doc) if c.get("text")], confidence
 
     chunks: list[dict[str, Any]] = []
     seen_items: set[str] = set()
@@ -180,6 +260,9 @@ def docling_extract(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return [c for c in chunks if c.get("text")], confidence
 
 
+_LOCAL_ASR_LOCK = threading.Lock()
+
+
 def _docling_media(
     path: Path,
     rel: str,
@@ -187,18 +270,24 @@ def _docling_media(
     delta: dict[str, int],
     log: Callable[[str], None],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Local Docling Whisper; non-native formats go through an ffmpeg WAV first."""
-    if is_docling_native_media(path):
-        return docling_extract(path)
-    with as_docling_media(path) as (media_path, bridge_meta):
-        log(
-            f"[cyan]media bridge[/cyan] {rel} "
-            f"({bridge_meta.get('original_suffix')}→wav)"
-        )
-        chunks, confidence = docling_extract(media_path)
-        meta.update(bridge_meta)
-        delta["media_bridged"] = 1
-    return chunks, confidence
+    """Local Docling Whisper; non-native formats go through an ffmpeg WAV first.
+
+    One at a time: two long transcriptions on the shared Whisper model in
+    parallel ingest workers interleave and one fails ("Pipeline VideoPipeline
+    failed"). Local Whisper already uses every CPU core, so this costs nothing.
+    """
+    with _LOCAL_ASR_LOCK:
+        if is_docling_native_media(path):
+            return docling_extract(path)
+        with as_docling_media(path) as (media_path, bridge_meta):
+            log(
+                f"[cyan]media bridge[/cyan] {rel} "
+                f"({bridge_meta.get('original_suffix')}→wav)"
+            )
+            chunks, confidence = docling_extract(media_path)
+            meta.update(bridge_meta)
+            delta["media_bridged"] = 1
+        return chunks, confidence
 
 
 def _maybe_asr_escalate(
@@ -458,10 +547,16 @@ def _ingest_one_file(
                     meta_existing = {}
             meta_existing = meta_existing if isinstance(meta_existing, dict) else {}
             with db_lock:
+                # Keep the real chunk count; the updater's default (0) made every
+                # unchanged file look empty after a re-run.
+                n_existing = db.conn.execute(
+                    "SELECT COUNT(*) FROM chunks WHERE file_id=?", (int(existing["id"]),)
+                ).fetchone()[0]
                 db.update_manifest_ingest(
                     case_id,
                     rel,
                     ingest_status="ready",
+                    chunk_count=int(n_existing),
                     quality_score=meta_existing.get("quality_score")
                     if isinstance(meta_existing.get("quality_score"), (int, float))
                     else None,
@@ -625,7 +720,20 @@ def _ingest_one_file(
             and path.suffix.lower() not in _RAW_TEXT_ONLY_SUFFIXES
             and resolve_entity_client(settings)
         ):
-            ent = extract_entities_for_chunks(chunks, settings, log=log)
+            ent_chunks = chunks
+            if path.suffix.lower() in _SPREADSHEET_SUFFIXES:
+                # Row data (tower dumps, call logs) is thousands of near-identical
+                # rows; mapping all of it costs one LLM call per segment for
+                # little gain. The header + first rows carry the sheet's entities.
+                ent_chunks, total = [], 0
+                for c in chunks:
+                    if total >= _SPREADSHEET_ENTITY_CHARS:
+                        break
+                    ent_chunks.append(c)
+                    total += len(c.get("text") or "")
+            ent = extract_entities_for_chunks(ent_chunks, settings, log=log)
+            if len(ent_chunks) < len(chunks):
+                ent["truncated"] = True
             if ent.get("entities") or ent.get("tags"):
                 meta["entities"] = ent.get("entities") or []
                 meta["tags"] = ent.get("tags") or []

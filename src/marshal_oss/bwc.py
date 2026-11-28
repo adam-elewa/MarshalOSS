@@ -56,7 +56,7 @@ def camera_officer_label(name: str, media: dict[str, Any]) -> str:
     if override:
         return override
 
-    # Washington-style production renames: "Det Egan (1) - confidential.mp4"
+    # Production renames that name the officer: "Det Smith (1) - confidential.mp4"
     base = re.sub(r"\.[^.]+$", "", name or "")
     base = re.sub(r"\s*-\s*confidential\s*$", "", base, flags=re.I).strip()
     m = _OFFICER_CLIP.match(base)
@@ -304,7 +304,7 @@ def build_bwc_index(db: Database, case: Case) -> dict[str, Any]:
             "note": (
                 "Axon exports use device serials, not officer names. "
                 "Use Label in the viewer (or set meta.media.officer) to name a camera lane. "
-                "Renamed files like 'Det Egan (1).mp4' are parsed when present."
+                "Renamed files like 'Det Smith (1).mp4' are parsed when present."
             ),
         },
     }

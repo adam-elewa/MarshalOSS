@@ -59,7 +59,7 @@ def test_filters_noise_tags_and_weak_people():
     assert is_noise_entity("officer", "Axon Body 3")
     assert is_noise_entity("person", "man in green shirt")
     assert is_noise_entity("location", "Georgia")
-    assert not is_noise_entity("location", "West Orange, NJ")
+    assert not is_noise_entity("location", "Springfield, IL")
     assert filter_tags(["BodyCam", "daytime", "New Jersey", "firearm", "timestamp", "dui"]) == [
         "bodycam",
         "firearm",

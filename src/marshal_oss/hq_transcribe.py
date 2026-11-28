@@ -55,12 +55,13 @@ VERIFY_MIN_AVG_LOGPROB = -1.0
 VERIFY_MAX_NO_SPEECH = 0.65
 VERIFY_MAX_COMPRESSION = 2.6
 
+# Generic on purpose: names in a prompt bias the model toward hearing them.
+# Put case-specific vocabulary in the `asr_hq_prompt` setting for that matter.
 _DEFAULT_PROMPT = (
-    "Body-worn camera and emergency radio audio from a Jersey City police "
-    "incident. Speakers may include officers, family members, and dispatch. "
-    "Use proper names when clear: Washington, Jersey City, Mobile Crisis, "
-    "Randolph. Prefer verbatim speech; do not invent dialogue over silence "
-    "or noise. Keep filler words when audible."
+    "Body-worn camera and emergency radio audio from a police incident. "
+    "Speakers may include officers, civilians, witnesses, and dispatch. "
+    "Prefer verbatim speech; do not invent dialogue over silence or noise. "
+    "Keep names, badge numbers, and radio codes when clear."
 )
 
 _WHISPER_JUNK_RE = re.compile(r"^[.\s,…\-–—]+$")

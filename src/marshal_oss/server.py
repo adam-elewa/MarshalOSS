@@ -450,7 +450,19 @@ def create_app(
             **payload,
             "pins": pins,
             "phone_labels": phone_labels,
+            "case_timezone": db.get_case_timezone(c.id),
         }
+
+    @app.put("/api/cases/{case_id}/timezone")
+    async def api_case_timezone(case_id: int, request: Request) -> dict[str, Any]:
+        """Set the case's local timezone (IANA name, e.g. America/Chicago)."""
+        payload = await request.json()
+        c = resolve_case(case_id=case_id)
+        try:
+            tz = db.set_case_timezone(c.id, str(payload.get("timezone") or ""))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return {"ok": True, "case_timezone": tz}
 
     @app.get("/api/forensics/search")
     def api_forensics_search(
@@ -550,7 +562,20 @@ def create_app(
     def api_bwc_index(case_id: int | None = None) -> dict[str, Any]:
         """Multi-cam bodycam/dashcam index (timed speech + visual segments)."""
         c = resolve_case(case_id=case_id)
-        return build_bwc_index(db, c)
+        idx = build_bwc_index(db, c)
+        idx["timeline_offsets"] = db.get_bwc_timeline_offsets(c.id)
+        return idx
+
+    @app.post("/api/bwc/offsets")
+    async def api_bwc_offsets(request: Request) -> dict[str, Any]:
+        """Replace the case's per-clip timeline sync offsets (seconds)."""
+        payload = await request.json()
+        case_id = payload.get("case_id")
+        offsets = payload.get("offsets")
+        if not isinstance(offsets, dict):
+            raise HTTPException(400, "offsets must be an object")
+        c = resolve_case(case_id=int(case_id) if case_id is not None else None)
+        return {"ok": True, "timeline_offsets": db.set_bwc_timeline_offsets(c.id, offsets)}
 
     @app.get("/api/bwc/label-suggestions")
     def api_bwc_label_suggestions(case_id: int | None = None) -> dict[str, Any]:
@@ -581,6 +606,7 @@ def create_app(
             raise HTTPException(400, str(e)) from e
         # Return fresh index so the client can refresh lanes without a second round-trip.
         result["index"] = build_bwc_index(db, c)
+        result["index"]["timeline_offsets"] = db.get_bwc_timeline_offsets(c.id)
         return result
 
     @app.get("/api/files/detail")

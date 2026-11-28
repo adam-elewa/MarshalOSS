@@ -36,10 +36,10 @@ def test_camera_label_honors_officer_override():
     assert camera_officer_label("Axon_Body_3_Video_x.mp4", media) == "Tpr. Baka"
 
 
-def test_camera_label_parses_renamed_washington_style():
+def test_camera_label_parses_officer_named_renames():
     media = {"kind": "video"}
-    assert camera_officer_label("Det Egan (1) - confidential.mp4", media) == "Det Egan"
-    assert clip_label_for("Det Egan (1) - confidential.mp4", media, None) == "Clip 1"
+    assert camera_officer_label("Det Smith (1) - confidential.mp4", media) == "Det Smith"
+    assert clip_label_for("Det Smith (1) - confidential.mp4", media, None) == "Clip 1"
 
 
 def test_build_bwc_index_maps_segments(tmp_path):
@@ -196,3 +196,13 @@ def test_apply_camera_label_by_serial(tmp_path):
     db.conn.commit()
     sug = label_suggestions(db, case)
     assert any(s["label"] == "Jamaal Hart" for s in sug["suggestions"])
+
+
+def test_timeline_offsets_persist_per_case(tmp_path):
+    db = Database(tmp_path / "t.db")
+    a = db.upsert_case("a", "A", str(tmp_path / "a"))
+    b = db.upsert_case("b", "B", str(tmp_path / "b"))
+    saved = db.set_bwc_timeline_offsets(a.id, {"f1": 12.4, "f2": 0, "f3": "bad", "f4": 10**9})
+    assert saved == {"f1": 12, "f4": 7 * 24 * 3600}
+    assert db.get_bwc_timeline_offsets(a.id) == saved
+    assert db.get_bwc_timeline_offsets(b.id) == {}

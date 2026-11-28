@@ -1219,7 +1219,7 @@ def _extract_csli_geo(df, *, source_name: str, rel_path: str) -> dict[str, Any]:
             continue
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
             continue
-        # NJ/US sanity: skip clearly wrong zeros
+        # 0,0 is a missing-value placeholder, not a real tower
         if lat == 0 and lon == 0:
             continue
 
@@ -1286,8 +1286,9 @@ def _extract_csli_geo(df, *, source_name: str, rel_path: str) -> dict[str, Any]:
                     "label": phone or cell or "Event",
                     "source": source_name,
                     "rel_path": rel_path,
-                    # Carrier tower/CDR sheets for NJ cases are typically local Eastern.
-                    "source_tz": "America/New_York",
+                    # Tower-dump sheets rarely state a zone; None = read in the
+                    # case's timezone (set per case in the viewer).
+                    "source_tz": None,
                 }
             )
 
@@ -1338,7 +1339,7 @@ def parse_csli_map_for_case(
             cache_key_parts.append(f"{s['rel_path']}|{st.st_size}|{int(st.st_mtime)}")
         except OSError:
             cache_key_parts.append(s["rel_path"])
-    raw = "v8|" + "|".join(cache_key_parts)
+    raw = "v9|" + "|".join(cache_key_parts)  # v9: untagged sheets use case tz
     digest = hashlib.sha256(raw.encode()).hexdigest()[:24]
     cache_file = cache_dir / f"map-{digest}.json"
     if use_cache and cache_file.is_file():

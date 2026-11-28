@@ -345,7 +345,7 @@ Generic document review is not enough for every discovery problem. Marshal is me
 | **Forensics · Cellebrite** | Browse chats from Cellebrite `.ufdr` phone extractions (pick a phone, app, thread) | Live — case nav **Forensics** |
 | **Forensics · CSLI** | Map of cell-site / CDR location events by phone and day (sectors, timeline, pins) | Live — case nav **Forensics** |
 
-More forensic views are planned (same Forensics area). Ingest stores timed speech/visual segments plus camera type, device, serial, and recording start for bodycam. Axon exports usually have **serials, not officer names** in the filename; set `meta.media.officer` to override a lane label, or rename files like `Det Egan (1).mp4` when that convention is used.
+More forensic views are planned (same Forensics area). Ingest stores timed speech/visual segments plus camera type, device, serial, and recording start for bodycam. Axon exports usually have **serials, not officer names** in the filename; set `meta.media.officer` to override a lane label, or rename files like `Det Smith (1).mp4` when that convention is used.
 
 ---
 

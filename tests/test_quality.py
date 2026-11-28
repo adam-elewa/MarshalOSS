@@ -4,7 +4,7 @@ from marshal_oss.quality import score_extraction, score_transcript
 def test_good_legal_text_ok():
     text = (
         "The defendant was advised of his Miranda rights prior to questioning. "
-        "Officer Gigante observed the vehicle near Bergen Avenue. " * 20
+        "Officer Smith observed the vehicle near Main Street. " * 20
     )
     r = score_extraction(text, file_size=200_000, page_count=5)
     assert not r.escalate

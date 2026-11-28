@@ -28,7 +28,7 @@ _ENTITY_NOISE_RULE = (
     "- People/officers: real proper names only (e.g. \"David Eli Jones\", \"Trooper Baca\").\n"
     "  NEVER: Speaker A/B, badge numbers alone (\"7867\"), clothing descriptions\n"
     "  (\"man in green shirt\"), camera products (\"Axon Body 3\").\n"
-    "- Orgs: named agencies/courts/firms (\"New Jersey State Police\"), not generic roles.\n"
+    "- Orgs: named agencies/courts/firms (\"Springfield Police Department\", \"U.S. District Court for the District of Oregon\"), not generic roles.\n"
     "- Locations: specific places tied to the matter (city/county/address/landmark).\n"
     "  Skip bare US state names alone (\"Georgia\") unless part of a fuller place.\n"
     "- Per file: at most 8 entities total after merge; prefer the most important names.\n"
@@ -134,9 +134,6 @@ _TAG_DENY = frozenset(
         "criminal",
         "damaged_vehicle",
         "bus",
-        "new_jersey",
-        "georgia",
-        "essex_county",
         "law_enforcement",
         "court_records",
         "police_report",
@@ -193,6 +190,9 @@ def is_noise_tag(tag: str) -> bool:
     if not t or len(t) < 3:
         return True
     if t in _TAG_DENY:
+        return True
+    # Bare jurisdictions say where, not what: "new_jersey", "essex_county"
+    if _BARE_STATE.match(t.replace("_", " ")) or t.endswith("_county"):
         return True
     # Purely atmospheric / lighting / weather leftovers
     if any(x in t for x in ("lighting", "weather", "daytime", "nighttime", "overcast")):

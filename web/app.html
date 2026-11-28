@@ -1855,7 +1855,7 @@ const state = {
   csliPhone: null,
   csliSelectedId: null,
   csliSelectedPinId: null,
-  csliTzMode: (typeof localStorage !== "undefined" && localStorage.getItem("marshaloss.csliTzMode")) || "eastern",
+  csliTzMode: (typeof localStorage !== "undefined" && localStorage.getItem("marshaloss.csliTzMode")) || "case",
   csliPois: [], // user pins [{id,label,lat,lon,note,event_when}]
   csliPhoneLabels: {}, // { digits: displayName }
   csliPhonesChosen: null, // null = phone picker; string[] = phones included on map
@@ -1986,7 +1986,7 @@ function fmtNum(n) {
   if (n == null) return "—";
   return Number(n).toLocaleString();
 }
-/** Viewer label: essex_county / New_Jersey → Essex County / New Jersey */
+/** Viewer label: snake_case / Title_Case tag → Title Case words */
 function prettyLabel(s) {
   return String(s ?? "")
     .replace(/[_-]+/g, " ")
@@ -2180,8 +2180,8 @@ async function loadForRoute() {
     state.forensicsChatId = state.route.forensicsChat || state.forensicsChatId || null;
     state.forensicsCsliMap = state.forensicsCsliMap || null;
     state.popout = !!state.route.popout;
-    if (state.route.csliTz && ["eastern", "utc", "source"].includes(state.route.csliTz)) {
-      state.csliTzMode = state.route.csliTz;
+    if (state.route.csliTz && ["case", "eastern", "utc", "source"].includes(state.route.csliTz)) {
+      state.csliTzMode = state.route.csliTz === "eastern" ? "case" : state.route.csliTz;
       try { localStorage.setItem("marshaloss.csliTzMode", state.csliTzMode); } catch {}
     }
     if (state.route.csliPhone) {
@@ -2555,19 +2555,34 @@ async function loadForensicsCsli(push) {
   mountCsliMap();
 }
 
-/** Display zone for unified clocks. Pins are always Eastern wall times. */
+/** The case's local zone: set per case (DB), else this browser's zone. */
+function csliCaseZone() {
+  const set = state.forensicsCsliMap?.case_timezone;
+  if (set) return set;
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+}
+
+function csliZoneAbbr(zone) {
+  try {
+    const part = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "short" })
+      .formatToParts(new Date()).find((p) => p.type === "timeZoneName");
+    return part ? part.value : zone;
+  } catch { return zone; }
+}
+
+/** Display zone for unified clocks. Pin times are wall times in the case zone. */
 function csliDisplayZone() {
-  const mode = state.csliTzMode || "eastern";
+  const mode = state.csliTzMode || "case";
   if (mode === "utc") return "UTC";
   if (mode === "source") return null;
-  return "America/New_York";
+  return csliCaseZone();
 }
 
 function csliTzLabel() {
-  const mode = state.csliTzMode || "eastern";
+  const mode = state.csliTzMode || "case";
   if (mode === "utc") return "UTC";
   if (mode === "source") return "Raw";
-  return "ET";
+  return csliZoneAbbr(csliCaseZone());
 }
 
 function csliEventSourceTz(e) {
@@ -2575,7 +2590,18 @@ function csliEventSourceTz(e) {
   if (tagged) return tagged;
   const c = String(e?.carrier || "").toUpperCase();
   if (c.includes("AT&T") || c === "ATT") return "UTC";
-  return "America/New_York";
+  return csliCaseZone();
+}
+
+async function promptCaseTimezone() {
+  const cur = csliCaseZone();
+  const raw = prompt("Case timezone (IANA name, e.g. America/Chicago, Europe/London).\nUsed for map pin times and tower sheets that don't state a zone.", cur);
+  if (raw == null) return false;
+  const tz = raw.trim();
+  try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); } catch { alert(`Unknown timezone: ${tz}`); return false; }
+  const data = await api(`/api/cases/${state.caseId}/timezone`, { method: "PUT", body: JSON.stringify({ timezone: tz }) });
+  if (state.forensicsCsliMap) state.forensicsCsliMap.case_timezone = data.case_timezone;
+  return true;
 }
 
 function csliParseWallParts(raw) {
@@ -2681,7 +2707,7 @@ function csliFmtClock(e, opts) {
   return csliFmt12(parts.hour, parts.minute, parts.second, withSeconds);
 }
 
-/** Pin event_when is Eastern wall time — clock in the active display zone. */
+/** Pin event_when is a case-zone wall time — clock in the active display zone. */
 function csliFmtPinClock(pin, opts) {
   const withSeconds = !!(opts && opts.withSeconds);
   const raw = pin?.event_when || "";
@@ -2691,7 +2717,7 @@ function csliFmtPinClock(pin, opts) {
     if (!m) return raw ? "All day" : "—";
     return csliFmt12(m[1], m[2], m[3] || "00", withSeconds);
   }
-  const inst = csliParseInZone(raw, "America/New_York");
+  const inst = csliParseInZone(raw, csliCaseZone());
   if (!inst) return raw ? "All day" : "—";
   const parts = csliFormatParts(inst, zone);
   if (!parts) return "—";
@@ -2707,7 +2733,7 @@ function csliFmtDay(day) {
 }
 
 function setCsliTzMode(mode) {
-  const next = (mode === "utc" || mode === "source") ? mode : "eastern";
+  const next = (mode === "utc" || mode === "source") ? mode : "case";
   state.csliTzMode = next;
   try { localStorage.setItem("marshaloss.csliTzMode", next); } catch {}
   // Remap selected day into the new zone's day list
@@ -3119,14 +3145,14 @@ function csliPinVisibleForPhone(pin, phone) {
 function csliPinVisibleNow(pin) {
   if (!csliPinVisibleForPhone(pin, state.csliPhone)) return false;
   const day = state.csliDay;
-  // Pin event_when is Eastern; map to the active display zone's calendar day
+  // Pin event_when is a case-zone wall time; map to the active display zone's day
   let pinDay = "";
   if (pin.event_when) {
     const zone = csliDisplayZone();
-    if (!zone || zone === "America/New_York") {
+    if (!zone || zone === csliCaseZone()) {
       pinDay = csliEventWhenDay(pin.event_when) || pin.event_day || "";
     } else {
-      const inst = csliParseInZone(pin.event_when, "America/New_York");
+      const inst = csliParseInZone(pin.event_when, csliCaseZone());
       const parts = csliFormatParts(inst, zone);
       pinDay = parts ? `${parts.year}-${parts.month}-${parts.day}` : csliEventWhenDay(pin.event_when);
     }
@@ -3808,7 +3834,7 @@ function mountCsliMap() {
   if (!el || typeof L === "undefined") return;
   const data = state.forensicsCsliMap;
   if (!data) return;
-  const sig = `path|${data.event_count}|${state.csliPhone || ""}|${state.csliDay || ""}|${state.csliTzMode || "eastern"}|${(state.csliPois || []).length}`;
+  const sig = `path|${data.event_count}|${state.csliPhone || ""}|${state.csliDay || ""}|${state.csliTzMode || "case"}|${csliCaseZone()}|${(state.csliPois || []).length}`;
 
   if (!(state._csliMap && state._csliMapSig === sig && el._leaflet_id)) {
     if (state._csliMap) {
@@ -6331,7 +6357,7 @@ function renderForensics() {
       });
     });
     activePois.forEach((p, i) => {
-      const inst = csliParseInZone(p.event_when, "America/New_York");
+      const inst = csliParseInZone(p.event_when, csliCaseZone());
       timelineItems.push({
         kind: "pin",
         sort: inst && !Number.isNaN(inst.getTime()) ? inst.getTime() : (1e15 + i),
@@ -6404,9 +6430,10 @@ function renderForensics() {
                     <select id="csliPhone" title="Phone" aria-label="Phone">${phoneOpts || `<option value="">No phones</option>`}</select>
                     <select id="csliDay" title="Date" aria-label="Date" ${days.length ? "" : "disabled"}>${dayOpts || `<option value="">No dates</option>`}</select>
                     <select id="csliTzMode" title="Timezone" aria-label="Timezone">
-                      <option value="eastern" ${state.csliTzMode === "eastern" ? "selected" : ""}>ET</option>
+                      <option value="case" ${state.csliTzMode === "case" || state.csliTzMode === "eastern" ? "selected" : ""} title="Case timezone: ${esc(csliCaseZone())}">${esc(csliZoneAbbr(csliCaseZone()))}</option>
                       <option value="utc" ${state.csliTzMode === "utc" ? "selected" : ""}>UTC</option>
                       <option value="source" ${state.csliTzMode === "source" ? "selected" : ""}>Raw</option>
+                      <option value="__set_case_tz">Set case timezone…</option>
                     </select>
                     <span class="tool-sep" aria-hidden="true"></span>
                     <button type="button" class="tool-btn ${state.csliPoiAddMode ? "active" : ""}" id="csliPoiAdd" title="Drop a pin on the map">
@@ -7401,7 +7428,15 @@ function bindCaseHandlers() {
         }
         const tzEl = document.getElementById("csliTzMode");
         if (tzEl) {
-          tzEl.onchange = () => {
+          tzEl.onchange = async () => {
+            if (tzEl.value === "__set_case_tz") {
+              try { await promptCaseTimezone(); } catch (e) { alert(e.message || String(e)); }
+              setCsliTzMode("case");
+              csliSyncHash();
+              render();
+              mountCsliMap();
+              return;
+            }
             setCsliTzMode(tzEl.value);
             csliSyncHash();
             render();

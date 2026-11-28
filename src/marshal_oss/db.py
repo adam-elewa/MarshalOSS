@@ -1626,6 +1626,52 @@ class Database:
         self.conn.commit()
         return cur.rowcount > 0
 
+    def get_case_timezone(self, case_id: int) -> str | None:
+        """IANA zone for this case's local wall times (CSLI pins, untagged sheets)."""
+        return self.get_setting(f"case_timezone:{int(case_id)}") or None
+
+    def set_case_timezone(self, case_id: int, tz: str) -> str:
+        from zoneinfo import ZoneInfo
+
+        tz = (tz or "").strip()
+        try:
+            ZoneInfo(tz)
+        except Exception as e:
+            raise ValueError(f"unknown timezone: {tz!r}") from e
+        self.set_setting(f"case_timezone:{int(case_id)}", tz)
+        return tz
+
+    def get_bwc_timeline_offsets(self, case_id: int) -> dict[str, int]:
+        """Per-clip timeline sync offsets (seconds), keyed by BWC video id."""
+        raw = self.get_setting(f"bwc_timeline_offsets:{int(case_id)}")
+        try:
+            data = json.loads(raw) if raw else {}
+        except Exception:
+            data = {}
+        out: dict[str, int] = {}
+        for k, v in (data.items() if isinstance(data, dict) else []):
+            try:
+                n = int(round(float(v)))
+            except (TypeError, ValueError):
+                continue
+            if n:
+                out[str(k)] = n
+        return out
+
+    def set_bwc_timeline_offsets(self, case_id: int, offsets: dict[str, Any]) -> dict[str, int]:
+        limit = 7 * 24 * 3600
+        clean: dict[str, int] = {}
+        for k, v in (offsets or {}).items():
+            try:
+                n = int(round(float(v)))
+            except (TypeError, ValueError):
+                continue
+            n = max(-limit, min(limit, n))
+            if n and str(k):
+                clean[str(k)[:64]] = n
+        self.set_setting(f"bwc_timeline_offsets:{int(case_id)}", json.dumps(clean))
+        return clean
+
     def csli_phone_labels_key(self, case_id: int) -> str:
         return f"csli_phone_labels:{int(case_id)}"
 
